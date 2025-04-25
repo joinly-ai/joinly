@@ -1,0 +1,47 @@
+[project]
+name = "meeting-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "dbrockmann", email = "dominiktobin@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1.8",
+    "faster-whisper>=1.1.1",
+    "numpy>=2.2.4",
+    "playwright>=1.51.0",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" },
+]
+torchaudio = [
+    { index = "pytorch-cpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[project.scripts]
+meeting-agent = "meeting_agent.cli.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+    "pyright>=1.1.399",
+    "ruff>=0.11.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["meeting_agent"]
