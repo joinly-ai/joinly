@@ -1,0 +1,11 @@
+.venv
+__pycache__
+.gitignore
+.git
+Dockerfile
+docker-compose.yml
+.vscode
+.devcontainer
+ruff.toml
+.pre-commit-config.yaml
+.ruff_cache
