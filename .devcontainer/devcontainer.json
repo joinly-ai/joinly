@@ -1,19 +1,19 @@
 {
-	"name": "uv",
-	"build": {
+    "name": "uv",
+    "build": {
         "context": "..",
         "dockerfile": "Dockerfile"
     },
     "customizations": {
         "vscode": {
             "extensions": [
-				"charliermarsh.ruff",
+                "charliermarsh.ruff",
                 "ms-azuretools.vscode-docker",
-				"ms-python.python",
-				"ms-python.vscode-pylance",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
                 "tamasfe.even-better-toml",
                 "yzhang.markdown-all-in-one"
-			]
+            ]
         }
     },
     "containerEnv": {
@@ -22,7 +22,7 @@
         "UV_LINK_MODE": "copy",
         "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
     },
-	"postCreateCommand": "uv sync --frozen && /home/vscode/.venv/bin/python -m playwright install --only-shell chromium",
+    "postCreateCommand": "uv sync --frozen && /home/vscode/.venv/bin/python -m playwright install --only-shell chromium",
     "postStartCommand": "uv run pre-commit install && pulseaudio --start --exit-idle-time=-1",
-	"remoteUser": "vscode"
+    "remoteUser": "vscode"
 }
