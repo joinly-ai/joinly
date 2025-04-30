@@ -31,6 +31,11 @@ class AudioTranscriber(AsyncBufferedProcessor[bytes, str]):
             compute_type="int8",
         )
 
+        logger.info(
+            "Initialized Whisper model: %s",
+            self._model,
+        )
+
     @override
     async def process(self, item: bytes) -> AsyncIterator[str]:
         """Process the input audio chunk and yield transcriptions.

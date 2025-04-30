@@ -1,9 +1,9 @@
-import asyncio
 import logging
 from contextlib import AsyncExitStack
 
 from meeting_agent.browser.meeting_browser import MeetingBrowser
 from meeting_agent.capture.audio_capturer import AudioCapturer
+from meeting_agent.capture.audio_sink import AudioSink
 from meeting_agent.transcription.audio_transcriber import AudioTranscriber
 from meeting_agent.transcription.vad_chunker import VADChunker
 
@@ -17,48 +17,50 @@ logging.basicConfig(
 class MeetingSession:
     """A class to represent a meeting session."""
 
-    def __init__(self, meeting_url: str, participant_name: str) -> None:
+    def __init__(
+        self, meeting_url: str, participant_name: str, *, headless: bool = True
+    ) -> None:
         """Initialize a meeting session.
 
         Args:
             meeting_url: The URL of the meeting to join.
             participant_name: The name of the participant to display in the meeting.
+            headless: Whether to run the browser in headless mode (default: True).
         """
         self._meeting_url = meeting_url
         self._participant_name = participant_name
+        self._headless = headless
 
     async def run(self) -> None:
         """Run the meeting session.
 
         TODO: fix the closing
         """
-        audio_capturer = AudioCapturer()
-        meeting_browser = MeetingBrowser(
-            meeting_url=self._meeting_url,
-            participant_name=self._participant_name,
-            audio_sink_name=audio_capturer.sink_name,
-        )
+        audio_sink = AudioSink()
+        audio_capturer = AudioCapturer(audio_sink.sink_name)
         vad_chunker = VADChunker(audio_capturer)
         audio_transcriber = AudioTranscriber(vad_chunker)
 
+        meeting_browser = MeetingBrowser(
+            meeting_url=self._meeting_url,
+            participant_name=self._participant_name,
+            audio_sink_name=audio_sink.sink_name,
+            headless=self._headless,
+        )
+
         services = [
+            audio_sink,
             audio_capturer,
-            meeting_browser,
             vad_chunker,
             audio_transcriber,
+            meeting_browser,
         ]
 
-        try:
-            async with AsyncExitStack() as stack:
-                await asyncio.gather(
-                    *(stack.enter_async_context(svc) for svc in services)
-                )
+        async with AsyncExitStack() as stack:
+            for svc in services:
+                await stack.enter_async_context(svc)
 
-                await meeting_browser.join()
+            await meeting_browser.join()
 
-                async for text in audio_transcriber:
-                    logger.info(text)
-
-        except asyncio.CancelledError:
-            await meeting_browser.leave()
-            raise
+            async for text in audio_transcriber:
+                logger.info(text)

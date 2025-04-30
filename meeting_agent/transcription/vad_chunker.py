@@ -65,7 +65,7 @@ class VADChunker(AsyncProcessor[bytes, bytes]):
         confidence = await self._vad(item)
         speech = confidence > self._speech_threshold
 
-        logger.info(
+        logger.debug(
             "%s %s: %s (%.2f)",
             self._had_speech,
             self._silent_chunks,
@@ -102,7 +102,7 @@ class VADChunker(AsyncProcessor[bytes, bytes]):
             msg = "VAD model not initialized"
             raise RuntimeError(msg)
 
-        audio_f32 = torch.frombuffer(audio_bytes, dtype=torch.float32)
+        audio_f32 = torch.frombuffer(bytearray(audio_bytes), dtype=torch.float32)
         confidence = await asyncio.to_thread(self._model, audio_f32, 16000)
 
         return confidence.item()
