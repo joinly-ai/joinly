@@ -38,8 +38,13 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "aiofiles>=24.1.0",
+    "aiohttp>=3.11.18",
+    "jiwer>=3.1.0",
     "pre-commit>=4.2.0",
     "pyright>=1.1.399",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
     "ruff>=0.11.6",
 ]
 
