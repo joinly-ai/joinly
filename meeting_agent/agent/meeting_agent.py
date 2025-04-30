@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import override
 
-from meeting_agent.core.async_processor import AsyncBufferedProcessor
+from meeting_agent.shared.async_processor import AsyncBufferedProcessor
 
 logger = logging.getLogger(__name__)
 

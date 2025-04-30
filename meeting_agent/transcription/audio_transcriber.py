@@ -7,7 +7,7 @@ from typing import override
 import numpy as np
 from faster_whisper import WhisperModel
 
-from meeting_agent.core.async_processor import AsyncBufferedProcessor
+from meeting_agent.shared.async_processor import AsyncBufferedProcessor
 
 logger = logging.getLogger(__name__)
 

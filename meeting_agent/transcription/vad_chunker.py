@@ -5,7 +5,7 @@ from typing import override
 
 import torch
 
-from meeting_agent.core.async_processor import AsyncProcessor
+from meeting_agent.shared.async_processor import AsyncProcessor
 
 logger = logging.getLogger(__name__)
 
