@@ -10,6 +10,10 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1.8",
     "faster-whisper>=1.1.1",
+    "langchain-mcp-adapters>=0.0.3",
+    "langchain-openai>=0.3.16",
+    "langgraph>=0.4.1",
+    "mcp>=1.7.1",
     "numpy>=2.2.4",
     "playwright>=1.51.0",
     "torch>=2.6.0",

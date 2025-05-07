@@ -9,3 +9,4 @@ docker-compose.yml
 ruff.toml
 .pre-commit-config.yaml
 .ruff_cache
+node_modules
