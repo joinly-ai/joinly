@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 TODO:
 - fix need to start mic before sink?, maybe set pactl auto select off?
 - fix audio microphone buffer issues (constant silence stream?)
+- fix closure on ctrl-c
 - optional dependencies, lazy import (e.g., for langchain, providers, etc.)
 - improve transcription: stream input directly and use context
 - improve latency of entire system
@@ -105,12 +105,11 @@ class MeetingSession:
             if svc is not None:
                 await self._exit_stack.enter_async_context(svc)
 
-        asyncio.get_running_loop().call_later(
-            30,
-            lambda: asyncio.create_task(
-                self._meeting_controller.send_chat_message("Hello!")
-            ),
-        )
+        # asyncio.get_running_loop().call_later(
+        #    30, lambda: asyncio.create_task(self.send_chat_message("Hello!")))
+
+        # asyncio.get_running_loop().call_later(
+        #    40, lambda: asyncio.create_task(self.send_chat_message("Hello, again.")))
 
         # asyncio.get_running_loop().call_later(
         #    10,

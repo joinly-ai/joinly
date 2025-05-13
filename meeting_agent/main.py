@@ -124,8 +124,8 @@ async def run_meeting_session(
 
     ms.add_transcription_listener(_on_transcription)
 
-    with contextlib.suppress(KeyboardInterrupt):
-        async with ms:
+    async with ms:
+        with contextlib.suppress(KeyboardInterrupt):
             await ms.join_meeting(
                 meeting_url=meeting_url,
                 participant_name=participant_name,

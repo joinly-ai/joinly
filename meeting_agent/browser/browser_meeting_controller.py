@@ -125,8 +125,20 @@ class BrowserMeetingController:
         logger.info("Sending chat message: %s", message)
 
         try:
-            await self._page.fill("input[placeholder*='message' i]", message)
-            await self._page.press("input[placeholder*='message' i]", "Enter")
+            input_field = await self._page.query_selector("div[contenteditable='true']")
+
+            if input_field is None:
+                await self._page.wait_for_selector(
+                    "button:has-text('chat')", timeout=2000
+                )
+                await self._page.click("button:has-text('chat')")
+                await self._page.wait_for_timeout(2000)
+
+            await self._page.wait_for_selector(
+                "div[contenteditable='true']", timeout=2000
+            )
+            await self._page.fill("div[contenteditable='true']", message)
+            await self._page.keyboard.press("Enter")
         except PlaywrightError as e:
             msg = "Failed to send chat message"
             logger.exception(msg)

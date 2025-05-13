@@ -122,3 +122,16 @@ async def speak_text(
     """Speak the given text in the meeting using TTS."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.speak_text(text)
+
+
+@mcp.tool(
+    "send_chat_message",
+    description="Send a chat message in the meeting.",
+)
+async def send_chat_message(
+    message: Annotated[str, Field(description="Message to be sent")],
+    ctx: Context,
+) -> None:
+    """Send a chat message in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.send_chat_message(message)
