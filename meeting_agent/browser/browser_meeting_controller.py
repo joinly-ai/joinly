@@ -67,12 +67,14 @@ class BrowserMeetingController:
             await self._page.wait_for_selector(
                 "input[placeholder*='name' i]", timeout=20000
             )
+            await self._page.wait_for_timeout(1000)
             await self._page.fill("input[placeholder*='name' i]", participant_name)
 
             # click the join button by finding a button containing "join"
             await self._page.wait_for_selector(
                 "button:has-text('join')", timeout=1000, state="visible"
             )
+            await self._page.wait_for_timeout(1000)
             await self._page.click("button:has-text('join')")
         except PlaywrightError as e:
             msg = "Failed to join the meeting"
