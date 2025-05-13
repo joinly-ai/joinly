@@ -1,0 +1,138 @@
+import asyncio
+import contextlib
+import logging
+import signal
+
+import click
+
+from meeting_agent import MeetingSession
+
+logger = logging.getLogger(__name__)
+
+
+@click.command()
+@click.option(
+    "-n",
+    "--participant-name",
+    type=str,
+    help="The meeting participant name.",
+    default="Kevin",
+)
+@click.option(
+    "--headless/--no-headless",
+    help="Run the meeting session in headless mode.",
+    default=True,
+)
+@click.option(
+    "--browser-agent/--no-browser-agent",
+    help="Use a browser agent to run the meeting session.",
+    default=False,
+)
+@click.option(
+    "--browser-agent-port",
+    type=int,
+    help="The port for the browser agent. Only applicable with --browser-agent.",
+    default=None,
+    callback=lambda ctx, _, val: val
+    if ctx.params.get("browser_agent", False)
+    else None,
+)
+@click.option(
+    "-v",
+    "--verbose",
+    count=True,
+    help="Increase logging verbosity (can be used multiple times).",
+)
+@click.option(
+    "-q", "--quiet", is_flag=True, help="Suppress all but error and critical logging."
+)
+@click.argument(
+    "meeting-url",
+    type=str,
+    required=False,
+    envvar="MEETING_URL",
+)
+def cli(  # noqa: PLR0913
+    meeting_url: str | None,
+    participant_name: str,
+    *,
+    headless: bool,
+    browser_agent: bool,
+    browser_agent_port: int | None,
+    verbose: int,
+    quiet: bool,
+) -> None:
+    """Start the meeting session."""
+    configure_logging(verbose, quiet=quiet)
+
+    if meeting_url is None:
+        from meeting_agent.server import mcp
+
+        mcp.run(transport="streamable-http")
+    else:
+        asyncio.run(
+            run_meeting_session(
+                meeting_url,
+                participant_name,
+                headless=headless,
+                use_browser_agent=browser_agent,
+                browser_agent_port=browser_agent_port,
+            )
+        )
+
+
+def configure_logging(verbose: int, *, quiet: bool) -> None:
+    """Configure logging based on verbosity level."""
+    log_level = logging.WARNING
+
+    if quiet:
+        log_level = logging.ERROR
+    elif verbose == 1:
+        log_level = logging.INFO
+    elif verbose >= 2:  # noqa: PLR2004
+        log_level = logging.DEBUG
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+async def run_meeting_session(
+    meeting_url: str,
+    participant_name: str,
+    *,
+    headless: bool,
+    use_browser_agent: bool = False,
+    browser_agent_port: int | None = None,
+) -> None:
+    """Run the meeting session until receiving a termination signal."""
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    ms = MeetingSession(
+        headless=headless,
+        use_browser_agent=use_browser_agent,
+        browser_agent_port=browser_agent_port,
+    )
+
+    async def _on_transcription(event: str, text: str) -> None:
+        logger.info("Transcription event: %s: %s", event, text)
+
+    ms.add_transcription_listener(_on_transcription)
+
+    with contextlib.suppress(KeyboardInterrupt):
+        async with ms:
+            await ms.join_meeting(
+                meeting_url=meeting_url,
+                participant_name=participant_name,
+            )
+            await stop_event.wait()
+            await ms.leave_meeting()
+
+
+if __name__ == "__main__":
+    cli()
