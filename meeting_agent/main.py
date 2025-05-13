@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import logging
-import signal
 
 import click
 
@@ -107,12 +106,7 @@ async def run_meeting_session(
     use_browser_agent: bool = False,
     browser_agent_port: int | None = None,
 ) -> None:
-    """Run the meeting session until receiving a termination signal."""
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-
+    """Run the meeting session until receiving a cancellation signal."""
     ms = MeetingSession(
         headless=headless,
         use_browser_agent=use_browser_agent,
@@ -124,14 +118,22 @@ async def run_meeting_session(
 
     ms.add_transcription_listener(_on_transcription)
 
+    joined = False
     async with ms:
-        with contextlib.suppress(KeyboardInterrupt):
+        try:
             await ms.join_meeting(
                 meeting_url=meeting_url,
                 participant_name=participant_name,
             )
-            await stop_event.wait()
-            await ms.leave_meeting()
+            joined = True
+
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            logger.info("Meeting session cancelled")
+            if joined:
+                with contextlib.suppress(Exception):
+                    await ms.leave_meeting()
+            raise
 
 
 if __name__ == "__main__":

@@ -35,8 +35,6 @@ class BrowserMeetingController:
 
     async def __aexit__(self, *exc: object) -> None:
         """Leave the meeting session."""
-        if self._page is not None and not self._page.is_closed():
-            await self.leave()
         self._page = None
 
     async def join(self, meeting_url: str, participant_name: str) -> None:

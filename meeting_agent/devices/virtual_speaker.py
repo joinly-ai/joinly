@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -111,8 +112,10 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
         else:
             logger.info("Stopping audio stream from monitor: %s", self._monitor_name)
 
-            self._proc.stdin.write(b"q")  # type: ignore[attr-defined]
-            await self._proc.stdin.drain()  # type: ignore[attr-defined]
+            if self._proc.returncode is None and self._proc.stdin:
+                with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+                    self._proc.stdin.write(b"q")
+                    await self._proc.stdin.drain()
             try:
                 await asyncio.wait_for(self._proc.wait(), timeout=5)
             except TimeoutError:
@@ -157,4 +160,7 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
             msg = "Audio streamer not started"
             raise RuntimeError(msg)
 
-        return await self._proc.stdout.readexactly(self._chunk_size)
+        try:
+            return await self._proc.stdout.readexactly(self._chunk_size)
+        except asyncio.IncompleteReadError as exc:
+            raise StopAsyncIteration from exc

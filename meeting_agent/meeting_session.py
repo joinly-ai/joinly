@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 TODO:
 - fix need to start mic before sink?, maybe set pactl auto select off?
 - fix audio microphone buffer issues (constant silence stream?)
-- fix closure on ctrl-c
 - optional dependencies, lazy import (e.g., for langchain, providers, etc.)
 - improve transcription: stream input directly and use context
 - improve latency of entire system

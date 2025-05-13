@@ -81,6 +81,7 @@ class BrowserSession:
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
             env=self._env,
+            start_new_session=True,
         )
         logger.info("Chromium browser launched.")
 
