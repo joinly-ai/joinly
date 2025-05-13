@@ -11,15 +11,15 @@ from meeting_agent.browser.browser_session import BrowserSession
 logger = logging.getLogger(__name__)
 
 
-class MeetingController:
-    """A class to represent a meeting controller."""
+class BrowserMeetingController:
+    """A class to represent a browser meeting controller."""
 
     def __init__(
         self,
         browser_session: BrowserSession,
         browser_agent: BrowserAgent | None = None,
     ) -> None:
-        """Initialize the meeting controller.
+        """Initialize the browser meeting controller.
 
         Args:
             browser_session: The browser session
@@ -110,6 +110,29 @@ class MeetingController:
             raise RuntimeError(msg) from e
         else:
             logger.info("Left the meeting.")
+
+    async def send_chat_message(self, message: str) -> None:
+        """Send a chat message in the meeting.
+
+        Args:
+            message: The message to send.
+        """
+        if self._page is None or self._page.is_closed():
+            msg = "Meeting not joined or already left."
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        logger.info("Sending chat message: %s", message)
+
+        try:
+            await self._page.fill("input[placeholder*='message' i]", message)
+            await self._page.press("input[placeholder*='message' i]", "Enter")
+        except PlaywrightError as e:
+            msg = "Failed to send chat message"
+            logger.exception(msg)
+            raise RuntimeError(msg) from e
+        else:
+            logger.info("Chat message sent.")
 
     async def start_screen_sharing(self) -> None:
         """Start screen sharing in the meeting."""

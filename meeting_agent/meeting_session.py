@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -5,8 +6,8 @@ from contextlib import AsyncExitStack
 from typing import Self
 
 from meeting_agent.browser.browser_agent import BrowserAgent
+from meeting_agent.browser.browser_meeting_controller import BrowserMeetingController
 from meeting_agent.browser.browser_session import BrowserSession
-from meeting_agent.browser.meeting_controller import MeetingController
 from meeting_agent.devices.virtual_display import VirtualDisplay
 from meeting_agent.devices.virtual_microphone import VirtualMicrophone
 from meeting_agent.devices.virtual_speaker import VirtualSpeaker
@@ -82,7 +83,7 @@ class MeetingSession:
             if self.use_browser_agent
             else None
         )
-        self._meeting_controller = MeetingController(
+        self._meeting_controller = BrowserMeetingController(
             browser_session=self._browser_session,
             browser_agent=self._browser_agent,
         )
@@ -103,6 +104,13 @@ class MeetingSession:
         ]:
             if svc is not None:
                 await self._exit_stack.enter_async_context(svc)
+
+        asyncio.get_running_loop().call_later(
+            30,
+            lambda: asyncio.create_task(
+                self._meeting_controller.send_chat_message("Hello!")
+            ),
+        )
 
         # asyncio.get_running_loop().call_later(
         #    10,
@@ -153,3 +161,11 @@ class MeetingSession:
             text (str): The text to be spoken.
         """
         await self._speech_controller.speak_text(text)
+
+    async def send_chat_message(self, message: str) -> None:
+        """Send a chat message in the meeting.
+
+        Args:
+            message (str): The message to be sent.
+        """
+        await self._meeting_controller.send_chat_message(message)
