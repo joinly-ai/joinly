@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio \
     pulseaudio-utils \
     ffmpeg \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1001 app && \
@@ -48,12 +49,7 @@ RUN chmod +x /entrypoint
 USER app
 WORKDIR /app
 
-RUN /app/.venv/bin/python -m playwright install --only-shell chromium
-RUN /app/.venv/bin/python - <<'EOF'
-import torch
-from faster_whisper import WhisperModel
-_ = torch.hub.load("snakers4/silero-vad", model="silero_vad", source="github")
-_ = WhisperModel("small", device="cpu", compute_type="int8")
-EOF
+# TODO fix this, wont work with finding playwright
+RUN /app/.venv/bin/python -m scripts.bootstrap_assets
 
 ENTRYPOINT ["/entrypoint"]

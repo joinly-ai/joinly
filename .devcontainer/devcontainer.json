@@ -22,7 +22,7 @@
         "UV_LINK_MODE": "copy",
         "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
     },
-    "postCreateCommand": "uv sync --frozen && /home/vscode/.venv/bin/python -m playwright install --only-shell chromium",
+    "postCreateCommand": "uv sync --frozen && uv run scripts/bootstrap_assets.py",
     "postStartCommand": "uv run pre-commit install && pulseaudio --start --exit-idle-time=-1",
     "remoteUser": "vscode"
 }
