@@ -57,7 +57,6 @@ class VirtualMicrophone:
 
         logger.info("Creating FIFO file: %s", self.fifo_path)
         os.mkfifo(self.fifo_path, 0o600)
-        self._env[_ENV_VAR] = str(self.fifo_path)
 
         logger.info("Setting up FIFO file for writing: %s", self.fifo_path)
         fd = os.open(self.fifo_path, os.O_WRONLY)
@@ -73,13 +72,17 @@ class VirtualMicrophone:
         self._writer.write(_wav_header(self.sample_rate, 1, self.frame_bits))
         await self._writer.drain()
 
+        self._env[_ENV_VAR] = str(self.fifo_path)
+
         logger.info("FIFO file created and opened for writing: %s", self.fifo_path)
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Stop the audio stream and clean up resources."""
-        if self._writer is not None:
+        if self._writer is None:
+            logger.warning("No fifo file to close")
+        else:
             logger.info("Closing FIFO file: %s", self.fifo_path)
             await self._writer.drain()
             self._writer.close()
@@ -95,8 +98,10 @@ class VirtualMicrophone:
             self._dir = None
         elif self.fifo_path is not None:
             logger.info("Removing FIFO file: %s", self.fifo_path)
-            self.fifo_path.unlink(missing_ok=True)
+            self.fifo_path.unlink()
             self.fifo_path = None
+        else:
+            logger.warning("No FIFO file to remove")
 
     async def write_frames(self, frames: bytes) -> None:
         """Write the incoming audio chunk.
