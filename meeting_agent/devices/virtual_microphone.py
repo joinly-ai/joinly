@@ -1,214 +1,102 @@
 import asyncio
+import fcntl
 import logging
-import uuid
+import os
+import tempfile
+from pathlib import Path
 from typing import Self
-
-from meeting_agent.devices.pulse_module_manager import PulseModuleManager
 
 logger = logging.getLogger(__name__)
 
+_ENV_VAR = "VIRTUAL_AUDIO_SOURCE"
 
-class VirtualMicrophone(PulseModuleManager):
+
+class VirtualMicrophone:
     """A class to create and unload a virtual microphone and play audio."""
 
     def __init__(
-        self, *, sample_rate: int = 24000, env: dict[str, str] | None = None
+        self,
+        *,
+        sample_rate: int = 24000,
+        frame_bits: int = 16,
+        pipe_size: int = 2048,
+        fifo_path: Path | None = None,
+        env: dict[str, str] | None = None,
     ) -> None:
         """Initialize the VirtualMicrophone.
 
         Args:
             sample_rate: Sample rate for the audio.
+            frame_bits: Number of bits per frame for the audio.
+            pipe_size: Size of the pipe for the audio.
+            fifo_path: Path to the FIFO file for audio input.
             env: Optional environment dictionary to set the audio source name.
         """
         self.sample_rate = sample_rate
+        self.frame_bits = frame_bits
+        self.pipe_size = pipe_size
+        self.fifo_path = fifo_path
         self._env: dict[str, str] = env if env is not None else {}
-        self._proc: asyncio.subprocess.Process | None = None
-        self.sink_name: str | None = None
-        self.source_name: str | None = None
-        self._sink_module_id: int | None = None
-        self._source_module_id: int | None = None
-        self._write_silence_task: asyncio.Task[None] | None = None
+        self._dir: tempfile.TemporaryDirectory[str] | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> Self:
-        """Create the virtual audio sink.
-
-        This method uses the `pactl` command to load the `module-null-sink` module
-        with the specified sink name and properties. The sink is created in the
-        PulseAudio server, allowing audio to be captured from it.
-
-        Raises:
-            RuntimeError: If the source creation fails.
-        """
-        if self._sink_module_id is not None:
-            msg = "Audio sink already created"
-            raise RuntimeError(msg)
-
-        if self._source_module_id is not None:
-            msg = "Audio source already created"
-            raise RuntimeError(msg)
-
-        if self._proc:
+        """Set up the fifo file and input stream."""
+        if self._writer is not None:
             msg = "Audio streamer already started"
             raise RuntimeError(msg)
 
-        self.sink_name = f"virt.mic.{uuid.uuid4()}"
-        self.source_name = f"{self.sink_name}.source"
+        if self.fifo_path is None:
+            self._dir = tempfile.TemporaryDirectory(prefix="virtmic_")
+            self.fifo_path = Path(self._dir.name) / "fifo.wav"
+        elif self.fifo_path.exists():
+            msg = f"FIFO file already exists: {self.fifo_path}"
+            logger.error(msg)
+            raise RuntimeError(msg)
 
-        logger.info("Creating virtual audio sink: %s", self.sink_name)
+        logger.info("Creating FIFO file: %s", self.fifo_path)
+        os.mkfifo(self.fifo_path, 0o600)
+        self._env[_ENV_VAR] = str(self.fifo_path)
 
-        self._sink_module_id = await self._load_module(
-            "module-null-sink",
-            f"sink_name={self.sink_name}",
-            "sink_properties=device.description=virt",
+        logger.info("Setting up FIFO file for writing: %s", self.fifo_path)
+        fd = os.open(self.fifo_path, os.O_WRONLY)
+        fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, self.pipe_size)
+
+        loop = asyncio.get_running_loop()
+        transport, protocol = await loop.connect_write_pipe(
+            asyncio.Protocol, os.fdopen(fd, "wb", buffering=0)
         )
+        transport.set_write_buffer_limits(high=self.pipe_size, low=self.pipe_size // 2)
+        self._writer = asyncio.StreamWriter(transport, protocol, None, loop)
 
-        logger.info(
-            "Creating virtual audio source: %s for sink: %s",
-            self.source_name,
-            self.sink_name,
-        )
+        self._writer.write(_wav_header(self.sample_rate, 1, self.frame_bits))
+        await self._writer.drain()
 
-        self._source_module_id = await self._load_module(
-            "module-remap-source",
-            f"source_name={self.source_name}",
-            f"master={self.sink_name}.monitor",
-            "channels=1",
-            "channel_map=mono",
-            "source_properties=device.description=virt",
-        )
-
-        self._env["PULSE_SOURCE"] = self.source_name
-
-        logger.info(
-            "Created virtual audio source: %s (id: %d) and sink: %s (id: %d)",
-            self.source_name,
-            self._source_module_id,
-            self.sink_name,
-            self._sink_module_id,
-        )
-
-        logger.info("Starting audio stream into sink: %s", self.sink_name)
-
-        # WIP: set PULSE_LATENCY_MSEC=30 ?
-        # fmt: off
-        """cmd = [
-            "/usr/bin/ffmpeg",
-            "-loglevel", "error",
-            "-re",
-            "-c:v", "none",
-            "-c:a", "pcm_f32le",
-            "-sample_fmt", "flt",
-            "-f", "f32le",
-            "-ar", str(self.sample_rate),
-            "-ac", "1",
-            "-i", "-",
-            "-fflags", "+nobuffer+flush_packets",
-            "-flags", "low_delay",
-            "-avioflags", "direct",
-            "-use_wallclock_as_timestamps", "1",
-            "-probesize", "32",
-            "-analyzeduration", "0",
-            "-f", "pulse",
-            self.sink_name,
-        ]"""
-        cmd = [
-            "/usr/bin/ffmpeg",
-            "-loglevel", "error",
-            "-re",
-            "-f", "f32le",
-            "-ar", str(self.sample_rate),
-            "-ac", "1",
-            "-i", "-",
-            "-fflags", "nobuffer",
-            "-flags", "low_delay",
-            "-probesize", "32",
-            "-analyzeduration", "0",
-            "-f", "pulse",
-            self.sink_name,
-        ]
-        # fmt: on
-        self._proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-        )
-
-        logger.info(
-            "Started audio streamer into sink: %s (sample_rate: %d)",
-            self.sink_name,
-            self.sample_rate,
-        )
+        logger.info("FIFO file created and opened for writing: %s", self.fifo_path)
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        """Unload the sink module and stop audio stream."""
-        if self._proc is None:
-            logger.warning("Audio stream is not running, skipping stream close.")
-        else:
-            logger.info("Stopping audio stream into sink: %s", self.sink_name)
+        """Stop the audio stream and clean up resources."""
+        if self._writer is not None:
+            logger.info("Closing FIFO file: %s", self.fifo_path)
+            await self._writer.drain()
+            self._writer.close()
+            await self._writer.wait_closed()
+            self._writer = None
 
-            self._proc.stdin.close()  # type: ignore[attr-defined]
-            try:
-                await asyncio.wait_for(self._proc.wait(), timeout=5)
-            except TimeoutError:
-                logger.warning("Audio stream process did not terminate, killing it.")
-                self._proc.kill()
-                await self._proc.wait()
-            self._proc = None
+        if self._env.get(_ENV_VAR) == str(self.fifo_path):
+            self._env.pop(_ENV_VAR)
 
-            logger.info("Stopped audio stream into sink: %s", self.sink_name)
-
-        if self._source_module_id is None:
-            logger.warning("No source module ID found, skipping unload.")
-        else:
-            logger.info(
-                "Unloading virtual audio source: %s (id: %s)",
-                self.source_name,
-                self._source_module_id,
-            )
-
-            await self._unload_module(self._source_module_id)
-
-            logger.info(
-                "Unloaded virtual audio source: %s (id: %s)",
-                self.source_name,
-                self._source_module_id,
-            )
-
-            if self._env.get("PULSE_SOURCE") == self.source_name:
-                self._env.pop("PULSE_SOURCE")
-
-            self.source_name = None
-            self._source_module_id = None
-
-        if self._sink_module_id is None:
-            logger.warning("No sink module ID found, skipping unload.")
-        else:
-            logger.info(
-                "Unloading virtual audio sink: %s (id: %s)",
-                self.sink_name,
-                self._sink_module_id,
-            )
-
-            await self._unload_module(self._sink_module_id)
-
-            logger.info(
-                "Unloaded virtual audio sink: %s (id: %s)",
-                self.sink_name,
-                self._sink_module_id,
-            )
-
-            self.sink_name = None
-            self._sink_module_id = None
-
-    # dont know, seems like bad practice and race condition
-    async def _write_silence(self) -> None:
-        while True:
-            await asyncio.sleep(0.1)
-            if self._proc is None or self._proc.stdin is None:
-                break
-            self._proc.stdin.write(b"\x00" * 4096)
+        if self._dir is not None:
+            logger.info("Cleaning up temporary directory: %s", self._dir.name)
+            self._dir.cleanup()
+            self._dir = None
+        elif self.fifo_path is not None:
+            logger.info("Removing FIFO file: %s", self.fifo_path)
+            self.fifo_path.unlink(missing_ok=True)
+            self.fifo_path = None
 
     async def write_frames(self, frames: bytes) -> None:
         """Write the incoming audio chunk.
@@ -216,11 +104,35 @@ class VirtualMicrophone(PulseModuleManager):
         Args:
             frames (bytes): Audio data in f32le format to be processed.
         """
-        if self._proc is None or self._proc.stdin is None:
+        if self._writer is None:
             msg = "Audio streamer not started"
             raise RuntimeError(msg)
 
-        logger.debug("Writing %d bytes to virtual microphone", len(frames))
+        async with self._lock:
+            logger.debug("Writing %d bytes to virtual microphone", len(frames))
+            self._writer.write(frames)
+            await self._writer.drain()
 
-        self._proc.stdin.write(frames)
-        await self._proc.stdin.drain()
+
+def _wav_header(rate: int, channels: int, bits: int) -> bytes:
+    """Generate a unbounded PCM WAV header for the given parameters."""
+
+    def _le(x: int, n: int) -> bytes:
+        return x.to_bytes(n, "little")
+
+    byte_rate = rate * channels * bits // 8
+    block_align = channels * bits // 8
+    return (
+        b"RIFF"
+        + _le(0xFFFFFFFF, 4)
+        + b"WAVEfmt "
+        + _le(16, 4)
+        + _le(1, 2)
+        + _le(channels, 2)
+        + _le(rate, 4)
+        + _le(byte_rate, 4)
+        + _le(block_align, 2)
+        + _le(bits, 2)
+        + b"data"
+        + _le(0xFFFFFFFF, 4)
+    )
