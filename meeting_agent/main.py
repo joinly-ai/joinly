@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "-q", "--quiet", is_flag=True, help="Suppress all but error and critical logging."
 )
+@click.option("--logging-plain", is_flag=True, help="Use plain logging format.")
 @click.argument(
     "meeting-url",
     type=str,
@@ -60,9 +61,10 @@ def cli(  # noqa: PLR0913
     browser_agent_port: int | None,
     verbose: int,
     quiet: bool,
+    logging_plain: bool,
 ) -> None:
     """Start the meeting session."""
-    configure_logging(verbose, quiet=quiet)
+    configure_logging(verbose, quiet=quiet, plain=logging_plain)
 
     if meeting_url is None:
         from meeting_agent.server import mcp
@@ -80,7 +82,7 @@ def cli(  # noqa: PLR0913
         )
 
 
-def configure_logging(verbose: int, *, quiet: bool) -> None:
+def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
     """Configure logging based on verbosity level."""
     log_level = logging.WARNING
 
@@ -91,9 +93,21 @@ def configure_logging(verbose: int, *, quiet: bool) -> None:
     elif verbose >= 2:  # noqa: PLR2004
         log_level = logging.DEBUG
 
+    if not plain:
+        with contextlib.suppress(ImportError):
+            from rich.logging import RichHandler
+
+            logging.basicConfig(
+                level=log_level,
+                format="%(message)s",
+                datefmt="[%X]",
+                handlers=[RichHandler(rich_tracebacks=True)],
+            )
+            return
+
     logging.basicConfig(
         level=log_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
