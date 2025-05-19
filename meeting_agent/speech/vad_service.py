@@ -107,6 +107,8 @@ class VADService(AsyncIterator[bytes]):
             self._silent_chunks = 0
             self._speech_chunks += 1
             self.no_speech_event.clear()
+            if self._speech_chunks == 1:
+                logger.info("Speech started")
         else:
             self._silent_chunks += 1
 
@@ -124,6 +126,7 @@ class VADService(AsyncIterator[bytes]):
                 self._speech_chunks = 0
                 self._buffer.clear()
                 self.no_speech_event.set()
+                logger.info("Speech ended")
 
                 return segment
 

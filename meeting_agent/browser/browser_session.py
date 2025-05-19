@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import re
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Self
@@ -29,7 +28,7 @@ class BrowserSession:
         self._cdp_port: int = cdp_port
 
         self._proc: asyncio.subprocess.Process | None = None
-        self._profile_dir: Path | None = None
+        self._profile_dir: tempfile.TemporaryDirectory | None = None
         self._playwright: Playwright | None = None
         self._pw_browser: PlaywrightBrowser | None = None
         self._pw_context: BrowserContext | None = None
@@ -38,8 +37,6 @@ class BrowserSession:
 
     async def __aenter__(self) -> Self:
         """Start and connect to the Playwright browser."""
-        self._env["XDG_SESSION_TYPE"] = "x11"
-
         self._pw = await async_playwright().start()
 
         bin_path = Path(self._pw.chromium.executable_path)
@@ -49,18 +46,18 @@ class BrowserSession:
             logger.error(msg)
             raise RuntimeError(msg)
 
-        self._profile_dir = Path(tempfile.mkdtemp(prefix="pw-profile-"))
-        logger.info("Profile directory created at: %s", self._profile_dir)
+        self._profile_dir = tempfile.TemporaryDirectory(prefix="pw-profile_")
+        logger.info("Profile directory created at: %s", self._profile_dir.name)
 
         logger.info("Launching Chromium browser.")
+        logger.debug("Environment variables: %s", self._env)
         self._proc = await asyncio.create_subprocess_exec(
             str(bin_path),
             f"--remote-debugging-port={self._cdp_port}",
-            f"--user-data-dir={self._profile_dir}",
+            f"--user-data-dir={self._profile_dir.name}",
             "--use-fake-ui-for-media-stream",
-            "--use-fake-device-for-media-stream",
-            f"--use-file-for-fake-audio-capture={self._env['VIRTUAL_AUDIO_SOURCE']}",
             "--alsa-output-device=pulse",
+            f"--alsa-input-device={self._env.get('PULSE_SOURCE')}",
             "--autoplay-policy=no-user-gesture-required",
             "--disable-extensions",
             "--allow-http-screen-capture",
@@ -68,7 +65,6 @@ class BrowserSession:
             "--enable-usermedia-screen-capturing",
             "--enable-features=WebRTCPipeWireCapturer",
             "--ozone-platform=x11",
-            "--disable-features=UseOzonePlatform,PermissionsPolicyDisplayCapture",
             "--disable-gpu",
             "--disable-focus-on-load",
             "--window-size=1280,720",
@@ -78,7 +74,10 @@ class BrowserSession:
             "--disable-dev-shm-usage",
             "--disable-gpu-sandbox",
             "--disable-setuid-sandbox",
-            "--no-xsmh",
+            "--no-xshm",
+            "--force-device-scale-factor=1",
+            "--disable-features=TranslateUI,MediaRouter,WebRtcAutomaticGainControl",
+            "--disable-backgrounding-occluded-windows",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
             env=self._env,
@@ -131,9 +130,9 @@ class BrowserSession:
                 self._proc.kill()
                 await self._proc.wait()
 
-        if self._profile_dir is not None and self._profile_dir.exists():
-            shutil.rmtree(self._profile_dir, ignore_errors=True)
-            logger.info("Profile directory removed: %s", self._profile_dir)
+        if self._profile_dir is not None:
+            self._profile_dir.cleanup()
+            logger.info("Profile directory removed: %s", self._profile_dir.name)
 
         self._pw_context = None
         self._pw_browser = None
