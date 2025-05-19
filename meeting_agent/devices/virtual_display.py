@@ -1,8 +1,11 @@
 import asyncio
 import logging
+import re
 from typing import Self
 
 logger = logging.getLogger(__name__)
+
+_VNC_PORT_RE = re.compile(r"PORT=(\d+)")
 
 
 class VirtualDisplay:
@@ -10,22 +13,31 @@ class VirtualDisplay:
 
     def __init__(
         self,
+        *,
+        env: dict[str, str] | None = None,
         size: tuple[int, int] = (1280, 720),
         depth: int = 24,
-        env: dict[str, str] | None = None,
+        use_vnc_server: bool = False,
+        vnc_port: int | None = None,
     ) -> None:
         """Initialize the VirtualDisplay.
 
         Args:
+            env: Optional environment dictionary to set the display name.
             size: The display width and height in pixels (default is 1280x720).
             depth: The color depth of the display (default is 24).
-            env: Optional environment dictionary to set the display name.
+            use_vnc_server: Whether to use a VNC server (default is False).
+            vnc_port: The port for the VNC server (default is None).
         """
+        self._env: dict[str, str] = env if env is not None else {}
         self.size = size
         self.depth = depth
         self.display_name: str | None = None
-        self._env: dict[str, str] = env if env is not None else {}
+        self.use_vnc_server = use_vnc_server
+        self.vnc_port = vnc_port
+        self._vnc_port = vnc_port
         self._proc: asyncio.subprocess.Process | None = None
+        self._vnc_proc: asyncio.subprocess.Process | None = None
 
     async def __aenter__(self) -> Self:
         """Start the Xvfb display."""
@@ -34,6 +46,9 @@ class VirtualDisplay:
             raise RuntimeError(msg)
 
         logger.info("Starting Xvfb display")
+
+        self._env["XDG_SESSION_TYPE"] = "x11"
+        self._env.pop("WAYLAND_DISPLAY", None)
 
         # fmt: off
         cmd = [
@@ -48,6 +63,7 @@ class VirtualDisplay:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
+            env=self._env,
         )
         disp = (await self._proc.stdout.readline()).decode().strip()  # type: ignore[attr-defined]
 
@@ -62,6 +78,39 @@ class VirtualDisplay:
             self.depth,
         )
 
+        if self.use_vnc_server:
+            cmd = [
+                "/usr/bin/x11vnc",
+                "-display",
+                self.display_name,
+                "-forever",
+                "-nopw",
+                "-shared",
+            ]
+            if self.vnc_port is not None:
+                cmd.extend(["-rfbport", str(self.vnc_port)])
+
+            self._vnc_proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=self._env,
+            )
+            if self._vnc_port is None:
+                while line := await self._vnc_proc.stdout.readline():  # type: ignore[attr-defined]
+                    m = _VNC_PORT_RE.search(line.decode())
+                    if m:
+                        self._vnc_port = int(m.group(1))
+                        break
+                else:
+                    logger.warning(
+                        "Could not find VNC port in stdout, terminating VNC server"
+                    )
+                    self._vnc_proc.terminate()
+
+            if self._vnc_port is not None:
+                logger.info("Started VNC server on port: %s", self._vnc_port)
+
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -72,7 +121,8 @@ class VirtualDisplay:
 
         logger.info("Stopping Xvfb display: %s", self.display_name)
 
-        self._proc.terminate()
+        if self._proc.returncode is None:
+            self._proc.terminate()
         try:
             await asyncio.wait_for(self._proc.wait(), 5)
         except TimeoutError:
@@ -87,5 +137,21 @@ class VirtualDisplay:
             self._env.pop("DISPLAY")
 
         logger.info("Stopped Xvfb display: %s", self.display_name)
-
         self.display_name = None
+
+        if self._vnc_proc is not None:
+            logger.info("Stopping VNC server on port: %s", self._vnc_port)
+            if self._vnc_proc.returncode is None:
+                self._vnc_proc.terminate()
+            try:
+                await asyncio.wait_for(self._vnc_proc.wait(), 5)
+            except TimeoutError:
+                logger.warning(
+                    "VNC server on port %s did not stop in time, killing it",
+                    self._vnc_port,
+                )
+                self._vnc_proc.kill()
+                await self._vnc_proc.wait()
+            logger.info("Stopped VNC server on port: %s", self._vnc_port)
+            self._vnc_proc = None
+            self._vnc_port = None

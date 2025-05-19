@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio-utils \
     ffmpeg \
     xvfb \
+    x11vnc \
     && rm -rf /var/lib/apt/lists/*
 
 ENV XDG_RUNTIME_DIR=/home/vscode/.xdg_runtime

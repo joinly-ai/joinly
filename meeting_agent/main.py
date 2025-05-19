@@ -23,6 +23,19 @@ logger = logging.getLogger(__name__)
     default=True,
 )
 @click.option(
+    "--vnc-server/--no-vnc-server",
+    help="Run a VNC server to connect to. Only applicable with --headless.",
+    default=False,
+    callback=lambda ctx, _, val: val if ctx.params.get("headless", True) else False,
+)
+@click.option(
+    "--vnc-server-port",
+    type=int,
+    help="The port for the VNC server. Only applicable with --vnc-server.",
+    default=None,
+    callback=lambda ctx, _, val: val if ctx.params.get("vnc_server", False) else None,
+)
+@click.option(
     "--browser-agent/--no-browser-agent",
     help="Use a browser agent to run the meeting session.",
     default=False,
@@ -57,6 +70,8 @@ def cli(  # noqa: PLR0913
     participant_name: str,
     *,
     headless: bool,
+    vnc_server: bool,
+    vnc_server_port: int | None,
     browser_agent: bool,
     browser_agent_port: int | None,
     verbose: int,
@@ -76,6 +91,8 @@ def cli(  # noqa: PLR0913
                 meeting_url,
                 participant_name,
                 headless=headless,
+                use_vnc_server=vnc_server,
+                vnc_server_port=vnc_server_port,
                 use_browser_agent=browser_agent,
                 browser_agent_port=browser_agent_port,
             )
@@ -112,23 +129,29 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
     )
 
 
-async def run_meeting_session(
+async def run_meeting_session(  # noqa: PLR0913
     meeting_url: str,
     participant_name: str,
     *,
     headless: bool,
+    use_vnc_server: bool = False,
+    vnc_server_port: int | None = None,
     use_browser_agent: bool = False,
     browser_agent_port: int | None = None,
 ) -> None:
     """Run the meeting session until receiving a cancellation signal."""
     ms = MeetingSession(
         headless=headless,
+        use_vnc_server=use_vnc_server,
+        vnc_server_port=vnc_server_port,
         use_browser_agent=use_browser_agent,
         browser_agent_port=browser_agent_port,
     )
 
     async def _on_transcription(event: str, text: str) -> None:
-        logger.info("Transcription event: %s: %s", event, text)
+        if event == "chunk":
+            logger.info("Transcription: %s", text)
+            await ms.speak_text(text, wait=False, interrupt=False)
 
     ms.add_transcription_listener(_on_transcription)
 
