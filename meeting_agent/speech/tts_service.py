@@ -5,6 +5,7 @@ import pathlib
 from collections.abc import AsyncIterator
 from typing import Self
 
+from blingfire import text_to_sentences
 from kokoro_onnx import Kokoro
 
 logger = logging.getLogger(__name__)
@@ -53,11 +54,13 @@ class TTSService:
 
         logger.info("Streaming TTS for text: %s", text)
 
+        sentences = text_to_sentences(text).split("\n")
         async with self._sem:
-            tts_stream = self._model.create_stream(text, voice=self._voice)
-            async for pcm_array, _ in tts_stream:
-                pcm_bytes = await asyncio.to_thread(pcm_array.tobytes)
-                logger.debug("Yielding PCM bytes of size %d", len(pcm_bytes))
-                yield pcm_bytes
+            for sentence in sentences:
+                tts_stream = self._model.create_stream(sentence, voice=self._voice)
+                async for pcm_array, _ in tts_stream:
+                    pcm_bytes = await asyncio.to_thread(pcm_array.tobytes)
+                    logger.debug("Yielding PCM bytes of size %d", len(pcm_bytes))
+                    yield pcm_bytes
 
         logger.info("Finished streaming TTS for text: %s", text)

@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "blingfire>=0.1.8",
     "click>=8.1.8",
     "faster-whisper>=1.1.1",
     "fastmcp>=2.3.3",
