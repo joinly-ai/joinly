@@ -64,6 +64,7 @@ class VirtualDisplay:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
             env=self._env,
+            start_new_session=True,
         )
         disp = (await self._proc.stdout.readline()).decode().strip()  # type: ignore[attr-defined]
 
@@ -95,6 +96,7 @@ class VirtualDisplay:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=self._env,
+                start_new_session=True,
             )
             if self._vnc_port is None:
                 while line := await self._vnc_proc.stdout.readline():  # type: ignore[attr-defined]

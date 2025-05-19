@@ -112,7 +112,12 @@ class BrowserMeetingController:
             return
 
         try:
-            await self._page.click("button:has-text('leave')", timeout=1000)
+            leave_btn = self._page.get_by_role(
+                "button", name=re.compile(r"^leave", re.IGNORECASE)
+            )
+            await leave_btn.click(timeout=1000)
+
+            await self._page.wait_for_timeout(500)
         except PlaywrightError as e:
             msg = "Failed to leave the meeting"
             logger.exception(msg)
