@@ -4,7 +4,6 @@ import fcntl
 import logging
 import os
 import tempfile
-import time
 import uuid
 from pathlib import Path
 from typing import Self
@@ -24,11 +23,12 @@ class VirtualMicrophone(PulseModuleManager):
         self,
         *,
         sample_rate: int = 24000,
-        pipe_size: int = 7680,
+        pipe_size: int = 1920,
         fifo_path: Path | None = None,
         source_name: str | None = None,
-        chunk_ms: int = 80,
+        chunk_ms: int = 10,
         queue_size: int = 2,
+        max_missed_chunks: int = 10,
         env: dict[str, str] | None = None,
     ) -> None:
         """Initialize the VirtualMicrophone.
@@ -40,6 +40,8 @@ class VirtualMicrophone(PulseModuleManager):
             source_name: Name of the source.
             chunk_ms: Size of the audio chunk in milliseconds.
             queue_size: Size of the audio queue.
+            max_missed_chunks: Maximum number of missed chunks before adjusting the
+                pacing.
             env: Optional environment dictionary to set the audio source name.
         """
         self.sample_rate = sample_rate
@@ -51,6 +53,7 @@ class VirtualMicrophone(PulseModuleManager):
         self.chunk_ms = chunk_ms
         self.chunk_size = int(sample_rate * chunk_ms / 1000) * 4
         self.queue_size = queue_size
+        self.max_missed_chunks = max_missed_chunks
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
@@ -210,19 +213,36 @@ class VirtualMicrophone(PulseModuleManager):
             msg = "Audio streamer not started"
             raise RuntimeError(msg)
 
+        loop = asyncio.get_running_loop()
         silence = b"\x00" * self.chunk_size
         period = self.chunk_size / (4 * self.sample_rate)
+        next_deadline = loop.time() + period
 
         while True:
-            loop_time = time.monotonic()
+            now = loop.time()
+            if now < next_deadline:
+                await asyncio.sleep(next_deadline - now)
+            else:
+                missed = (now - next_deadline) / period
+                if missed >= self.max_missed_chunks:
+                    logger.warning(
+                        "Missed %d pacing intervals, adjusting next deadline",
+                        int(missed),
+                    )
+                    next_deadline = now
+            next_deadline += period
 
             try:
                 chunk = self._queue.get_nowait()
-                logger.debug("Writing %d bytes to virtual microphone", len(chunk))
+                logger.log(
+                    LOGGING_TRACE, "Writing %d bytes to virtual microphone", len(chunk)
+                )
             except asyncio.QueueEmpty:
                 chunk = silence
-                logger.debug(
-                    "Writing %d bytes of silence to virtual microphone", len(chunk)
+                logger.log(
+                    LOGGING_TRACE,
+                    "Writing %d bytes of silence to virtual microphone",
+                    len(chunk),
                 )
 
             self._writer.write(chunk)
@@ -230,10 +250,3 @@ class VirtualMicrophone(PulseModuleManager):
 
             if chunk is not silence:
                 self._queue.task_done()
-
-            drift = time.monotonic() - loop_time
-            if drift > period:
-                logger.warning(
-                    "Audio stream is lagging by %.2f seconds", drift - period
-                )
-            await asyncio.sleep(max(0, period - drift))
