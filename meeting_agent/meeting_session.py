@@ -48,6 +48,7 @@ class MeetingSession:
         headless: bool = True,
         use_vnc_server: bool = False,
         vnc_server_port: int | None = None,
+        use_pulse_server: bool = True,
         use_browser_agent: bool = False,
         browser_agent_port: int | None = None,
         env: dict[str, str] | None = None,
@@ -58,6 +59,8 @@ class MeetingSession:
             headless: Whether to run in headless mode (default: True).
             use_vnc_server: Whether to use a VNC server (default: False).
             vnc_server_port: The port for the VNC server (default: None).
+            use_pulse_server: Whether to use a dedicated PulseAudio server
+                (default: True).
             use_browser_agent: Whether to use a browser agent (default: False).
             browser_agent_port: The port for the browser agent (default: None).
             env: Environment variables to set for the session (default: None).
@@ -65,7 +68,9 @@ class MeetingSession:
         self._session_env = env or os.environ.copy()
         self._exit_stack: AsyncExitStack = AsyncExitStack()
 
-        self._pulse_server = PulseServer(env=self._session_env)
+        self._pulse_server = (
+            PulseServer(env=self._session_env) if use_pulse_server else None
+        )
         self._virtual_speaker = VirtualSpeaker(env=self._session_env)
         self._vad_service = VADService(self._virtual_speaker)
         self._audio_transcriber = AudioTranscriber(self._vad_service)

@@ -37,6 +37,12 @@ logger = logging.getLogger(__name__)
     callback=lambda ctx, _, val: val if ctx.params.get("vnc_server", False) else None,
 )
 @click.option(
+    "--pulse-server/--no-pulse-server",
+    help="Run a dedicated PulseAudio server. Expects a running PulseAudio server "
+    "otherwise.",
+    default=True,
+)
+@click.option(
     "--browser-agent/--no-browser-agent",
     help="Use a browser agent to run the meeting session.",
     default=False,
@@ -73,6 +79,7 @@ def cli(  # noqa: PLR0913
     headless: bool,
     vnc_server: bool,
     vnc_server_port: int | None,
+    pulse_server: bool,
     browser_agent: bool,
     browser_agent_port: int | None,
     verbose: int,
@@ -94,6 +101,7 @@ def cli(  # noqa: PLR0913
                 headless=headless,
                 use_vnc_server=vnc_server,
                 vnc_server_port=vnc_server_port,
+                use_pulse_server=pulse_server,
                 use_browser_agent=browser_agent,
                 browser_agent_port=browser_agent_port,
             )
@@ -107,6 +115,7 @@ async def run_meeting_session(  # noqa: PLR0913
     headless: bool,
     use_vnc_server: bool = False,
     vnc_server_port: int | None = None,
+    use_pulse_server: bool = True,
     use_browser_agent: bool = False,
     browser_agent_port: int | None = None,
 ) -> None:
@@ -115,6 +124,7 @@ async def run_meeting_session(  # noqa: PLR0913
         headless=headless,
         use_vnc_server=use_vnc_server,
         vnc_server_port=vnc_server_port,
+        use_pulse_server=use_pulse_server,
         use_browser_agent=use_browser_agent,
         browser_agent_port=browser_agent_port,
     )
