@@ -1,5 +1,7 @@
 import asyncio
+import contextlib
 import logging
+import re
 from typing import Self
 
 from playwright.async_api import Error as PlaywrightError
@@ -62,24 +64,31 @@ class BrowserMeetingController:
             )
             return
 
-        try:
-            # wait for an input field where placeholder contains "name"
-            await self._page.wait_for_selector(
-                "input[placeholder*='name' i]", timeout=20000
-            )
-            await self._page.wait_for_timeout(1000)
-            await self._page.fill("input[placeholder*='name' i]", participant_name)
+        async def _dismiss_audio_missing(page: Page) -> None:
+            await page.click("button:has-text('Continue without audio')", timeout=0)
 
-            # click the join button by finding a button containing "join"
-            await self._page.wait_for_selector(
-                "button:has-text('join')", timeout=1000, state="visible"
+        dismiss_audio_missing = asyncio.create_task(_dismiss_audio_missing(self._page))
+
+        try:
+            name_field = self._page.get_by_placeholder(
+                re.compile("name", re.IGNORECASE)
             )
-            await self._page.wait_for_timeout(1000)
-            await self._page.click("button:has-text('join')")
+            await name_field.fill(participant_name, timeout=10000)
+
+            join_btn = self._page.get_by_role(
+                "button", name=re.compile(r"^join", re.IGNORECASE)
+            )
+            await join_btn.click(timeout=3000)
+            dismiss_audio_missing.cancel()
+
         except PlaywrightError as e:
             msg = "Failed to join the meeting"
             logger.exception(msg)
             raise RuntimeError(msg) from e
+        finally:
+            dismiss_audio_missing.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await dismiss_audio_missing
 
         logger.info(
             "Joined the meeting: %s as %s",
