@@ -1,10 +1,10 @@
 import asyncio
-import contextlib
 import logging
 
 import click
 
-from meeting_agent import MeetingSession
+from meeting_agent import client
+from meeting_agent.server import SESSION_CONFIG, mcp
 from meeting_agent.utils import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,12 @@ logger = logging.getLogger(__name__)
     else None,
 )
 @click.option(
+    "--server/--client",
+    help="Run the meeting agent as server or client. For --client, a meeting-url is "
+    "required.",
+    default=True,
+)
+@click.option(
     "-v",
     "--verbose",
     count=True,
@@ -68,90 +74,38 @@ logger = logging.getLogger(__name__)
 @click.option("--logging-plain", is_flag=True, help="Use plain logging format.")
 @click.argument(
     "meeting-url",
+    default=None,
     type=str,
     required=False,
     envvar="MEETING_URL",
 )
-def cli(  # noqa: PLR0913
-    meeting_url: str | None,
-    participant_name: str,
+def cli(
     *,
-    headless: bool,
-    vnc_server: bool,
-    vnc_server_port: int | None,
-    pulse_server: bool,
-    browser_agent: bool,
-    browser_agent_port: int | None,
+    server: bool,
     verbose: int,
     quiet: bool,
     logging_plain: bool,
+    **ms_kwargs: dict,
 ) -> None:
     """Start the meeting session."""
-    configure_logging(verbose, quiet=quiet, plain=logging_plain)
-
-    if meeting_url is None:
-        from meeting_agent.server import mcp
-
-        mcp.run(transport="streamable-http")
-    else:
-        asyncio.run(
-            run_meeting_session(
-                meeting_url,
-                participant_name,
-                headless=headless,
-                use_vnc_server=vnc_server,
-                vnc_server_port=vnc_server_port,
-                use_pulse_server=pulse_server,
-                use_browser_agent=browser_agent,
-                browser_agent_port=browser_agent_port,
-            )
-        )
-
-
-async def run_meeting_session(  # noqa: PLR0913
-    meeting_url: str,
-    participant_name: str,
-    *,
-    headless: bool,
-    use_vnc_server: bool = False,
-    vnc_server_port: int | None = None,
-    use_pulse_server: bool = True,
-    use_browser_agent: bool = False,
-    browser_agent_port: int | None = None,
-) -> None:
-    """Run the meeting session until receiving a cancellation signal."""
-    ms = MeetingSession(
-        headless=headless,
-        use_vnc_server=use_vnc_server,
-        vnc_server_port=vnc_server_port,
-        use_pulse_server=use_pulse_server,
-        use_browser_agent=use_browser_agent,
-        browser_agent_port=browser_agent_port,
+    configure_logging(
+        verbose=verbose,
+        quiet=quiet,
+        plain=logging_plain,
     )
 
-    async def _on_transcription(event: str, text: str) -> None:
-        if event == "chunk":
-            logger.info("Transcription: %s", text)
-            await ms.speak_text(text, wait=False, interrupt=False)
+    if not server and ms_kwargs.get("meeting_url") is None:
+        msg = "The meeting URL is required when running as a client."
+        raise click.BadParameter(
+            msg,
+            param_hint="meeting-url",
+        )
+    SESSION_CONFIG.update(ms_kwargs)
 
-    ms.add_transcription_listener(_on_transcription)
-
-    joined = False
-    async with ms:
-        try:
-            await ms.join_meeting(
-                meeting_url=meeting_url,
-                participant_name=participant_name,
-            )
-            joined = True
-
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            logger.info("Meeting session cancelled")
-            if joined:
-                with contextlib.suppress(Exception):
-                    await ms.leave_meeting()
-            raise
+    if server:
+        mcp.run(transport="streamable-http")
+    else:
+        asyncio.run(client.run())
 
 
 if __name__ == "__main__":

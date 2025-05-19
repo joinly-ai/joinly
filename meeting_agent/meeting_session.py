@@ -1,7 +1,9 @@
+import contextlib
 import logging
 import os
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from typing import Self
 
 from meeting_agent.browser.browser_agent import BrowserAgent
@@ -20,16 +22,15 @@ logger = logging.getLogger(__name__)
 
 """
 TODO:
-- fix need to start mic before sink?, maybe set pactl auto select off?
-- fix audio microphone buffer issues (constant silence stream?)
+- settings
 - optional dependencies, lazy import (e.g., for langchain, providers, etc.)
+- subclass to allow different providers (transcription, tts, vad)
 - improve transcription: stream input directly and use context
 - improve latency of entire system
-- subclass to allow different providers (transcription, tts, vad)
 - add transcription class, maybe with vad timestamps? maybe already
     with multiple speaker support?
-- add playbook executor and playbooks for gmeet, teams, zoom
-- maybe replace playwright-mcp with agent working directly on playbook syntax?
+- (?) add playbook executor and playbooks for gmeet, teams, zoom
+- (?) maybe replace playwright-mcp with agent working directly on playbook syntax?
     -> allows it to pick up history better and produce playbook from actions
 - add meeting chat functionality + chat events
 - participant detection, joining events etc.
@@ -39,37 +40,48 @@ TODO:
 """
 
 
+@dataclass(frozen=True)
+class MeetingSessionConfig:
+    """Configuration for the meeting session.
+
+    Attributes:
+        meeting_url: The URL of the meeting to join.
+        participant_name: The name of the participant.
+        headless: Whether to run in headless mode
+        vnc_server: Whether to use a VNC server.
+        vnc_server_port: The port for the VNC server.
+        pulse_server: Whether to use a dedicated PulseAudio server.
+        browser_agent: Whether to use a browser agent.
+        browser_agent_port: The port for the browser agent.
+        env: Environment variables to set for the session.
+    """
+
+    meeting_url: str | None = None
+    participant_name: str | None = None
+    headless: bool = True
+    vnc_server: bool = False
+    vnc_server_port: int | None = None
+    pulse_server: bool = True
+    browser_agent: bool = False
+    browser_agent_port: int | None = None
+    env: dict[str, str] | None = None
+
+
+DEFAULT_CONFIG = MeetingSessionConfig()
+
+
 class MeetingSession:
     """A class to represent a meeting session."""
 
-    def __init__(  # noqa: PLR0913
-        self,
-        *,
-        headless: bool = True,
-        use_vnc_server: bool = False,
-        vnc_server_port: int | None = None,
-        use_pulse_server: bool = True,
-        use_browser_agent: bool = False,
-        browser_agent_port: int | None = None,
-        env: dict[str, str] | None = None,
-    ) -> None:
-        """Initialize a meeting session.
-
-        Args:
-            headless: Whether to run in headless mode (default: True).
-            use_vnc_server: Whether to use a VNC server (default: False).
-            vnc_server_port: The port for the VNC server (default: None).
-            use_pulse_server: Whether to use a dedicated PulseAudio server
-                (default: True).
-            use_browser_agent: Whether to use a browser agent (default: False).
-            browser_agent_port: The port for the browser agent (default: None).
-            env: Environment variables to set for the session (default: None).
-        """
-        self._session_env = env or os.environ.copy()
+    def __init__(self, config: MeetingSessionConfig = DEFAULT_CONFIG) -> None:
+        """Initialize a meeting session."""
+        self._meeting_url = config.meeting_url
+        self._participant_name = config.participant_name or "joinly"
+        self._session_env = os.environ.copy() | (config.env or {})
         self._exit_stack: AsyncExitStack = AsyncExitStack()
 
         self._pulse_server = (
-            PulseServer(env=self._session_env) if use_pulse_server else None
+            PulseServer(env=self._session_env) if config.pulse_server else None
         )
         self._virtual_speaker = VirtualSpeaker(env=self._session_env)
         self._vad_service = VADService(self._virtual_speaker)
@@ -84,16 +96,16 @@ class MeetingSession:
         self._virtual_display = (
             VirtualDisplay(
                 env=self._session_env,
-                use_vnc_server=use_vnc_server,
-                vnc_port=vnc_server_port,
+                use_vnc_server=config.vnc_server,
+                vnc_port=config.vnc_server_port,
             )
-            if headless
+            if config.headless
             else None
         )
         self._browser_session = BrowserSession(env=self._session_env)
         self._browser_agent = (
-            BrowserAgent(env=self._session_env, mcp_port=browser_agent_port)
-            if use_browser_agent
+            BrowserAgent(env=self._session_env, mcp_port=config.browser_agent_port)
+            if config.browser_agent
             else None
         )
         self._meeting_controller = BrowserMeetingController(
@@ -123,10 +135,19 @@ class MeetingSession:
             await self._exit_stack.aclose()
             raise
 
+        if self._meeting_url is not None:
+            await self.join_meeting(
+                meeting_url=self._meeting_url,
+                participant_name=self._participant_name,
+            )
+
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the meeting session context."""
+        if self._meeting_url is not None:
+            with contextlib.suppress(Exception):
+                await self.leave_meeting()
         await self._exit_stack.aclose()
 
     @property
@@ -148,14 +169,20 @@ class MeetingSession:
         """
         return self._audio_transcriber.add_listener(listener)
 
-    async def join_meeting(self, meeting_url: str, participant_name: str) -> None:
+    async def join_meeting(
+        self, meeting_url: str, participant_name: str | None
+    ) -> None:
         """Join a meeting using the provided URL.
 
         Args:
             meeting_url (str): The URL of the meeting to join.
-            participant_name (str): The name of the participant.
+            participant_name (str | None): The name of the participant.
+                Defaults to the sessions participant name.
         """
-        await self._meeting_controller.join(meeting_url, participant_name)
+        name = (
+            participant_name if participant_name is not None else self._participant_name
+        )
+        await self._meeting_controller.join(meeting_url, name)
 
     async def leave_meeting(self) -> None:
         """Leave the current meeting."""

@@ -111,7 +111,7 @@ class AudioTranscriber:
                 await self._notify("chunk", chunk)
 
             if segment:
-                logger.debug("Transcription segment: %s", " ".join(segment))
+                logger.info("Transcription segment: %s", " ".join(segment))
                 await self._notify("segment", " ".join(segment))
 
         await self._queue.put(_SENTINEL)

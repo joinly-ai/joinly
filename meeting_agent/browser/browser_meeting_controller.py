@@ -72,7 +72,7 @@ class BrowserMeetingController:
             name_field = self._page.get_by_placeholder(
                 re.compile("name", re.IGNORECASE)
             )
-            await name_field.fill(participant_name, timeout=10000)
+            await name_field.fill(participant_name, timeout=20000)
 
             join_btn = self._page.get_by_role(
                 "button", name=re.compile(r"^join", re.IGNORECASE)

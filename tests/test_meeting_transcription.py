@@ -43,10 +43,7 @@ async def _run_meeting_transcription_test(
         duration_seconds: How long to collect transcriptions (in seconds)
         max_wer_threshold: Maximum acceptable Word Error Rate (default 0.1 or 10%)
     """
-    ms = MeetingSession(
-        headless=True,
-        use_browser_agent=False,
-    )
+    ms = MeetingSession()
 
     transcription_agg: list[str] = []
 

@@ -8,12 +8,14 @@ from fastmcp import Context, FastMCP
 from mcp.server import NotificationOptions
 from pydantic import AnyUrl, Field
 
-from meeting_agent.meeting_session import MeetingSession
+from meeting_agent.meeting_session import MeetingSession, MeetingSessionConfig
 
 if TYPE_CHECKING:
     from mcp import ServerSession
 
 logger = logging.getLogger(__name__)
+
+SESSION_CONFIG: dict = {}
 
 
 transcript_url = AnyUrl("transcript://live")
@@ -30,7 +32,7 @@ class SessionContext:
 async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     """Create and enter a MeetingSession once per client connection."""
     logger.info("Creating meeting session")
-    ms = MeetingSession()
+    ms = MeetingSession(MeetingSessionConfig(**SESSION_CONFIG))
     await ms.__aenter__()
 
     _removers: dict[ServerSession, Callable[[], None]] = {}
@@ -90,7 +92,7 @@ async def get_transcript(ctx: Context) -> str:
 async def join_meeting(
     meeting_url: Annotated[str, Field(description="URL to join an online meeting")],
     participant_name: Annotated[
-        str, Field(description="Name of the participant to join as")
+        str | None, Field(description="Name of the participant to join as")
     ],
     ctx: Context,
 ) -> None:
@@ -147,3 +149,7 @@ async def start_screen_sharing(
     """Start screen sharing in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.start_screen_sharing()
+
+
+if __name__ == "__main__":
+    mcp.run(transport="streamable-http")
