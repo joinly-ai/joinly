@@ -5,6 +5,7 @@ import logging
 import click
 
 from meeting_agent import MeetingSession
+from meeting_agent.utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -97,36 +98,6 @@ def cli(  # noqa: PLR0913
                 browser_agent_port=browser_agent_port,
             )
         )
-
-
-def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
-    """Configure logging based on verbosity level."""
-    log_level = logging.WARNING
-
-    if quiet:
-        log_level = logging.ERROR
-    elif verbose == 1:
-        log_level = logging.INFO
-    elif verbose >= 2:  # noqa: PLR2004
-        log_level = logging.DEBUG
-
-    if not plain:
-        with contextlib.suppress(ImportError):
-            from rich.logging import RichHandler
-
-            logging.basicConfig(
-                level=log_level,
-                format="%(message)s",
-                datefmt="[%X]",
-                handlers=[RichHandler(rich_tracebacks=True)],
-            )
-            return
-
-    logging.basicConfig(
-        level=log_level,
-        format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
 
 
 async def run_meeting_session(  # noqa: PLR0913

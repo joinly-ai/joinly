@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Self
 
 from meeting_agent.devices.pulse_module_manager import PulseModuleManager
+from meeting_agent.utils import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
 
@@ -183,13 +184,18 @@ class VirtualMicrophone(PulseModuleManager):
 
         view = memoryview(frames)
         while len(view) >= self.chunk_size:
-            logger.debug("Queueing %d bytes to virtual microphone", self.chunk_size)
+            logger.log(
+                LOGGING_TRACE,
+                "Queueing %d bytes to virtual microphone",
+                self.chunk_size,
+            )
             await self._queue.put(bytes(view[: self.chunk_size]))
             view = view[self.chunk_size :]
 
         if view:
             pad_len = self.chunk_size - len(view)
-            logger.debug(
+            logger.log(
+                LOGGING_TRACE,
                 "Queueing %d bytes with %d bytes (total %d) of padding to "
                 "virtual microphone",
                 len(view),

@@ -6,6 +6,8 @@ from typing import Self
 
 import torch
 
+from meeting_agent.utils import LOGGING_TRACE
+
 logger = logging.getLogger(__name__)
 
 
@@ -95,7 +97,8 @@ class VADService(AsyncIterator[bytes]):
         confidence = await self.vad(chunk)
         speech = confidence > self._speech_threshold
 
-        logger.debug(
+        logger.log(
+            LOGGING_TRACE,
             "%s %s: %s (%.2f)",
             self._silent_chunks,
             self._speech_chunks,
