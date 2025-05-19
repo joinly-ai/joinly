@@ -42,10 +42,12 @@ TODO:
 class MeetingSession:
     """A class to represent a meeting session."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         headless: bool = True,
+        use_vnc_server: bool = False,
+        vnc_server_port: int | None = None,
         use_browser_agent: bool = False,
         browser_agent_port: int | None = None,
         env: dict[str, str] | None = None,
@@ -54,13 +56,12 @@ class MeetingSession:
 
         Args:
             headless: Whether to run in headless mode (default: True).
+            use_vnc_server: Whether to use a VNC server (default: False).
+            vnc_server_port: The port for the VNC server (default: None).
             use_browser_agent: Whether to use a browser agent (default: False).
             browser_agent_port: The port for the browser agent (default: None).
             env: Environment variables to set for the session (default: None).
         """
-        self.headless = headless
-        self.use_browser_agent = use_browser_agent
-        self.browser_agent_port = browser_agent_port
         self._session_env = env or os.environ.copy()
         self._exit_stack: AsyncExitStack = AsyncExitStack()
 
@@ -76,12 +77,18 @@ class MeetingSession:
             no_speech_event=self._vad_service.no_speech_event,
         )
         self._virtual_display = (
-            VirtualDisplay(env=self._session_env) if self.headless else None
+            VirtualDisplay(
+                env=self._session_env,
+                use_vnc_server=use_vnc_server,
+                vnc_port=vnc_server_port,
+            )
+            if headless
+            else None
         )
         self._browser_session = BrowserSession(env=self._session_env)
         self._browser_agent = (
-            BrowserAgent(env=self._session_env, mcp_port=self.browser_agent_port)
-            if self.use_browser_agent
+            BrowserAgent(env=self._session_env, mcp_port=browser_agent_port)
+            if use_browser_agent
             else None
         )
         self._meeting_controller = BrowserMeetingController(
@@ -149,13 +156,17 @@ class MeetingSession:
         """Leave the current meeting."""
         await self._meeting_controller.leave()
 
-    async def speak_text(self, text: str) -> None:
+    async def speak_text(
+        self, text: str, *, wait: bool = True, interrupt: bool = False
+    ) -> None:
         """Speak the provided text using TTS.
 
         Args:
             text (str): The text to be spoken.
+            wait (bool): Whether to block until the speech is finished (default: True).
+            interrupt (bool): Whether to interrupt detected speech (default: False).
         """
-        await self._speech_controller.speak_text(text)
+        await self._speech_controller.speak_text(text, wait=wait, interrupt=interrupt)
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.
