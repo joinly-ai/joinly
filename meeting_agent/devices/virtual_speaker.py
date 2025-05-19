@@ -23,7 +23,7 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
         *,
         sample_rate: int = 16000,
         frames_per_chunk: int = 512,
-        pipe_size: int = 2048,
+        pipe_size: int = 4096,
         fifo_path: Path | None = None,
         sink_name: str | None = None,
         env: dict[str, str] | None = None,
@@ -33,7 +33,7 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
         Args:
             sample_rate (int): The sample rate for the audio stream (default is 16000).
             frames_per_chunk (int): The number of frames per chunk (default is 512).
-            pipe_size (int): The size of the pipe for audio streaming (default is 2048).
+            pipe_size (int): The size of the pipe for audio streaming (default is 4096).
             fifo_path (Path | None): The path to the FIFO file (default is None).
             sink_name (str | None): The name of the sink (default is None).
             env: Optional environment dictionary to set the sink name.
@@ -61,6 +61,10 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
             msg = "Audio sink already created"
             raise RuntimeError(msg)
 
+        if self._reader is not None:
+            msg = "Audio reader already started"
+            raise RuntimeError(msg)
+
         if self.fifo_path is None:
             self._dir = tempfile.TemporaryDirectory(prefix="virtsink_")
             self.fifo_path = Path(self._dir.name) / "fifo.pcm"
@@ -71,11 +75,6 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
 
         logger.info("Creating FIFO file: %s", self.fifo_path)
         os.mkfifo(self.fifo_path, 0o600)
-        fcntl.fcntl(
-            os.open(self.fifo_path, os.O_RDONLY | os.O_NONBLOCK),
-            fcntl.F_SETPIPE_SZ,
-            self.pipe_size,
-        )
 
         logger.info("Creating virtual audio sink: %s", self.sink_name)
         self._module_id = await self._load_module(
@@ -83,12 +82,11 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
             f"sink_name={self.sink_name}",
             f"file={self.fifo_path}",
             f"rate={self.sample_rate}",
-            "format=f32le",
+            "format=float32le",
             "channels=1",
+            "use_system_clock_for_timing=yes",
+            env=self._env,
         )
-
-        self._env[_ENV_VAR] = self.sink_name
-
         logger.info(
             "Created virtual audio sink: %s (id: %s)",
             self.sink_name,
@@ -96,7 +94,16 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
         )
 
         logger.info("Setting up FIFO file for reading: %s", self.fifo_path)
-        self._reader, _ = await asyncio.open_connection(path=self.fifo_path)
+        fd = os.open(self.fifo_path, os.O_RDWR | os.O_NONBLOCK)
+        fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, self.pipe_size)
+
+        reader = asyncio.StreamReader()
+        protocol = asyncio.StreamReaderProtocol(reader)
+        loop = asyncio.get_running_loop()
+        await loop.connect_read_pipe(lambda: protocol, os.fdopen(fd, "rb", buffering=0))
+        self._reader = reader
+
+        self._env[_ENV_VAR] = self.sink_name
 
         logger.info(
             "Virtual speaker is ready (sink: %s, id: %s, fifo: %s, rate: %s)",
@@ -126,7 +133,7 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
                 self._module_id,
             )
 
-            await self._unload_module(self._module_id)
+            await self._unload_module(self._module_id, env=self._env)
 
             if self._env.get(_ENV_VAR) == self.sink_name:
                 self._env.pop(_ENV_VAR)
@@ -136,7 +143,6 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
                 self.sink_name,
                 self._module_id,
             )
-            self._monitor_name = None
             self._module_id = None
 
         if self._dir is not None:
