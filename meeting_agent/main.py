@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
     "--participant-name",
     type=str,
     help="The meeting participant name.",
-    default="Kevin",
+    default="Blaire",
 )
 @click.option(
     "--headless/--no-headless",
