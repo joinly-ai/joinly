@@ -33,6 +33,7 @@ class BrowserMeetingController:
 
     async def __aenter__(self) -> Self:
         """Start the meeting session."""
+        self._page = await self._browser_session.get_page()
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -41,12 +42,10 @@ class BrowserMeetingController:
 
     async def join(self, meeting_url: str, participant_name: str) -> None:
         """Join the meeting by clicking the join button."""
-        if self._page is not None:
-            msg = "Meeting already joined, leave before joining again."
+        if self._page is None:
+            msg = "Meeting controller not started."
             logger.error(msg)
             raise RuntimeError(msg)
-
-        self._page = await self._browser_session.get_page()
 
         logger.info("Joining the meeting: %s as %s", meeting_url, participant_name)
 
@@ -139,19 +138,20 @@ class BrowserMeetingController:
         logger.info("Sending chat message: %s", message)
 
         try:
-            input_field = await self._page.query_selector("div[contenteditable='true']")
+            chat_input = self._page.locator("div[contenteditable='true']")
+            is_chat_visible = await chat_input.is_visible(timeout=1000)
 
-            if input_field is None:
-                await self._page.wait_for_selector(
-                    "button:has-text('chat')", timeout=2000
+            if not is_chat_visible:
+                chat_button = self._page.get_by_role(
+                    "button", name=re.compile(r"^chat", re.IGNORECASE)
                 )
-                await self._page.click("button:has-text('chat')")
-                await self._page.wait_for_timeout(2000)
+                await chat_button.wait_for(timeout=2000)
+                await chat_button.click()
+                await self._page.wait_for_timeout(1000)
 
-            await self._page.wait_for_selector(
-                "div[contenteditable='true']", timeout=2000
-            )
-            await self._page.fill("div[contenteditable='true']", message)
+            await chat_input.wait_for(timeout=2000)
+            await chat_input.fill(message)
+            await self._page.wait_for_timeout(500)
             await self._page.keyboard.press("Enter")
         except PlaywrightError as e:
             msg = "Failed to send chat message"
@@ -170,9 +170,21 @@ class BrowserMeetingController:
         logger.info("Starting screen sharing.")
 
         try:
-            await self._page.click("button:has-text('Share')", timeout=1000)
-            await self._page.click("button:has-text('Screen')", timeout=1000)
-        except PlaywrightError:
-            logger.exception("Failed to start screen sharing")
+            screen_share_btn = self._page.get_by_role(
+                "button", name=re.compile(r"^share", re.IGNORECASE)
+            )
+            await screen_share_btn.wait_for(timeout=2000)
+            await screen_share_btn.click(timeout=2000)
+            await self._page.wait_for_timeout(500)
+
+            screen_share_btn = self._page.get_by_role(
+                "button", name=re.compile(r"^share a screen", re.IGNORECASE)
+            )
+            await screen_share_btn.wait_for(timeout=2000)
+            await screen_share_btn.click(timeout=2000)
+        except PlaywrightError as e:
+            msg = "Failed to start screen sharing"
+            logger.exception(msg)
+            raise RuntimeError(msg) from e
         else:
             logger.info("Screen sharing started.")

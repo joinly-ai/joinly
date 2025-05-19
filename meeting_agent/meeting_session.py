@@ -180,3 +180,7 @@ class MeetingSession:
             message (str): The message to be sent.
         """
         await self._meeting_controller.send_chat_message(message)
+
+    async def start_screen_sharing(self) -> None:
+        """Start screen sharing in the meeting."""
+        await self._meeting_controller.start_screen_sharing()

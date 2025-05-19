@@ -135,3 +135,15 @@ async def send_chat_message(
     """Send a chat message in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.send_chat_message(message)
+
+
+@mcp.tool(
+    "start_screen_sharing",
+    description="Start screen sharing in the meeting.",
+)
+async def start_screen_sharing(
+    ctx: Context,
+) -> None:
+    """Start screen sharing in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.start_screen_sharing()

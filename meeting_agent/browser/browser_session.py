@@ -61,7 +61,7 @@ class BrowserSession:
             "--autoplay-policy=no-user-gesture-required",
             "--disable-extensions",
             "--allow-http-screen-capture",
-            "--auto-select-desktop-capture-source=screen",
+            "--auto-select-desktop-capture-source=Entire",
             "--enable-usermedia-screen-capturing",
             "--enable-features=WebRTCPipeWireCapturer",
             "--ozone-platform=x11",

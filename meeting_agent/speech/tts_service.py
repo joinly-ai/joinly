@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class TTSService:
     """Text-to-Speech (TTS) service for converting text to speech."""
 
-    def __init__(self, *, voice: str = "af_kore") -> None:
+    def __init__(self, *, voice: str = "af_bella") -> None:
         """Initialize the TTS service."""
         self._voice = voice
         self._model = None
