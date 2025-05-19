@@ -7,6 +7,7 @@ from typing import Self
 from meeting_agent.browser.browser_agent import BrowserAgent
 from meeting_agent.browser.browser_meeting_controller import BrowserMeetingController
 from meeting_agent.browser.browser_session import BrowserSession
+from meeting_agent.devices.pulse_server import PulseServer
 from meeting_agent.devices.virtual_display import VirtualDisplay
 from meeting_agent.devices.virtual_microphone import VirtualMicrophone
 from meeting_agent.devices.virtual_speaker import VirtualSpeaker
@@ -63,6 +64,7 @@ class MeetingSession:
         self._session_env = env or os.environ.copy()
         self._exit_stack: AsyncExitStack = AsyncExitStack()
 
+        self._pulse_server = PulseServer(env=self._session_env)
         self._virtual_speaker = VirtualSpeaker(env=self._session_env)
         self._vad_service = VADService(self._virtual_speaker)
         self._audio_transcriber = AudioTranscriber(self._vad_service)
@@ -89,30 +91,25 @@ class MeetingSession:
 
     async def __aenter__(self) -> Self:
         """Enter the meeting session context."""
-        for svc in [
-            self._virtual_microphone,
-            self._virtual_speaker,
-            self._vad_service,
-            self._audio_transcriber,
-            self._tts_service,
-            self._speech_controller,
-            self._virtual_display,
-            self._browser_session,
-            self._browser_agent,
-            self._meeting_controller,
-        ]:
-            if svc is not None:
-                await self._exit_stack.enter_async_context(svc)
-
-        # asyncio.get_running_loop().call_later(
-        #    30, lambda: asyncio.create_task(self.send_chat_message("Hello!")))
-
-        # asyncio.get_running_loop().call_later(
-        #    40, lambda: asyncio.create_task(self.send_chat_message("Hello, again.")))
-
-        # asyncio.get_running_loop().call_later(
-        #    10,
-        #    lambda: asyncio.create_task(speech_controller.speak_text("Hello, how are you? I am testing this meeting agent. Feel free to interrupt me. I will keep on talking for some time now. Just to give you some time to do some testing, isn't that nice? But now you really need to finish. Your last seconds are ticking.")))  # noqa: E501
+        try:
+            for svc in [
+                self._pulse_server,
+                self._virtual_speaker,
+                self._vad_service,
+                self._audio_transcriber,
+                self._virtual_microphone,
+                self._tts_service,
+                self._speech_controller,
+                self._virtual_display,
+                self._browser_session,
+                self._browser_agent,
+                self._meeting_controller,
+            ]:
+                if svc is not None:
+                    await self._exit_stack.enter_async_context(svc)
+        except Exception:
+            await self._exit_stack.aclose()
+            raise
 
         return self
 

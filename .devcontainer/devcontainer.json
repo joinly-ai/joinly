@@ -23,6 +23,6 @@
         "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
     },
     "postCreateCommand": "uv sync --frozen && uv run scripts/bootstrap_assets.py",
-    "postStartCommand": "uv run pre-commit install && pulseaudio --start --exit-idle-time=-1",
+    "postStartCommand": "uv run pre-commit install",
     "remoteUser": "vscode"
 }
