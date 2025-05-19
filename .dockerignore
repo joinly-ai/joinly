@@ -10,3 +10,6 @@ ruff.toml
 .pre-commit-config.yaml
 .ruff_cache
 node_modules
+pytest.ini
+pytest_cache
+.env
