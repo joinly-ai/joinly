@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
     "--host",
     type=str,
     help="The host to bind the server to. Only applicable with --server.",
-    default="localhost",
+    default="127.0.0.1",
     callback=lambda ctx, _, val: val if ctx.params.get("server", True) else None,
 )
 @click.option(
@@ -116,7 +116,7 @@ def cli(  # noqa: PLR0913
         msg = "The meeting URL is required when running as a client."
         raise click.BadParameter(
             msg,
-            param_hint="meeting-url",
+            param_hint="MEETING_URL",
         )
     SESSION_CONFIG.update(ms_kwargs)
 
