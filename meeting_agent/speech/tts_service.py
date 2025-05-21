@@ -2,10 +2,10 @@ import asyncio
 import logging
 import os
 import pathlib
+import re
 from collections.abc import AsyncIterator
 from typing import Self
 
-from blingfire import text_to_sentences
 from kokoro_onnx import Kokoro
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class TTSService:
     def __init__(self, *, voice: str = "af_bella") -> None:
         """Initialize the TTS service."""
         self._voice = voice
-        self._model = None
+        self._model: Kokoro | None = None
         self._sem = asyncio.Semaphore(1)
 
     async def __aenter__(self) -> Self:
@@ -46,21 +46,25 @@ class TTSService:
             del self._model
             self._model = None
 
-    async def tts(self, text: str) -> AsyncIterator[bytes]:
-        """Stream TTS audio."""
+    async def tts(self, text: str) -> AsyncIterator[tuple[bytes, str]]:
+        """Convert text to speech and stream the audio data."""
+        logger.info("Streaming TTS for text: %s", text)
+
+        chunks = re.split(r"(?<=[.,;!?])\s+", text)
+        for chunk in chunks:
+            audio_data = await self._tts(chunk)
+            yield audio_data, chunk
+
+        logger.info("Finished streaming TTS for text: %s", text)
+
+    async def _tts(self, text: str) -> bytes:
+        """Convert text to speech."""
         if self._model is None:
             msg = "Model not initialized"
             raise RuntimeError(msg)
 
-        logger.info("Streaming TTS for text: %s", text)
-
-        sentences = text_to_sentences(text).split("\n")
         async with self._sem:
-            for sentence in sentences:
-                tts_stream = self._model.create_stream(sentence, voice=self._voice)
-                async for pcm_array, _ in tts_stream:
-                    pcm_bytes = await asyncio.to_thread(pcm_array.tobytes)
-                    logger.debug("Yielding PCM bytes of size %d", len(pcm_bytes))
-                    yield pcm_bytes
-
-        logger.info("Finished streaming TTS for text: %s", text)
+            return await asyncio.to_thread(
+                lambda text: self._model.create(text, voice=self._voice)[0].tobytes(),  # type: ignore[attr-defined]
+                text,
+            )

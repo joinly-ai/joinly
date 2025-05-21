@@ -156,15 +156,6 @@ wheels = [
 ]
 
 [[package]]
-name = "blingfire"
-version = "0.1.8"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0f/55/e5b9ac53281b89b7fb182c9858b78c6109e350797e93f5e4cbdb90dfbbe6/blingfire-0.1.8.tar.gz", hash = "sha256:fac20b4c1bb6519a32716a8bf64f0fcb7b6ea7631ad1ffab29f14df85c5b4d6a", size = 41948752, upload-time = "2021-09-24T18:38:41.596Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/6e/bbf134837ca86e416183e98c4ed2f4e35cb805296a940fb96e58faaa2123/blingfire-0.1.8-py3-none-any.whl", hash = "sha256:9534102bb81f69bc175e2373ef46d8eb0a2a43da052442c7708bfcef171899df", size = 42060688, upload-time = "2021-09-24T18:33:50.229Z" },
-]
-
-[[package]]
 name = "certifi"
 version = "2025.1.31"
 source = { registry = "https://pypi.org/simple" }
@@ -1005,7 +996,6 @@ name = "meeting-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "blingfire" },
     { name = "click" },
     { name = "faster-whisper" },
     { name = "fastmcp" },
@@ -1037,7 +1027,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blingfire", specifier = ">=0.1.8" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "faster-whisper", specifier = ">=1.1.1" },
     { name = "fastmcp", specifier = ">=2.3.3" },
