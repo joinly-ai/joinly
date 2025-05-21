@@ -64,7 +64,12 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     finally:
         for rem in _removers.values():
             rem()
-        await ms.__aexit__(None, None, None)
+
+        # ensure proper cleanup
+        from anyio import CancelScope
+
+        with CancelScope(shield=True):
+            await ms.__aexit__(None, None, None)
 
 
 mcp = FastMCP(

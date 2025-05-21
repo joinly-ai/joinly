@@ -110,25 +110,25 @@ class BrowserSession:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
-        """Stop the Playwright."""
-        logger.info("Stopping Playwright.")
+        """Stop the browser."""
+        logger.info("Stopping browser.")
 
         for page in self._pages:
-            if not page.is_closed():
+            if page is not self._default_page and not page.is_closed():
                 await page.close()
-        if self._pw_browser:
-            await self._pw_browser.close()
         if self._playwright:
             await self._playwright.stop()
 
         if self._proc and self._proc.returncode is None:
+            logger.info("Terminating browser process.")
             self._proc.terminate()
             try:
-                await asyncio.wait_for(self._proc.wait(), timeout=5)
+                await asyncio.wait_for(self._proc.wait(), timeout=1)
             except TimeoutError:
                 logger.warning("Browser process did not terminate, killing it.")
                 self._proc.kill()
                 await self._proc.wait()
+        logger.info("Browser stopped.")
 
         if self._profile_dir is not None:
             self._profile_dir.cleanup()
@@ -143,15 +143,13 @@ class BrowserSession:
         self._pages = []
         self._env.pop("CDP_ENDPOINT", None)
 
-        logger.info("Playwright stopped.")
-
     async def get_page(self) -> Page:
         """Get a new page in the browser context."""
         if self._pw_context is None:
             msg = "Playwright context is not initialized."
             raise RuntimeError(msg)
 
-        if not self._pages and self._default_page is not None:
+        if self._default_page is not None:
             page = self._default_page
             logger.info("Retrieving default page from the browser context.")
         else:

@@ -67,35 +67,30 @@ async def run() -> None:
 
     client = Client(mcp, message_handler=_message_handler)
 
-    try:
-        async with client:
-            await client.session.subscribe_resource(transcript_url)
+    async with client:
+        await client.session.subscribe_resource(transcript_url)
 
-            tools = await load_mcp_tools(client.session)
-            tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
-            memory = MemorySaver()
-            agent = create_react_agent(
-                llm, tool_node, prompt=prompt, checkpointer=memory
+        tools = await load_mcp_tools(client.session)
+        tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
+        memory = MemorySaver()
+        agent = create_react_agent(llm, tool_node, prompt=prompt, checkpointer=memory)
+        old_transcript = None
+
+        while True:
+            await transcript_event.wait()
+            transcript = Transcript.model_validate_json(
+                (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
             )
-            old_transcript = None
+            transcript_event.clear()
 
-            while True:
-                await transcript_event.wait()
-                transcript = Transcript.model_validate_json(
-                    (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
-                )
-                transcript_event.clear()
+            async for chunk in agent.astream(
+                {"messages": get_new_messages(transcript, old_transcript)},
+                config={"configurable": {"thread_id": "1"}},
+                stream_mode="updates",
+            ):
+                logger.info(chunk)
 
-                async for chunk in agent.astream(
-                    {"messages": get_new_messages(transcript, old_transcript)},
-                    config={"configurable": {"thread_id": "1"}},
-                    stream_mode="updates",
-                ):
-                    logger.info(chunk)
-
-                old_transcript = transcript
-    except asyncio.CancelledError:
-        await asyncio.sleep(5)
+            old_transcript = transcript
 
 
 if __name__ == "__main__":

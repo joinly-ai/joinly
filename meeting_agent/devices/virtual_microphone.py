@@ -165,12 +165,12 @@ class VirtualMicrophone(PulseModuleManager):
             self._module_id = None
 
         if self._dir is not None:
-            logger.info("Cleaning up temporary directory: %s", self._dir.name)
             self._dir.cleanup()
+            logger.info("Temporary directory removed: %s", self._dir.name)
             self._dir = None
         elif self.fifo_path is not None:
-            logger.info("Removing FIFO file: %s", self.fifo_path)
             self.fifo_path.unlink()
+            logger.info("FIFO file removed: %s", self.fifo_path)
             self.fifo_path = None
         else:
             logger.warning("No FIFO file to remove")

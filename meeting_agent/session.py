@@ -135,15 +135,15 @@ class MeetingSession:
             ]:
                 if svc is not None:
                     await self._exit_stack.enter_async_context(svc)
+
+            if self._meeting_url is not None:
+                await self.join_meeting(
+                    meeting_url=self._meeting_url,
+                    participant_name=self._participant_name,
+                )
         except Exception:
             await self._exit_stack.aclose()
             raise
-
-        if self._meeting_url is not None:
-            await self.join_meeting(
-                meeting_url=self._meeting_url,
-                participant_name=self._participant_name,
-            )
 
         return self
 

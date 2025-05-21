@@ -86,10 +86,12 @@ class PulseServer(PulseModuleManager):
             self._env.pop(_RUNTIME_ENV_VAR, None)
             self._env.pop(_SERVER_ENV_VAR, None)
             self._env.pop(_AUTOSPAWN_ENV_VAR, None)
+            logger.info("PulseAudio server stopped")
 
         if self._dir is not None:
             self._dir.cleanup()
             logger.info("Temporary directory removed: %s", self._dir.name)
+            self._dir = None
 
 
 async def _wait_for_server(path: Path) -> None:
