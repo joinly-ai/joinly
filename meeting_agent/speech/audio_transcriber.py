@@ -8,24 +8,24 @@ from typing import Self
 import numpy as np
 from faster_whisper import WhisperModel
 
-logger = logging.getLogger(__name__)
+from meeting_agent.types import Transcript, TranscriptSegment
 
-_SENTINEL = object()
+logger = logging.getLogger(__name__)
 
 
 class AudioTranscriber:
     """A class to transcribe audio using Whisper."""
 
-    def __init__(self, upstream: AsyncIterator[bytes]) -> None:
+    def __init__(self, upstream: AsyncIterator[tuple[bytes, float, float]]) -> None:
         """Initialize the AudioTranscriber."""
         self._upstream = upstream
         self._model: WhisperModel | None = None
         self._sem = asyncio.Semaphore(1)
-        self._queue: asyncio.Queue[bytes | object] | None = None
+        self._queue: asyncio.Queue[tuple[bytes, float, float]] | None = None
         self._queue_task: asyncio.Task | None = None
         self._process_task: asyncio.Task | None = None
         self._listeners: set[Callable[[str, str], Awaitable[None]]] = set()
-        self._transcript: list[str] = []
+        self._transcript = Transcript()
 
     def add_listener(
         self, listener: Callable[[str, str], Awaitable[None]]
@@ -35,9 +35,9 @@ class AudioTranscriber:
         return lambda: self._listeners.discard(listener)
 
     @property
-    def transcript(self) -> str:
+    def transcript(self) -> Transcript:
         """Get the current transcript."""
-        return " ".join(self._transcript)
+        return self._transcript
 
     async def __aenter__(self) -> Self:
         """Initialize the Whisper model."""
@@ -52,7 +52,7 @@ class AudioTranscriber:
 
         logger.info("Initialized Whisper model")
 
-        self._queue = asyncio.Queue[bytes | object](maxsize=5)
+        self._queue = asyncio.Queue[tuple[bytes, float, float]](maxsize=5)
         self._queue_task = asyncio.create_task(self._fill_queue())
         self._process_task = asyncio.create_task(self._process_queue())
 
@@ -90,7 +90,6 @@ class AudioTranscriber:
         with contextlib.suppress(asyncio.CancelledError):
             async for item in self._upstream:
                 await self._queue.put(item)
-            await self._queue.put(_SENTINEL)
 
     async def _process_queue(self) -> None:
         """Process the audio data in the queue."""
@@ -100,23 +99,26 @@ class AudioTranscriber:
 
         while True:
             item = await self._queue.get()
-            if item is _SENTINEL:
-                break
 
             segment = []
-            async for chunk in self.transcribe(item):  # type: ignore[arg-type]
+            async for chunk in self._transcribe(item[0]):
                 logger.debug("Transcription chunk: %s", chunk)
                 segment.append(chunk)
-                self._transcript.append(chunk)
                 await self._notify("chunk", chunk)
 
             if segment:
-                logger.info("Transcription segment: %s", " ".join(segment))
-                await self._notify("segment", " ".join(segment))
+                ts = TranscriptSegment(
+                    text=" ".join(segment),
+                    start=item[1],
+                    end=item[2],
+                )
+                self._transcript.segments.append(ts)
+                logger.info(
+                    "Transcription segment: %s (%.2f-%.2f)", ts.text, ts.start, ts.end
+                )
+                await self._notify("segment", ts.text)
 
-        await self._queue.put(_SENTINEL)
-
-    async def transcribe(self, item: bytes) -> AsyncIterator[str]:
+    async def _transcribe(self, item: bytes) -> AsyncIterator[str]:
         """Process the input audio chunk and yield transcriptions.
 
         Args:
@@ -131,11 +133,11 @@ class AudioTranscriber:
             msg = "Model not initialized"
             raise RuntimeError(msg)
 
+        logger.info("Processing audio chunk of size: %d", len(item))
+
+        audio_segment = np.frombuffer(item, dtype=np.float32)
+
         async with self._sem:
-            logger.info("Processing audio chunk of size: %d", len(item))
-
-            audio_segment = np.frombuffer(item, dtype=np.float32)
-
             # probably rather take whisper completely out to another process/api
             segments, _ = await asyncio.to_thread(
                 self._model.transcribe,

@@ -50,8 +50,8 @@ class VirtualMicrophone(PulseModuleManager):
         self.source_name: str = (
             source_name if source_name is not None else f"virtmic.{uuid.uuid4()}"
         )
-        self.chunk_ms = chunk_ms
         self.chunk_size = int(sample_rate * chunk_ms / 1000) * 4
+        self.chunk_ms = self.chunk_size / (4 * self.sample_rate) * 1000
         self.queue_size = queue_size
         self.max_missed_chunks = max_missed_chunks
         self._env: dict[str, str] = env if env is not None else {}
@@ -215,7 +215,7 @@ class VirtualMicrophone(PulseModuleManager):
 
         loop = asyncio.get_running_loop()
         silence = b"\x00" * self.chunk_size
-        period = self.chunk_size / (4 * self.sample_rate)
+        period = self.chunk_ms / 1000
         next_deadline = loop.time() + period
 
         while True:

@@ -11,24 +11,24 @@ from meeting_agent.utils import LOGGING_TRACE
 logger = logging.getLogger(__name__)
 
 
-class VADService(AsyncIterator[bytes]):
+class VADService(AsyncIterator[tuple[bytes, float, float]]):
     """A class to detect speech in audio streams and chunk audio bytes."""
 
     def __init__(
         self,
         upstream: AsyncIterator[bytes],
         *,
-        speech_threshold: float = 0.5,
-        max_silent_chunks: int = 15,
-        padding_chunks: int = 1,
+        speech_threshold: float = 0.75,
+        max_silent_chunks: int = 12,
+        padding_chunks: int = 2,
     ) -> None:
         """Initialize the VADService.
 
         Args:
             upstream: An AsyncIterator that provides audio data.
-            speech_threshold: The threshold for speech detection (default is 0.5).
-            max_silent_chunks: Max number of silent chunks each 32ms (default is 15).
-            padding_chunks: Number of chunks to add before/after speech (default is 1).
+            speech_threshold: The threshold for speech detection (default is 0.75).
+            max_silent_chunks: Max number of silent chunks each 32ms (default is 12).
+            padding_chunks: Number of chunks to add before/after speech (default is 2).
         """
         self._upstream = upstream
         self._speech_threshold = speech_threshold
@@ -36,6 +36,8 @@ class VADService(AsyncIterator[bytes]):
         self._padding_chunks = padding_chunks
         self._silent_chunks: int = 0
         self._speech_chunks: int = 0
+        self._chunks: int = 0
+        self._start_chunk: int = 0
         self._prev_buffer: deque[bytes] = deque(maxlen=padding_chunks)
         self._buffer: list[bytes] = []
         self._model = None
@@ -55,6 +57,8 @@ class VADService(AsyncIterator[bytes]):
 
         self._silent_chunks = 0
         self._speech_chunks = 0
+        self._chunks = 0
+        self._start_chunk = 0
         self._prev_buffer.clear()
         self._buffer.clear()
         self.no_speech_event.set()
@@ -67,7 +71,7 @@ class VADService(AsyncIterator[bytes]):
             del self._model
             self._model = None
 
-    async def __anext__(self) -> bytes:
+    async def __anext__(self) -> tuple[bytes, float, float]:
         """Get the next audio chunk from the upstream source.
 
         Returns:
@@ -82,7 +86,7 @@ class VADService(AsyncIterator[bytes]):
             if result is not None:
                 return result
 
-    async def _process(self, chunk: bytes) -> bytes | None:
+    async def _process(self, chunk: bytes) -> tuple[bytes, float, float] | None:
         """Process the input audio chunk and yield speech segments.
 
         Args:
@@ -94,7 +98,7 @@ class VADService(AsyncIterator[bytes]):
         TODO: make faster: maybe directly yield chunks instead of buffer?
             if whisper can handle that
         """
-        confidence = await self.vad(chunk)
+        confidence = await self._vad(chunk)
         speech = confidence > self._speech_threshold
 
         logger.log(
@@ -109,11 +113,13 @@ class VADService(AsyncIterator[bytes]):
         if speech:
             self._silent_chunks = 0
             self._speech_chunks += 1
-            self.no_speech_event.clear()
             if self._speech_chunks == 1:
+                self.no_speech_event.clear()
+                self._start_chunk = self._chunks
                 logger.info("Speech started")
         else:
             self._silent_chunks += 1
+        self._chunks += 1
 
         if not self._buffer:
             self._prev_buffer.append(chunk)
@@ -126,17 +132,20 @@ class VADService(AsyncIterator[bytes]):
                 tail = self._silent_chunks - self._padding_chunks
                 segment = b"".join(self._buffer[: -tail if tail > 0 else None])
 
+                start_time = (self._start_chunk - self._padding_chunks) * 0.032
+                end_time = start_time + (len(self._buffer) - max(0, tail)) * 0.032
+
                 self._speech_chunks = 0
                 self._buffer.clear()
                 self.no_speech_event.set()
                 logger.info("Speech ended")
 
-                return segment
+                return segment, start_time, end_time
 
         return None
 
     @torch.no_grad()
-    async def vad(self, audio_bytes: bytes) -> float:
+    async def _vad(self, audio_bytes: bytes) -> float:
         """Run VAD on the audio data.
 
         Args:
