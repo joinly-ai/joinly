@@ -63,6 +63,22 @@ logger = logging.getLogger(__name__)
     default=True,
 )
 @click.option(
+    "-h",
+    "--host",
+    type=str,
+    help="The host to bind the server to. Only applicable with --server.",
+    default="localhost",
+    callback=lambda ctx, _, val: val if ctx.params.get("server", True) else None,
+)
+@click.option(
+    "-p",
+    "--port",
+    type=int,
+    help="The port to bind the server to. Only applicable with --server.",
+    default=8000,
+    callback=lambda ctx, _, val: val if ctx.params.get("server", True) else None,
+)
+@click.option(
     "-v",
     "--verbose",
     count=True,
@@ -79,9 +95,11 @@ logger = logging.getLogger(__name__)
     required=False,
     envvar="MEETING_URL",
 )
-def cli(
+def cli(  # noqa: PLR0913
     *,
     server: bool,
+    host: str,
+    port: int,
     verbose: int,
     quiet: bool,
     logging_plain: bool,
@@ -103,7 +121,7 @@ def cli(
     SESSION_CONFIG.update(ms_kwargs)
 
     if server:
-        mcp.run(transport="streamable-http")
+        mcp.run(transport="streamable-http", host=host, port=port)
     else:
         asyncio.run(client.run())
 
