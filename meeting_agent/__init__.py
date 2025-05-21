@@ -1,3 +1,3 @@
-from meeting_agent.meeting_session import MeetingSession
+from meeting_agent.session import MeetingSession
 
 __all__ = ["MeetingSession"]

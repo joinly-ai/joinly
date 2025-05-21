@@ -5,7 +5,8 @@ import jiwer
 from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
-from meeting_agent.meeting_session import MeetingSession
+from meeting_agent.session import MeetingSession
+from meeting_agent.types import Transcript
 
 
 async def test_meeting_transcription_mockup(meeting_mockup: dict[str, Any]) -> None:
@@ -62,9 +63,10 @@ async def _run_meeting_transcription_test(
 
     assert transcription_agg, "No transcription received"
     transcription = " ".join(transcription_agg)
-    assert transcription == ms.transcript, (
+    ms_transcription = ms.transcript.text
+    assert transcription == ms_transcription, (
         "Transcription mismatch between aggregate and full transcript. "
-        f"Expected: {ms.transcript}, Got: {transcription}"
+        f"Expected: {ms_transcription}, Got: {transcription}"
     )
 
     wer = _calculate_wer(transcription, ground_truth_transcription)
@@ -130,20 +132,20 @@ async def _run_mcp_meeting_transcription_test(
 
         await asyncio.sleep(duration_seconds)
 
-        transcription_resource = await client.read_resource("transcript://live")
-        transcription = transcription_resource[0].text  # type: ignore[attr-defined]
+        transcript_resource = await client.read_resource("transcript://live")
+        transcript = Transcript.model_validate_json(transcript_resource[0].text)  # type: ignore[attr-defined]
 
-    assert transcription, "No transcription received"
+    assert transcript, "No transcription received"
     assert transcription_update_count > 0, (
         "No transcription updates received. "
         f"Expected at least one update, got {transcription_update_count}"
     )
 
-    wer = _calculate_wer(transcription, ground_truth_transcription)
+    wer = _calculate_wer(transcript.text, ground_truth_transcription)
     assert wer <= max_wer_threshold, (
         f"Transcription quality below threshold. WER: {wer:.2f}, "
         f"Max allowed: {max_wer_threshold:.2f}\n"
-        f'Transcription: "{transcription}"\n'
+        f'Transcription: "{transcript.text}"\n'
         f'Ground truth: "{ground_truth_transcription}"'
     )
 

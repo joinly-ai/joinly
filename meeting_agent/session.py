@@ -14,15 +14,19 @@ from meeting_agent.devices.virtual_display import VirtualDisplay
 from meeting_agent.devices.virtual_microphone import VirtualMicrophone
 from meeting_agent.devices.virtual_speaker import VirtualSpeaker
 from meeting_agent.speech.audio_transcriber import AudioTranscriber
-from meeting_agent.speech.speech_flow_controller import SpeechFlowController
+from meeting_agent.speech.speech_controller import SpeechController
 from meeting_agent.speech.tts_service import TTSService
 from meeting_agent.speech.vad_service import VADService
+from meeting_agent.types import Transcript
 
 logger = logging.getLogger(__name__)
 
 """
 TODO:
+- interrupt vs interruptable, send good message back
 - settings
+- event bus or similar?
+- add additional streaming endpoint for events? does that work with mcp?
 - optional dependencies, lazy import (e.g., for langchain, providers, etc.)
 - subclass to allow different providers (transcription, tts, vad)
 - improve transcription: stream input directly and use context
@@ -88,7 +92,7 @@ class MeetingSession:
         self._audio_transcriber = AudioTranscriber(self._vad_service)
         self._virtual_microphone = VirtualMicrophone(env=self._session_env)
         self._tts_service = TTSService()
-        self._speech_controller = SpeechFlowController(
+        self._speech_controller = SpeechController(
             mic=self._virtual_microphone,
             tts=self._tts_service,
             no_speech_event=self._vad_service.no_speech_event,
@@ -151,7 +155,7 @@ class MeetingSession:
         await self._exit_stack.aclose()
 
     @property
-    def transcript(self) -> str:
+    def transcript(self) -> Transcript:
         """Return the current transcript of the meeting."""
         return self._audio_transcriber.transcript
 
@@ -189,7 +193,12 @@ class MeetingSession:
         await self._meeting_controller.leave()
 
     async def speak_text(
-        self, text: str, *, wait: bool = True, interrupt: bool = False
+        self,
+        text: str,
+        *,
+        wait: bool = True,
+        interrupt: bool = False,
+        interruptable: bool = True,
     ) -> None:
         """Speak the provided text using TTS.
 
@@ -197,8 +206,12 @@ class MeetingSession:
             text (str): The text to be spoken.
             wait (bool): Whether to block until the speech is finished (default: True).
             interrupt (bool): Whether to interrupt detected speech (default: False).
+            interruptable (bool): Whether this speech can be interrupted
+                (default: True).
         """
-        await self._speech_controller.speak_text(text, wait=wait, interrupt=interrupt)
+        await self._speech_controller.speak_text(
+            text, wait=wait, interrupt=interrupt, interruptable=interruptable
+        )
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.

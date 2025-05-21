@@ -8,7 +8,8 @@ from fastmcp import Context, FastMCP
 from mcp.server import NotificationOptions
 from pydantic import AnyUrl, Field
 
-from meeting_agent.meeting_session import MeetingSession, MeetingSessionConfig
+from meeting_agent.session import MeetingSession, MeetingSessionConfig
+from meeting_agent.types import Transcript
 
 if TYPE_CHECKING:
     from mcp import ServerSession
@@ -77,9 +78,9 @@ mcp = FastMCP(
 @mcp.resource(
     "transcript://live",
     description="Live transcript of the meeting",
-    mime_type="text/plain",
+    mime_type="application/json",
 )
-async def get_transcript(ctx: Context) -> str:
+async def get_transcript(ctx: Context) -> Transcript:
     """Get the live transcript of the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     return ms.transcript
