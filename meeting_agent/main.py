@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 import click
+from dotenv import load_dotenv
 
 from meeting_agent import client
 from meeting_agent.server import SESSION_CONFIG, mcp
@@ -106,6 +107,8 @@ def cli(  # noqa: PLR0913
     **ms_kwargs: dict,
 ) -> None:
     """Start the meeting session."""
+    load_dotenv()
+
     configure_logging(
         verbose=verbose,
         quiet=quiet,

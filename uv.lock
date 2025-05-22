@@ -1006,6 +1006,7 @@ dependencies = [
     { name = "mcp" },
     { name = "numpy" },
     { name = "playwright" },
+    { name = "python-dotenv" },
     { name = "torch", version = "2.6.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.6.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "torchaudio", version = "2.6.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or sys_platform == 'darwin'" },
@@ -1037,6 +1038,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.7.1" },
     { name = "numpy", specifier = ">=2.2.4" },
     { name = "playwright", specifier = ">=1.51.0" },
+    { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "torch", specifier = ">=2.6.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchaudio", specifier = ">=2.6.0", index = "https://download.pytorch.org/whl/cpu" },
 ]

@@ -18,6 +18,7 @@ dependencies = [
     "mcp>=1.7.1",
     "numpy>=2.2.4",
     "playwright>=1.51.0",
+    "python-dotenv>=1.1.0",
     "torch>=2.6.0",
     "torchaudio>=2.6.0",
 ]
