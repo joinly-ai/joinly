@@ -101,10 +101,11 @@ async def join_meeting(
         str | None, Field(description="Name of the participant to join as")
     ],
     ctx: Context,
-) -> None:
+) -> str:
     """Join a meeting with the given URL and participant name."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.join_meeting(meeting_url, participant_name)
+    return "Joined meeting."
 
 
 @mcp.tool(
@@ -113,10 +114,11 @@ async def join_meeting(
 )
 async def leave_meeting(
     ctx: Context,
-) -> None:
+) -> str:
     """Leave the current meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.leave_meeting()
+    return "Left the meeting."
 
 
 @mcp.tool(
@@ -126,10 +128,11 @@ async def leave_meeting(
 async def speak_text(
     text: Annotated[str, Field(description="Text to be spoken")],
     ctx: Context,
-) -> None:
+) -> str:
     """Speak the given text in the meeting using TTS."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.speak_text(text)
+    return "Finished speaking."
 
 
 @mcp.tool(
@@ -139,10 +142,11 @@ async def speak_text(
 async def send_chat_message(
     message: Annotated[str, Field(description="Message to be sent")],
     ctx: Context,
-) -> None:
+) -> str:
     """Send a chat message in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.send_chat_message(message)
+    return "Sent message."
 
 
 @mcp.tool(
@@ -151,10 +155,11 @@ async def send_chat_message(
 )
 async def start_screen_sharing(
     ctx: Context,
-) -> None:
+) -> str:
     """Start screen sharing in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.start_screen_sharing()
+    return "Started screen sharing."
 
 
 if __name__ == "__main__":
