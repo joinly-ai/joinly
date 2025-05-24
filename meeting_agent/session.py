@@ -151,7 +151,7 @@ class MeetingSession:
         """Exit the meeting session context."""
         if self._meeting_url is not None:
             with contextlib.suppress(Exception):
-                await self.leave_meeting()
+                await self.leave_meeting(force=True)
         await self._exit_stack.aclose()
 
     @property
@@ -188,10 +188,15 @@ class MeetingSession:
         )
         await self._meeting_controller.join(meeting_url, name)
 
-    async def leave_meeting(self) -> None:
-        """Leave the current meeting."""
-        # wait until speech is finished
-        await self._speech_controller.wait_until_idle()
+    async def leave_meeting(self, *, force: bool = False) -> None:
+        """Leave the current meeting.
+
+        Args:
+            force (bool): Whether to force leave the meeting, otherwise wait for speech.
+                Defaults to False.
+        """
+        if not force:
+            await self._speech_controller.wait_until_idle()
         await self._meeting_controller.leave()
 
     async def speak_text(
