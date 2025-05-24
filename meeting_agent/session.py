@@ -190,6 +190,8 @@ class MeetingSession:
 
     async def leave_meeting(self) -> None:
         """Leave the current meeting."""
+        # wait until speech is finished
+        await self._speech_controller.wait_until_idle()
         await self._meeting_controller.leave()
 
     async def speak_text(

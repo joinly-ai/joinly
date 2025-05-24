@@ -117,6 +117,13 @@ class SpeechController:
                 logger.warning("Error while speaking text: %s", job.exception)
                 raise job.exception
 
+    async def wait_until_idle(self) -> None:
+        """Wait until all speech jobs in the queue are done."""
+        if self._queue is None:
+            msg = "Audio queue not initialized"
+            raise RuntimeError(msg)
+        await self._queue.join()
+
     async def _worker_loop(self) -> None:
         """Run the worker loop to process audio chunks."""
         if self._queue is None:
