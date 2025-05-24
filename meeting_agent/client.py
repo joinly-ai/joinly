@@ -108,7 +108,7 @@ async def run() -> None:
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         memory = MemorySaver()
         prompt_logger = PromptLogger()
-        llm_binded = llm.bind_tools(tools, tool_choice="any")
+        llm_binded = llm.bind_tools(tools, tool_choice="auto")
         agent = create_react_agent(
             llm_binded, tool_node, prompt=prompt, checkpointer=memory
         )
