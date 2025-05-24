@@ -19,6 +19,7 @@ dependencies = [
     "numpy>=2.2.4",
     "playwright>=1.51.0",
     "python-dotenv>=1.1.0",
+    "semchunk>=3.2.1",
     "torch>=2.6.0",
     "torchaudio>=2.6.0",
 ]

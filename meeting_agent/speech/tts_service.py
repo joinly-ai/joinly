@@ -2,11 +2,11 @@ import asyncio
 import logging
 import os
 import pathlib
-import re
 from collections.abc import AsyncIterator
 from typing import Self
 
 from kokoro_onnx import Kokoro
+from semchunk.semchunk import chunkerify
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ class TTSService:
         """Initialize the TTS service."""
         self._voice = voice
         self._model: Kokoro | None = None
+        self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
         self._sem = asyncio.Semaphore(1)
 
     async def __aenter__(self) -> Self:
@@ -50,7 +51,11 @@ class TTSService:
         """Convert text to speech and stream the audio data."""
         logger.info("Streaming TTS for text: %s", text)
 
-        chunks = re.split(r"(?<=[.,;!?])\s+", text)
+        chunks: list[str] = await asyncio.to_thread(
+            self._chunker,
+            text,
+        )  # type: ignore[operator]
+        logger.info("Splitted into chunks: %s", chunks)
         for chunk in chunks:
             audio_data = await self._tts(chunk)
             yield audio_data, chunk
