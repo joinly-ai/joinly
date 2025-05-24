@@ -30,6 +30,7 @@ class BrowserMeetingController:
         self._browser_session: BrowserSession = browser_session
         self._browser_agent: BrowserAgent | None = browser_agent
         self._page: Page | None = None
+        self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> Self:
         """Start the meeting session."""
@@ -49,45 +50,49 @@ class BrowserMeetingController:
 
         logger.info("Joining the meeting: %s as %s", meeting_url, participant_name)
 
-        try:
-            await self._page.goto(meeting_url, wait_until="load", timeout=20000)
-        except PlaywrightError as e:
-            msg = "Failed to navigate to the meeting URL"
-            logger.exception(msg)
-            raise RuntimeError(msg) from e
+        async with self._lock:
+            try:
+                await self._page.goto(meeting_url, wait_until="load", timeout=20000)
+            except PlaywrightError as e:
+                msg = "Failed to navigate to the meeting URL"
+                logger.exception(msg)
+                raise RuntimeError(msg) from e
 
-        if self._browser_agent is not None:
-            await asyncio.sleep(5)
-            await self._browser_agent.run(
-                f"Join the meeting which is opened with the name {participant_name}."
+            if self._browser_agent is not None:
+                await asyncio.sleep(5)
+                await self._browser_agent.run(
+                    f"Join the meeting which is opened with the name "
+                    f"{participant_name}."
+                )
+                return
+
+            async def _dismiss_audio_missing(page: Page) -> None:
+                await page.click("button:has-text('Continue without audio')", timeout=0)
+
+            dismiss_audio_missing = asyncio.create_task(
+                _dismiss_audio_missing(self._page)
             )
-            return
 
-        async def _dismiss_audio_missing(page: Page) -> None:
-            await page.click("button:has-text('Continue without audio')", timeout=0)
+            try:
+                name_field = self._page.get_by_placeholder(
+                    re.compile("name", re.IGNORECASE)
+                )
+                await name_field.fill(participant_name, timeout=20000)
 
-        dismiss_audio_missing = asyncio.create_task(_dismiss_audio_missing(self._page))
+                join_btn = self._page.get_by_role(
+                    "button", name=re.compile(r"^join", re.IGNORECASE)
+                )
+                await join_btn.click(timeout=3000)
+                dismiss_audio_missing.cancel()
 
-        try:
-            name_field = self._page.get_by_placeholder(
-                re.compile("name", re.IGNORECASE)
-            )
-            await name_field.fill(participant_name, timeout=20000)
-
-            join_btn = self._page.get_by_role(
-                "button", name=re.compile(r"^join", re.IGNORECASE)
-            )
-            await join_btn.click(timeout=3000)
-            dismiss_audio_missing.cancel()
-
-        except PlaywrightError as e:
-            msg = "Failed to join the meeting"
-            logger.exception(msg)
-            raise RuntimeError(msg) from e
-        finally:
-            dismiss_audio_missing.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await dismiss_audio_missing
+            except PlaywrightError as e:
+                msg = "Failed to join the meeting"
+                logger.exception(msg)
+                raise RuntimeError(msg) from e
+            finally:
+                dismiss_audio_missing.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await dismiss_audio_missing
 
         logger.info(
             "Joined the meeting: %s as %s",
@@ -104,25 +109,26 @@ class BrowserMeetingController:
 
         logger.info("Leaving the meeting.")
 
-        if self._browser_agent is not None:
-            await self._browser_agent.run(
-                "Leave the meeting you are currently in but leave the page open."
-            )
-            return
+        async with self._lock:
+            if self._browser_agent is not None:
+                await self._browser_agent.run(
+                    "Leave the meeting you are currently in but leave the page open."
+                )
+                return
 
-        try:
-            leave_btn = self._page.get_by_role(
-                "button", name=re.compile(r"^leave", re.IGNORECASE)
-            )
-            await leave_btn.click(timeout=1000)
+            try:
+                leave_btn = self._page.get_by_role(
+                    "button", name=re.compile(r"^leave", re.IGNORECASE)
+                )
+                await leave_btn.click(timeout=1000)
 
-            await self._page.wait_for_timeout(500)
-        except PlaywrightError as e:
-            msg = "Failed to leave the meeting"
-            logger.exception(msg)
-            raise RuntimeError(msg) from e
-        else:
-            logger.info("Left the meeting.")
+                await self._page.wait_for_timeout(500)
+            except PlaywrightError as e:
+                msg = "Failed to leave the meeting"
+                logger.exception(msg)
+                raise RuntimeError(msg) from e
+            else:
+                logger.info("Left the meeting.")
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.
@@ -137,28 +143,29 @@ class BrowserMeetingController:
 
         logger.info("Sending chat message: %s", message)
 
-        try:
-            chat_input = self._page.locator("div[contenteditable='true']")
-            is_chat_visible = await chat_input.is_visible(timeout=1000)
+        async with self._lock:
+            try:
+                chat_input = self._page.locator("div[contenteditable='true']")
+                is_chat_visible = await chat_input.is_visible(timeout=1000)
 
-            if not is_chat_visible:
-                chat_button = self._page.get_by_role(
-                    "button", name=re.compile(r"^chat", re.IGNORECASE)
-                )
-                await chat_button.wait_for(timeout=2000)
-                await chat_button.click()
-                await self._page.wait_for_timeout(1000)
+                if not is_chat_visible:
+                    chat_button = self._page.get_by_role(
+                        "button", name=re.compile(r"^chat", re.IGNORECASE)
+                    )
+                    await chat_button.wait_for(timeout=2000)
+                    await chat_button.click()
+                    await self._page.wait_for_timeout(1000)
 
-            await chat_input.wait_for(timeout=2000)
-            await chat_input.fill(message)
-            await self._page.wait_for_timeout(500)
-            await self._page.keyboard.press("Enter")
-        except PlaywrightError as e:
-            msg = "Failed to send chat message"
-            logger.exception(msg)
-            raise RuntimeError(msg) from e
-        else:
-            logger.info("Chat message sent.")
+                await chat_input.wait_for(timeout=2000)
+                await chat_input.fill(message)
+                await self._page.wait_for_timeout(500)
+                await self._page.keyboard.press("Enter")
+            except PlaywrightError as e:
+                msg = "Failed to send chat message"
+                logger.exception(msg)
+                raise RuntimeError(msg) from e
+            else:
+                logger.info("Chat message sent.")
 
     async def start_screen_sharing(self) -> None:
         """Start screen sharing in the meeting."""
@@ -169,22 +176,23 @@ class BrowserMeetingController:
 
         logger.info("Starting screen sharing.")
 
-        try:
-            screen_share_btn = self._page.get_by_role(
-                "button", name=re.compile(r"^share", re.IGNORECASE)
-            )
-            await screen_share_btn.wait_for(timeout=2000)
-            await screen_share_btn.click(timeout=2000)
-            await self._page.wait_for_timeout(500)
+        async with self._lock:
+            try:
+                screen_share_btn = self._page.get_by_role(
+                    "button", name=re.compile(r"^share", re.IGNORECASE)
+                )
+                await screen_share_btn.wait_for(timeout=2000)
+                await screen_share_btn.click(timeout=2000)
+                await self._page.wait_for_timeout(500)
 
-            screen_share_btn = self._page.get_by_role(
-                "button", name=re.compile(r"^share a screen", re.IGNORECASE)
-            )
-            await screen_share_btn.wait_for(timeout=2000)
-            await screen_share_btn.click(timeout=2000)
-        except PlaywrightError as e:
-            msg = "Failed to start screen sharing"
-            logger.exception(msg)
-            raise RuntimeError(msg) from e
-        else:
-            logger.info("Screen sharing started.")
+                screen_share_btn = self._page.get_by_role(
+                    "button", name=re.compile(r"^share a screen", re.IGNORECASE)
+                )
+                await screen_share_btn.wait_for(timeout=2000)
+                await screen_share_btn.click(timeout=2000)
+            except PlaywrightError as e:
+                msg = "Failed to start screen sharing"
+                logger.exception(msg)
+                raise RuntimeError(msg) from e
+            else:
+                logger.info("Screen sharing started.")
