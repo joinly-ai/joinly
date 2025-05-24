@@ -23,7 +23,11 @@ logger = logging.getLogger(__name__)
 
 """
 TODO:
-- interrupt vs interruptable, send good message back
+- local mockup meeting, for manual testing
+- bind client llm to tools-only (worked with "required" but could not stop)
+- keyword to not speak all the time
+- add status cam
+- participant detection, joining events etc./meeting states
 - settings
 - event bus or similar?
 - add additional streaming endpoint for events? does that work with mcp?
@@ -31,14 +35,7 @@ TODO:
 - subclass to allow different providers (transcription, tts, vad)
 - improve transcription: stream input directly and use context
 - improve latency of entire system
-- add transcription class, maybe with vad timestamps? maybe already
-    with multiple speaker support?
-- (?) add playbook executor and playbooks for gmeet, teams, zoom
-- (?) maybe replace playwright-mcp with agent working directly on playbook syntax?
-    -> allows it to pick up history better and produce playbook from actions
 - add meeting chat functionality + chat events
-- participant detection, joining events etc.
-- add status cam
 - add screen sharing
 - speaker diarization
 """
