@@ -114,7 +114,6 @@ class SpeechController:
         if wait:
             await job.done.wait()
             if job.exception is not None:
-                logger.warning("Error while speaking text: %s", job.exception)
                 raise job.exception
 
     async def wait_until_idle(self) -> None:
@@ -140,7 +139,7 @@ class SpeechController:
                 job.done.set()
                 self._queue.task_done()
 
-    async def _speak_text(
+    async def _speak_text(  # noqa: C901
         self, text: str, *, interrupt: bool, interruptable: bool
     ) -> None:
         """Speak the given text using the virtual microphone.
@@ -163,6 +162,7 @@ class SpeechController:
         next_chunk = asyncio.create_task(_next_chunk())
         chunk_num: int = 0
         spoken_text: list[str] = []
+        interrupted: bool = False
 
         try:
             while True:
@@ -181,10 +181,11 @@ class SpeechController:
 
                 next_chunk = asyncio.create_task(_next_chunk())
 
+                if not interrupt and chunk_num == 0:
+                    await self._no_speech_event.wait()
+
                 for i in range(0, len(chunk), self._chunk_size):
-                    if not interrupt and chunk_num == 0:
-                        await self._no_speech_event.wait()
-                    elif (
+                    if (
                         interruptable
                         and chunk_num * self._chunk_ms >= self.non_interruptable_ms
                         and not self._no_speech_event.is_set()
@@ -195,16 +196,32 @@ class SpeechController:
                             : int(i / len(chunk) * len(chunk_words))
                         ]
                         spoken_text.extend(spoken_chunk_text)
-                        msg = (
-                            f"Interrupted by detected speech. "
-                            f'Spoken text until now: "{" ".join(spoken_text)}"'
-                        )
-                        raise RuntimeError(msg)
+                        interrupted = True
+                        break
 
                     await self._mic.write(chunk[i : i + self._chunk_size])
                     chunk_num += 1
+
+                if interrupted:
+                    break
                 spoken_text.append(chunk_text)
+
+        except Exception as e:
+            msg = (
+                f"Error while speaking text: {text}. "
+                f'Spoken text until now: "{" ".join(spoken_text)}"'
+            )
+            logger.exception(msg)
+            raise RuntimeError(msg) from e
 
         finally:
             with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
                 next_chunk.cancel()
+
+        if interrupted:
+            msg = (
+                f"Interrupted by detected speech. "
+                f'Spoken text until now: "{" ".join(spoken_text)}"'
+            )
+            logger.warning(msg)
+            raise RuntimeError(msg)
