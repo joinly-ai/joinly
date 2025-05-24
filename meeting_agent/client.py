@@ -1,9 +1,12 @@
 import asyncio
 import logging
 import sys
+from typing import Any
 
+from dotenv import load_dotenv
 from fastmcp import Client
-from langchain_core.messages import HumanMessage
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import AzureChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -17,6 +20,37 @@ from meeting_agent.types import Transcript
 logger = logging.getLogger(__name__)
 
 
+def format_messages(messages: list[BaseMessage]) -> str:
+    """Format messages for logging."""
+    m_str = []
+    for m in messages:
+        s = f"{m.type} ({m.name}): {m.content}" if m.name else f"{m.type}: {m.content}"
+        if (
+            hasattr(m, "additional_kwargs")
+            and m.additional_kwargs
+            and (tools := m.additional_kwargs.get("tool_calls"))
+        ):
+            tool_str = [
+                f"{t['function']['name']}: {t['function']['arguments']}" for t in tools
+            ]
+            s += f" ({', '.join(tool_str)})"
+        m_str.append(s)
+    return "\n".join(m_str)
+
+
+class PromptLogger(BaseCallbackHandler):
+    """Callback that logs the exact prompt the model receives."""
+
+    def on_chat_model_start(
+        self,
+        serialized: dict[str, Any],  # noqa: ARG002
+        messages: list[list[BaseMessage]],
+        **_: Any,  # noqa: ANN401
+    ) -> None:
+        """Log the prompt the model receives."""
+        logger.info("PROMPT\n%s", format_messages([m for b in messages for m in b]))
+
+
 def get_new_messages(
     transcript: Transcript, old_transcript: Transcript | None = None
 ) -> list[HumanMessage]:
@@ -28,7 +62,7 @@ def get_new_messages(
     return [
         HumanMessage(
             content=segment.text,
-            name=segment.speaker,
+            name=segment.speaker if segment.speaker is not None else "Unknown",
         )
         for segment in transcript.segments[start_ind:]
     ]
@@ -73,7 +107,11 @@ async def run() -> None:
         tools = await load_mcp_tools(client.session)
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         memory = MemorySaver()
-        agent = create_react_agent(llm, tool_node, prompt=prompt, checkpointer=memory)
+        prompt_logger = PromptLogger()
+        llm_binded = llm.bind_tools(tools, tool_choice="any")
+        agent = create_react_agent(
+            llm_binded, tool_node, prompt=prompt, checkpointer=memory
+        )
         old_transcript = None
 
         while True:
@@ -85,10 +123,20 @@ async def run() -> None:
 
             async for chunk in agent.astream(
                 {"messages": get_new_messages(transcript, old_transcript)},
-                config={"configurable": {"thread_id": "1"}},
+                config={
+                    "callbacks": [prompt_logger],
+                    "configurable": {"thread_id": "1"},
+                },
                 stream_mode="updates",
             ):
-                logger.info(chunk)
+                if "agent" in chunk:
+                    logger.info(
+                        "AGENT\n%s", format_messages(chunk["agent"]["messages"])
+                    )
+                elif "tools" in chunk:
+                    logger.info(
+                        "TOOLS\n%s", format_messages(chunk["tools"]["messages"])
+                    )
 
             old_transcript = transcript
 
@@ -97,6 +145,8 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:  # noqa: PLR2004
         logger.error("Usage: python client.py <meeting_url>")
         sys.exit(1)
+
+    load_dotenv()
 
     SESSION_CONFIG["meeting_url"] = sys.argv[1]
     asyncio.run(run())
