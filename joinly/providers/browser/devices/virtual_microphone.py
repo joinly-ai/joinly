@@ -8,15 +8,18 @@ import uuid
 from pathlib import Path
 from typing import Self
 
-from meeting_agent.devices.pulse_module_manager import PulseModuleManager
-from meeting_agent.utils import LOGGING_TRACE
+from joinly.core import AudioWriter
+from joinly.providers.browser.devices.pulse_module_manager import (
+    PulseModuleManager,
+)
+from joinly.utils import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "PULSE_SOURCE"
 
 
-class VirtualMicrophone(PulseModuleManager):
+class VirtualMicrophone(PulseModuleManager, AudioWriter):
     """A class to create and unload a virtual microphone and play audio."""
 
     def __init__(  # noqa: PLR0913
@@ -50,8 +53,9 @@ class VirtualMicrophone(PulseModuleManager):
         self.source_name: str = (
             source_name if source_name is not None else f"virtmic.{uuid.uuid4()}"
         )
-        self.chunk_size = int(sample_rate * chunk_ms / 1000) * 4
-        self.chunk_ms = self.chunk_size / (4 * self.sample_rate) * 1000
+        self.byte_depth = 4  # float32le
+        self.chunk_size = int(sample_rate * chunk_ms / 1000) * self.byte_depth
+        self.chunk_ms = self.chunk_size / (self.byte_depth * self.sample_rate) * 1000
         self.queue_size = queue_size
         self.max_missed_chunks = max_missed_chunks
         self._env: dict[str, str] = env if env is not None else {}
@@ -175,17 +179,17 @@ class VirtualMicrophone(PulseModuleManager):
         else:
             logger.warning("No FIFO file to remove")
 
-    async def write(self, frames: bytes) -> None:
+    async def write(self, pcm: bytes) -> None:
         """Write the incoming audio chunk.
 
         Args:
-            frames (bytes): Audio data to be written.
+            pcm (bytes): Audio data to be written.
         """
         if self._queue is None:
             msg = "Audio streamer not started"
             raise RuntimeError(msg)
 
-        view = memoryview(frames)
+        view = memoryview(pcm)
         while len(view) >= self.chunk_size:
             logger.log(
                 LOGGING_TRACE,

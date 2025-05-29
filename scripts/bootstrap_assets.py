@@ -3,7 +3,6 @@ import pathlib
 import subprocess
 import urllib.request
 
-import torch
 from faster_whisper import WhisperModel
 
 
@@ -15,13 +14,10 @@ def main() -> None:
 
     # download whisper model
     _ = WhisperModel(
-        "small",
+        "tiny.en",
         device="cpu",
         compute_type="int8",
     )
-
-    # download silero vad model
-    _ = torch.hub.load("snakers4/silero-vad", "silero_vad", trust_repo=True)
 
     # download kokoro model and voices
     file_urls = [

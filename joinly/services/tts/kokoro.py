@@ -9,12 +9,15 @@ from typing import Self
 from kokoro_onnx import Kokoro
 from semchunk.semchunk import chunkerify
 
+from joinly.core import TTS
+from joinly.types import SpeechSegment
+
 logger = logging.getLogger(__name__)
 
 _SENT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
-class TTSService:
+class KokoroTTS(TTS):
     """Text-to-Speech (TTS) service for converting text to speech."""
 
     def __init__(self, *, voice: str = "af_bella") -> None:
@@ -22,7 +25,7 @@ class TTSService:
         self._voice = voice
         self._model: Kokoro | None = None
         self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
-        self._sem = asyncio.Semaphore(1)
+        self._sem = asyncio.BoundedSemaphore(1)
 
     async def __aenter__(self) -> Self:
         """Load the TTS model."""
@@ -50,8 +53,15 @@ class TTSService:
             del self._model
             self._model = None
 
-    async def tts(self, text: str) -> AsyncIterator[tuple[bytes, str]]:
-        """Convert text to speech and stream the audio data."""
+    async def stream(self, text: str) -> AsyncIterator[SpeechSegment]:
+        """Convert text to speech and stream the audio data.
+
+        Args:
+            text: The text to convert to speech.
+
+        Yields:
+            SpeechSegment: The audio data and corresponding text segments.
+        """
         logger.info("Streaming TTS for text: %s", text)
 
         chunks_nested: list[list[str]] = await asyncio.to_thread(
@@ -63,7 +73,10 @@ class TTSService:
         logger.info("Splitted into chunks: %s", chunks)
         for chunk in chunks:
             audio_data = await self._tts(chunk)
-            yield audio_data, chunk
+            yield SpeechSegment(
+                pcm=audio_data,
+                text=chunk,
+            )
 
         logger.info("Finished streaming TTS for text: %s", text)
 

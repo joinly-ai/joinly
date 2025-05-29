@@ -149,12 +149,8 @@ class BrowserSession:
             msg = "Playwright context is not initialized."
             raise RuntimeError(msg)
 
-        if self._default_page is not None:
-            page = self._default_page
-            logger.info("Retrieving default page from the browser context.")
-        else:
-            page = await self._pw_context.new_page()
-            logger.info("New page created in the browser context.")
+        page = await self._pw_context.new_page()
+        logger.info("New page created in the browser context.")
 
         page.on(
             "console", lambda msg: logger.debug("[console][%s] %s", msg.type, msg.text)

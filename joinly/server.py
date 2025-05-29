@@ -8,16 +8,14 @@ from fastmcp import Context, FastMCP
 from mcp.server import NotificationOptions
 from pydantic import AnyUrl, Field
 
-from meeting_agent.session import MeetingSession, MeetingSessionConfig
-from meeting_agent.types import Transcript
+from joinly.container import SessionContainer
+from joinly.session import MeetingSession
+from joinly.types import Transcript
 
 if TYPE_CHECKING:
     from mcp import ServerSession
 
 logger = logging.getLogger(__name__)
-
-SESSION_CONFIG: dict = {}
-
 
 transcript_url = AnyUrl("transcript://live")
 
@@ -33,8 +31,8 @@ class SessionContext:
 async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     """Create and enter a MeetingSession once per client connection."""
     logger.info("Creating meeting session")
-    ms = MeetingSession(MeetingSessionConfig(**SESSION_CONFIG))
-    await ms.__aenter__()
+    session_container = SessionContainer()
+    meeting_session = await session_container.__aenter__()
 
     _removers: dict[ServerSession, Callable[[], None]] = {}
 
@@ -45,12 +43,12 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
         logger.info("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
 
-        async def _push(event: str, text: str) -> None:
-            if event == "segment":
-                logger.debug("Sending transcription update notification for: %s", text)
+        async def _push(event: str) -> None:
+            if event == "utterance":
+                logger.debug("Sending transcription update notification")
                 await session.send_resource_updated(transcript_url)
 
-        _removers[session] = ms.add_transcription_listener(_push)
+        _removers[session] = meeting_session.add_transcription_listener(_push)
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
@@ -60,7 +58,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
             rem()
 
     try:
-        yield SessionContext(meeting_session=ms)
+        yield SessionContext(meeting_session=meeting_session)
     finally:
         for rem in _removers.values():
             rem()
@@ -69,7 +67,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
         from anyio import CancelScope
 
         with CancelScope(shield=True):
-            await ms.__aexit__(None, None, None)
+            await session_container.__aexit__()
 
 
 mcp = FastMCP(
@@ -96,7 +94,9 @@ async def get_transcript(ctx: Context) -> Transcript:
     description="Join a meeting with the given URL and participant name.",
 )
 async def join_meeting(
-    meeting_url: Annotated[str, Field(description="URL to join an online meeting")],
+    meeting_url: Annotated[
+        str | None, Field(description="URL to join an online meeting")
+    ],
     participant_name: Annotated[
         str | None, Field(description="Name of the participant to join as")
     ],
@@ -147,19 +147,6 @@ async def send_chat_message(
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.send_chat_message(message)
     return "Sent message."
-
-
-@mcp.tool(
-    "start_screen_sharing",
-    description="Start screen sharing in the meeting.",
-)
-async def start_screen_sharing(
-    ctx: Context,
-) -> str:
-    """Start screen sharing in the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.start_screen_sharing()
-    return "Started screen sharing."
 
 
 if __name__ == "__main__":

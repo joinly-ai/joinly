@@ -1,0 +1,116 @@
+import importlib
+import re
+from contextlib import (
+    AbstractAsyncContextManager,
+    AbstractContextManager,
+    AsyncExitStack,
+)
+from typing import Any, TypeVar
+
+from joinly.session import MeetingSession
+from joinly.settings import DEFAULT_SETTINGS, Settings
+
+T = TypeVar("T")
+
+
+def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
+    """Turn direct type, dotted path, or short token into a class object."""
+    if isinstance(spec, type):
+        return spec
+
+    if "." not in spec and spec[0].islower():
+        parts = re.split(r"[_\- ]+", spec)
+        spec = "".join(p.capitalize() for p in parts) + suffix
+
+    if "." not in spec:
+        spec = f"{base}.{spec}"
+
+    module_path, _, cls_name = spec.rpartition(".")
+    return getattr(importlib.import_module(module_path), cls_name)
+
+
+class SessionContainer:
+    """Container for the Meeting Session."""
+
+    def __init__(self, settings: Settings = DEFAULT_SETTINGS) -> None:
+        """Initialize the session container."""
+        self._settings = settings
+        self._stack = AsyncExitStack()
+
+    async def __aenter__(self) -> MeetingSession:
+        """Enter the context manager and create a meeting session."""
+        try:
+            vad = await self._build(
+                self._settings.vad,
+                "joinly.services.vad",
+                "VAD",
+                self._settings.vad_args,
+            )
+            stt = await self._build(
+                self._settings.stt,
+                "joinly.services.stt",
+                "STT",
+                self._settings.stt_args,
+            )
+            tts = await self._build(
+                self._settings.tts,
+                "joinly.services.tts",
+                "TTS",
+                self._settings.tts_args,
+            )
+            meeting_provider = await self._build(
+                self._settings.meeting_provider,
+                "joinly.providers",
+                "MeetingProvider",
+                self._settings.meeting_provider_args,
+            )
+
+            transcription_controller = await self._build(
+                self._settings.transcription_controller,
+                "joinly.controllers",
+                "TranscriptionController",
+                self._settings.transcription_controller_args
+                | {
+                    "reader": meeting_provider.audio_reader,
+                    "vad": vad,
+                    "stt": stt,
+                },
+            )
+            speech_controller = await self._build(
+                self._settings.speech_controller,
+                "joinly.controllers",
+                "SpeechController",
+                self._settings.speech_controller_args
+                | {
+                    "writer": meeting_provider.audio_writer,
+                    "tts": tts,
+                    "no_speech_event": transcription_controller.no_speech_event,
+                },
+            )
+
+            meeting_session = MeetingSession(
+                meeting_controller=meeting_provider.meeting_controller,
+                transcription_controller=transcription_controller,
+                speech_controller=speech_controller,
+            )
+        except:
+            await self._stack.aclose()
+            raise
+
+        return meeting_session
+
+    async def __aexit__(self, *_exc: object) -> None:
+        """Exit the context and clean up resources."""
+        await self._stack.aclose()
+
+    async def _build(
+        self, spec: str | type[T], base: str, suffix: str, args: dict[str, Any]
+    ) -> T:
+        """Build an instance of the specified class."""
+        cls = _resolve(spec, base=base, suffix=suffix)
+        instance = cls(**args)
+        if isinstance(instance, AbstractAsyncContextManager):
+            return await self._stack.enter_async_context(instance)
+        if isinstance(instance, AbstractContextManager):
+            return self._stack.enter_context(instance)
+        return instance

@@ -1,10 +1,10 @@
 [project]
-name = "meeting-agent"
+name = "joinly"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "dbrockmann", email = "dominiktobin@gmail.com" }
+    { name = "dbrockmann", email = "dominik@joinly.ai" }
 ]
 requires-python = ">=3.12"
 dependencies = [
@@ -20,25 +20,11 @@ dependencies = [
     "playwright>=1.51.0",
     "python-dotenv>=1.1.0",
     "semchunk>=3.2.1",
-    "torch>=2.6.0",
-    "torchaudio>=2.6.0",
+    "silero-vad-lite>=0.2.1",
 ]
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu" },
-]
-torchaudio = [
-    { index = "pytorch-cpu" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 [project.scripts]
-meeting-agent = "meeting_agent.main:cli"
+joinly = "joinly.main:cli"
 
 [build-system]
 requires = ["hatchling"]
@@ -58,4 +44,4 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["meeting_agent"]
+packages = ["joinly"]

@@ -2,18 +2,18 @@ import asyncio
 import contextlib
 import logging
 import re
-from typing import Self
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
-from meeting_agent.browser.browser_agent import BrowserAgent
-from meeting_agent.browser.browser_session import BrowserSession
+from joinly.providers.base import DefaultMeetingController
+from joinly.providers.browser.browser_agent import BrowserAgent
+from joinly.providers.browser.browser_session import BrowserSession
 
 logger = logging.getLogger(__name__)
 
 
-class BrowserMeetingController:
+class BrowserMeetingController(DefaultMeetingController):
     """A class to represent a browser meeting controller."""
 
     def __init__(
@@ -32,27 +32,26 @@ class BrowserMeetingController:
         self._page: Page | None = None
         self._lock = asyncio.Lock()
 
-    async def __aenter__(self) -> Self:
-        """Start the meeting session."""
-        self._page = await self._browser_session.get_page()
-        return self
-
-    async def __aexit__(self, *exc: object) -> None:
-        """Leave the meeting session."""
-        self._page = None
-
-    async def join(self, meeting_url: str, participant_name: str) -> None:
+    async def join(self, url: str | None = None, name: str | None = None) -> None:
         """Join the meeting by clicking the join button."""
-        if self._page is None:
-            msg = "Meeting controller not started."
-            logger.error(msg)
-            raise RuntimeError(msg)
+        if self._page is None or self._page.is_closed():
+            self._page = await self._browser_session.get_page()
 
-        logger.info("Joining the meeting: %s as %s", meeting_url, participant_name)
+        if url is None:
+            msg = "Meeting URL is required to join a meeting."
+            logger.error(msg)
+            raise ValueError(msg)
+
+        if name is None:
+            msg = "Participant name is required to join a meeting."
+            logger.error(msg)
+            raise ValueError(msg)
+
+        logger.info("Joining the meeting: %s as %s", url, name)
 
         async with self._lock:
             try:
-                await self._page.goto(meeting_url, wait_until="load", timeout=20000)
+                await self._page.goto(url, wait_until="load", timeout=20000)
             except PlaywrightError as e:
                 msg = "Failed to navigate to the meeting URL"
                 logger.exception(msg)
@@ -61,8 +60,7 @@ class BrowserMeetingController:
             if self._browser_agent is not None:
                 await asyncio.sleep(5)
                 await self._browser_agent.run(
-                    f"Join the meeting which is opened with the name "
-                    f"{participant_name}."
+                    f"Join the meeting which is opened with the name {name}."
                 )
                 return
 
@@ -77,7 +75,7 @@ class BrowserMeetingController:
                 name_field = self._page.get_by_placeholder(
                     re.compile("name", re.IGNORECASE)
                 )
-                await name_field.fill(participant_name, timeout=20000)
+                await name_field.fill(name, timeout=20000)
 
                 join_btn = self._page.get_by_role(
                     "button", name=re.compile(r"^join", re.IGNORECASE)
@@ -96,8 +94,8 @@ class BrowserMeetingController:
 
         logger.info(
             "Joined the meeting: %s as %s",
-            meeting_url,
-            participant_name,
+            url,
+            name,
         )
 
     async def leave(self) -> None:
@@ -121,8 +119,9 @@ class BrowserMeetingController:
                     "button", name=re.compile(r"^leave", re.IGNORECASE)
                 )
                 await leave_btn.click(timeout=1000)
-
                 await self._page.wait_for_timeout(500)
+
+                await self._page.close()
             except PlaywrightError as e:
                 msg = "Failed to leave the meeting"
                 logger.exception(msg)

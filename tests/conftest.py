@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+from joinly.container import SessionContainer
+from joinly.session import MeetingSession
 from tests.utils.meeting_mockup import serve_meeting_mockup
 
 
@@ -34,3 +36,15 @@ async def meeting_mockup(
             "transcription": audio_sample_info["transcription"],
             "duration": audio_sample_info["duration"],
         }
+
+
+@pytest.fixture
+async def meeting_session() -> AsyncGenerator[MeetingSession, None]:
+    """Fixture to set up a meeting session for testing."""
+    session_container = SessionContainer()
+
+    meeting_session = await session_container.__aenter__()
+    try:
+        yield meeting_session
+    finally:
+        await session_container.__aexit__()

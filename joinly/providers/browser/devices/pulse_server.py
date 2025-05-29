@@ -4,7 +4,9 @@ import tempfile
 from pathlib import Path
 from typing import Self
 
-from meeting_agent.devices.pulse_module_manager import PulseModuleManager
+from joinly.providers.browser.devices.pulse_module_manager import (
+    PulseModuleManager,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import sys
 from typing import Any
@@ -14,8 +15,8 @@ from langgraph.prebuilt import ToolNode, create_react_agent
 from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
-from meeting_agent.server import SESSION_CONFIG, mcp
-from meeting_agent.types import Transcript
+from joinly.server import mcp
+from joinly.types import Transcript
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,9 @@ def get_new_messages(
     ]
 
 
-async def run() -> None:
+async def run(
+    meeting_url: str | None = None, participant_name: str | None = None
+) -> None:
     """Simple conversational agent for a meeting."""
     transcript_url = AnyUrl("transcript://live")
     transcript_event = asyncio.Event()
@@ -97,6 +100,7 @@ async def run() -> None:
         "You should only respond to the messages you receive. "
         "You should not ask for clarification or provide any additional information. "
         "Do not use normal messages but the tools provided to you. "
+        "If interrupted, stop your response."
     )
 
     client = Client(mcp, message_handler=_message_handler)
@@ -114,39 +118,49 @@ async def run() -> None:
         )
         old_transcript = None
 
-        while True:
-            await transcript_event.wait()
-            transcript = Transcript.model_validate_json(
-                (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
-            )
-            transcript_event.clear()
+        await client.call_tool(
+            "join_meeting",
+            {"meeting_url": meeting_url, "participant_name": participant_name},
+        )
 
-            async for chunk in agent.astream(
-                {"messages": get_new_messages(transcript, old_transcript)},
-                config={
-                    "callbacks": [prompt_logger],
-                    "configurable": {"thread_id": "1"},
-                },
-                stream_mode="updates",
-            ):
-                if "agent" in chunk:
-                    logger.info(
-                        "AGENT\n%s", format_messages(chunk["agent"]["messages"])
-                    )
-                elif "tools" in chunk:
-                    logger.info(
-                        "TOOLS\n%s", format_messages(chunk["tools"]["messages"])
-                    )
+        try:
+            while True:
+                await transcript_event.wait()
+                transcript = Transcript.model_validate_json(
+                    (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+                )
+                transcript_event.clear()
 
-            old_transcript = transcript
+                async for chunk in agent.astream(
+                    {"messages": get_new_messages(transcript, old_transcript)},
+                    config={
+                        "callbacks": [prompt_logger],
+                        "configurable": {"thread_id": "1"},
+                    },
+                    stream_mode="updates",
+                ):
+                    if "agent" in chunk:
+                        logger.info(
+                            "AGENT\n%s", format_messages(chunk["agent"]["messages"])
+                        )
+                    elif "tools" in chunk:
+                        logger.info(
+                            "TOOLS\n%s", format_messages(chunk["tools"]["messages"])
+                        )
+
+                old_transcript = transcript
+
+        finally:
+            with contextlib.suppress(Exception):
+                await client.call_tool("leave_meeting")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:  # noqa: PLR2004
-        logger.error("Usage: python client.py <meeting_url>")
-        sys.exit(1)
-
     load_dotenv()
 
-    SESSION_CONFIG["meeting_url"] = sys.argv[1]
-    asyncio.run(run())
+    logging.basicConfig(level=logging.INFO)
+
+    meeting_url = sys.argv[1] if len(sys.argv) > 1 else None
+    participant_name = sys.argv[2] if len(sys.argv) > 2 else "Blaire"  # noqa: PLR2004
+
+    asyncio.run(run(meeting_url=meeting_url, participant_name=participant_name))

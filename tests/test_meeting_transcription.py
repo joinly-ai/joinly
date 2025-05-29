@@ -5,13 +5,16 @@ import jiwer
 from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
-from meeting_agent.session import MeetingSession
-from meeting_agent.types import Transcript
+from joinly.session import MeetingSession
+from joinly.types import Transcript
 
 
-async def test_meeting_transcription_mockup(meeting_mockup: dict[str, Any]) -> None:
+async def test_meeting_transcription_mockup(
+    meeting_mockup: dict[str, Any], meeting_session: MeetingSession
+) -> None:
     """Test transcription with meeting mockup."""
     await _run_meeting_transcription_test(
+        meeting_session=meeting_session,
         meeting_url=meeting_mockup["url"],
         ground_truth_transcription=meeting_mockup["transcription"],
         duration_seconds=meeting_mockup["duration"] + 5,
@@ -28,10 +31,11 @@ async def test_mcp_meeting_transcription_mockup(meeting_mockup: dict[str, Any]) 
 
 
 async def _run_meeting_transcription_test(
+    meeting_session: MeetingSession,
     meeting_url: str,
     ground_truth_transcription: str,
     duration_seconds: int = 30,
-    max_wer_threshold: float = 0.1,
+    max_wer_threshold: float = 0.2,
 ) -> None:
     """Executes a meeting transcription test by joining a meeting and processing audio.
 
@@ -39,41 +43,26 @@ async def _run_meeting_transcription_test(
     and transcription components to verify the audio transcription pipeline.
 
     Args:
+        meeting_session: The MeetingSession instance to use for the test
         meeting_url: URL for the meeting to join
         ground_truth_transcription: Expected text in the transcription
         duration_seconds: How long to collect transcriptions (in seconds)
-        max_wer_threshold: Maximum acceptable Word Error Rate (default 0.1 or 10%)
+        max_wer_threshold: Maximum acceptable Word Error Rate (default 0.2 or 20%)
     """
-    ms = MeetingSession()
-
-    transcription_agg: list[str] = []
-
-    async def _on_transcription(event: str, text: str) -> None:
-        if event == "segment":
-            transcription_agg.append(text)
-
-    ms.add_transcription_listener(_on_transcription)
-
-    async with ms:
-        await ms.join_meeting(
-            meeting_url=meeting_url,
-            participant_name="Test Participant",
-        )
-        await asyncio.sleep(duration_seconds)
-
-    assert transcription_agg, "No transcription received"
-    transcription = " ".join(transcription_agg)
-    ms_transcription = ms.transcript.text
-    assert transcription == ms_transcription, (
-        "Transcription mismatch between aggregate and full transcript. "
-        f"Expected: {ms_transcription}, Got: {transcription}"
+    await meeting_session.join_meeting(
+        meeting_url=meeting_url,
+        participant_name="Test Participant",
     )
+    await asyncio.sleep(duration_seconds)
 
-    wer = _calculate_wer(transcription, ground_truth_transcription)
+    ms_transcription = meeting_session.transcript.text
+    assert ms_transcription, "No transcription received"
+
+    wer = _calculate_wer(ms_transcription, ground_truth_transcription)
     assert wer <= max_wer_threshold, (
         f"Transcription quality below threshold. WER: {wer:.2f}, "
         f"Max allowed: {max_wer_threshold:.2f}\n"
-        f'Transcription: "{transcription}"\n'
+        f'Transcription: "{ms_transcription}"\n'
         f'Ground truth: "{ground_truth_transcription}"'
     )
 
@@ -82,7 +71,7 @@ async def _run_mcp_meeting_transcription_test(
     meeting_url: str,
     ground_truth_transcription: str,
     duration_seconds: int = 30,
-    max_wer_threshold: float = 0.1,
+    max_wer_threshold: float = 0.2,
 ) -> None:
     """Executes a meeting transcription test by joining a meeting and processing audio.
 
@@ -93,28 +82,22 @@ async def _run_mcp_meeting_transcription_test(
         meeting_url: URL for the meeting to join
         ground_truth_transcription: Expected text in the transcription
         duration_seconds: How long to collect transcriptions (in seconds)
-        max_wer_threshold: Maximum acceptable Word Error Rate (default 0.1 or 10%)
+        max_wer_threshold: Maximum acceptable Word Error Rate (default 0.2 or 20%)
     """
-    import logging
-
     from fastmcp import Client
 
-    from meeting_agent.server import mcp
-
-    logger = logging.getLogger("meeting_agent")
+    from joinly.server import mcp
 
     transcript_url = AnyUrl("transcript://live")
     transcription_update_count = 0
 
     async def _handler(message) -> None:  # noqa: ANN001
         nonlocal transcription_update_count
-        logger.info("Received message: %s", message)
         if (
             isinstance(message, ServerNotification)
             and isinstance(message.root, ResourceUpdatedNotification)
             and message.root.params.uri == transcript_url
         ):
-            logger.info("Transcription update received")
             transcription_update_count += 1
 
     client = Client(mcp, message_handler=_handler)

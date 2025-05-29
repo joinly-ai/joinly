@@ -4,18 +4,20 @@ import logging
 import os
 import tempfile
 import uuid
-from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Self
 
-from meeting_agent.devices.pulse_module_manager import PulseModuleManager
+from joinly.core import AudioReader
+from joinly.providers.browser.devices.pulse_module_manager import (
+    PulseModuleManager,
+)
 
 logger = logging.getLogger(__name__)
 
 _ENV_VAR = "PULSE_SINK"
 
 
-class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
+class VirtualSpeaker(PulseModuleManager, AudioReader):
     """A class to create and unload a virtual audio null sink."""
 
     def __init__(  # noqa: PLR0913
@@ -45,7 +47,8 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
         self.sink_name: str = (
             sink_name if sink_name is not None else f"virt.{uuid.uuid4()}"
         )
-        self._chunk_size = frames_per_chunk * 4
+        self.byte_depth = 4  # f32le
+        self.chunk_size = frames_per_chunk * self.byte_depth
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
@@ -156,7 +159,7 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
         else:
             logger.warning("No FIFO file to remove")
 
-    async def __anext__(self) -> bytes:
+    async def read(self) -> bytes:
         """Return the next audio chunk from the stream.
 
         Returns:
@@ -167,6 +170,6 @@ class VirtualSpeaker(PulseModuleManager, AsyncIterator[bytes]):
             raise RuntimeError(msg)
 
         try:
-            return await self._reader.readexactly(self._chunk_size)
+            return await self._reader.readexactly(self.chunk_size)
         except asyncio.IncompleteReadError as exc:
             raise StopAsyncIteration from exc
