@@ -1,6 +1,6 @@
-FROM ghcr.io/astral-sh/uv:latest AS uv
+FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:latest AS uv
 
-FROM mcr.microsoft.com/vscode/devcontainers/base:bookworm
+FROM --platform=linux/amd64 mcr.microsoft.com/vscode/devcontainers/base:bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 \
