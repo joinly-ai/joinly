@@ -102,11 +102,21 @@ async def run(
     notion = NotionClient(auth=os.getenv("NOTION_KEY"))
 
     @tool
-    async def notion_create_page(title: str) -> str:
+    async def notion_create_page(title: str, content: str) -> str:
         """Creates a new Notion page with the given title in the default database."""
         new_page = await notion.pages.create(
             parent={"database_id": database_id},
             properties={"Name": {"title": [{"text": {"content": title}}]}},
+        )
+        await notion.blocks.children.append(
+            block_id=new_page["id"],
+            children=[
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {"rich_text": [{"text": {"content": content}}]},
+                }
+            ],
         )
         return f"Created page: {new_page['url']}"
 
