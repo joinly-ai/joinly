@@ -206,7 +206,7 @@ class DefaultSpeechController(SpeechController):
 
         except Exception as e:
             msg = (
-                f"Error while speaking text: {text}. "
+                f"Error while speaking text. "
                 f'Spoken text until now: "{" ".join(spoken_text)}"'
             )
             logger.exception(msg)
