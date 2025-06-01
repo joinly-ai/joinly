@@ -8,6 +8,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from joinly.core import STT
+from joinly.settings import get_settings
 from joinly.types import TranscriptSegment, VADWindow
 
 logger = logging.getLogger(__name__)
@@ -16,10 +17,12 @@ logger = logging.getLogger(__name__)
 class WhisperSTT(STT):
     """A class to transcribe audio using Whisper."""
 
-    def __init__(self) -> None:
+    def __init__(self, hotwords: list[str] | None = None) -> None:
         """Initialize the WhisperSTT."""
         self._model: WhisperModel | None = None
         self._sem = asyncio.BoundedSemaphore(1)
+        hotwords_arr = (hotwords or []) + [get_settings().name]
+        self._hotwords_str = " ".join(hotwords_arr)
 
     async def __aenter__(self) -> Self:
         """Initialize the Whisper model."""
@@ -135,7 +138,8 @@ class WhisperSTT(STT):
             audio_segment,
             language="en",
             beam_size=5,
-            condition_on_previous_text=False,
+            condition_on_previous_text=True,
+            hotwords=self._hotwords_str,
         )
 
         get_next_segment = partial(next, iter(segments), None)
