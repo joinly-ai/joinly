@@ -8,7 +8,7 @@ from contextlib import (
 from typing import Any, TypeVar
 
 from joinly.session import MeetingSession
-from joinly.settings import DEFAULT_SETTINGS, Settings
+from joinly.settings import Settings, get_settings
 
 T = TypeVar("T")
 
@@ -32,9 +32,9 @@ def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
 class SessionContainer:
     """Container for the Meeting Session."""
 
-    def __init__(self, settings: Settings = DEFAULT_SETTINGS) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         """Initialize the session container."""
-        self._settings = settings
+        self._settings = settings or get_settings()
         self._stack = AsyncExitStack()
 
     async def __aenter__(self) -> MeetingSession:
