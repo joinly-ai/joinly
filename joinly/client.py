@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.tools import tool
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import AzureChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -133,11 +134,18 @@ async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> 
     async with client:
         await client.session.subscribe_resource(transcript_url)
 
-        tools = await load_mcp_tools(client.session)
+        @tool(return_direct=True)
+        def finish() -> None:
+            """Finish tool to end the conversation."""
+            return
+
+        tools = [finish]
+        tools.extend(await load_mcp_tools(client.session))
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
+        llm_binded = llm.bind_tools(tools, tool_choice="required")
+
         memory = MemorySaver()
         prompt_logger = PromptLogger()
-        llm_binded = llm.bind_tools(tools, tool_choice="auto")
         agent = create_react_agent(
             llm_binded, tool_node, prompt=prompt, checkpointer=memory
         )
