@@ -82,7 +82,6 @@ async def run(
     transcript_event = asyncio.Event()
 
     async def _message_handler(message) -> None:  # noqa: ANN001
-        """Handle incoming messages from the server."""
         if (
             isinstance(message, ServerNotification)
             and isinstance(message.root, ResourceUpdatedNotification)
@@ -99,6 +98,7 @@ async def run(
     search_tool = TavilySearch(max_results=5, topic="general")
 
     database_id = os.getenv("NOTION_DATABASE_ID")
+    notion = os.getenv("NOTION_KEY")
     notion = NotionClient(auth=os.getenv("NOTION_KEY"))
 
     @tool
@@ -188,10 +188,10 @@ async def run(
 
 if __name__ == "__main__":
     load_dotenv()
+
     logging.basicConfig(level=logging.INFO)
 
     meeting_url = sys.argv[1] if len(sys.argv) > 1 else None
     participant_name = sys.argv[2] if len(sys.argv) > 2 else "joinly"  # noqa: PLR2004
 
     asyncio.run(run(meeting_url=meeting_url, participant_name=participant_name))
-
