@@ -86,7 +86,7 @@ async def run(meeting_url: str | None = None) -> None:
             transcript_event.set()
 
     llm = AzureChatOpenAI(
-        azure_deployment="gpt-4o-mini",
+        azure_deployment="gpt-4.1",
         api_version="2024-12-01-preview",
     )
 
