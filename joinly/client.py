@@ -53,25 +53,34 @@ class PromptLogger(BaseCallbackHandler):
         logger.info("PROMPT\n%s", format_messages([m for b in messages for m in b]))
 
 
-def get_new_messages(
-    transcript: Transcript, old_transcript: Transcript | None = None
-) -> list[HumanMessage]:
-    """Convert a transcript to a list of HumanMessage.
-
-    Optionally, only include new messages since the last transcript.
-    """
-    start_ind = 0 if old_transcript is None else len(old_transcript.segments)
+def transcript_to_messages(transcript: Transcript) -> list[HumanMessage]:
+    """Convert a transcript to a list of HumanMessage."""
     return [
         HumanMessage(
-            content=segment.text,
-            name=segment.speaker if segment.speaker is not None else "Unknown",
+            content=s.text,
+            name=s.speaker if s.speaker is not None else "Unknown",
         )
-        for segment in transcript.segments[start_ind:]
+        for s in transcript.segments
     ]
 
 
-async def run(meeting_url: str | None = None) -> None:
-    """Simple conversational agent for a meeting."""
+def transcript_after(transcript: Transcript, after: float) -> Transcript:
+    """Get a new transcript including only segments starting after given time.
+
+    Args:
+        transcript: The original transcript.
+        after: The time (seconds) after which to include segments.
+    """
+    segments = [s for s in transcript.segments if s.start > after]
+    return Transcript(segments=segments)
+
+
+async def run(*, meeting_url: str | None = None) -> None:
+    """Simple conversational agent for a meeting.
+
+    Args:
+        meeting_url: The URL of the meeting to join.
+    """
     settings = get_settings()
     transcript_url = AnyUrl("transcript://live")
     transcript_event = asyncio.Event()
@@ -116,7 +125,7 @@ async def run(meeting_url: str | None = None) -> None:
         agent = create_react_agent(
             llm_binded, tool_node, prompt=prompt, checkpointer=memory
         )
-        old_transcript = None
+        last_time = -1.0
 
         await client.call_tool(
             "join_meeting",
@@ -126,13 +135,15 @@ async def run(meeting_url: str | None = None) -> None:
         try:
             while True:
                 await transcript_event.wait()
-                transcript = Transcript.model_validate_json(
+                transcript_full = Transcript.model_validate_json(
                     (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
                 )
+                transcript = transcript_after(transcript_full, last_time)
                 transcript_event.clear()
+                last_time = transcript.segments[-1].start
 
                 async for chunk in agent.astream(
-                    {"messages": get_new_messages(transcript, old_transcript)},
+                    {"messages": transcript_to_messages(transcript)},
                     config={
                         "callbacks": [prompt_logger],
                         "configurable": {"thread_id": "1"},
@@ -147,8 +158,6 @@ async def run(meeting_url: str | None = None) -> None:
                         logger.info(
                             "TOOLS\n%s", format_messages(chunk["tools"]["messages"])
                         )
-
-                old_transcript = transcript
 
         finally:
             with contextlib.suppress(Exception):

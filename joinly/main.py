@@ -189,7 +189,7 @@ def cli(  # noqa: PLR0913
     if server:
         mcp.run(transport="streamable-http", host=host, port=port)
     else:
-        asyncio.run(client.run(meeting_url))
+        asyncio.run(client.run(meeting_url=meeting_url))
 
 
 if __name__ == "__main__":
