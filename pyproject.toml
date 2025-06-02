@@ -8,12 +8,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "langchain",
-    "langchain-core",
-    "langchain-mcp-adapters",
-    "langchain-openai",
-    "langchain-tavily",
-    "notion-client",
     "click>=8.1.8",
     "faster-whisper>=1.1.1",
     "fastmcp>=2.3.3",
