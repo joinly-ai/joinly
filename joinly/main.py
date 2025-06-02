@@ -40,6 +40,14 @@ def _parse_kv(
     default=True,
 )
 @click.option(
+    "-n",
+    "--name",
+    type=str,
+    help="The meeting participant name.",
+    default="joinly",
+    show_default=True,
+)
+@click.option(
     "-h",
     "--host",
     type=str,
@@ -56,12 +64,10 @@ def _parse_kv(
     show_default=True,
 )
 @click.option(
-    "-n",
-    "--name",
-    type=str,
-    help="The meeting participant name.",
-    default="joinly",
-    show_default=True,
+    "--name-trigger",
+    is_flag=True,
+    help="Trigger the agent only when the name is mentioned in the transcript."
+    "Only applicable with --client.",
 )
 @click.option(
     "-m",
@@ -168,7 +174,8 @@ def cli(  # noqa: PLR0913
     server: bool,
     host: str,
     port: int,
-    meeting_url: str | None = None,
+    name_trigger: bool,
+    meeting_url: str | None,
     verbose: int,
     quiet: bool,
     logging_plain: bool,
@@ -189,7 +196,7 @@ def cli(  # noqa: PLR0913
     if server:
         mcp.run(transport="streamable-http", host=host, port=port)
     else:
-        asyncio.run(client.run(meeting_url=meeting_url))
+        asyncio.run(client.run(meeting_url=meeting_url, name_trigger=name_trigger))
 
 
 if __name__ == "__main__":

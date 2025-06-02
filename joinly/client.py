@@ -1,7 +1,9 @@
 import asyncio
 import contextlib
 import logging
+import re
 import sys
+import unicodedata
 from typing import Any
 
 from dotenv import load_dotenv
@@ -75,11 +77,25 @@ def transcript_after(transcript: Transcript, after: float) -> Transcript:
     return Transcript(segments=segments)
 
 
-async def run(*, meeting_url: str | None = None) -> None:
+def normalize(s: str) -> str:
+    """Normalize a string."""
+    normalized = unicodedata.normalize("NFKD", s.casefold().strip())
+    chars = (c for c in normalized if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^\w\s]", "", "".join(chars))
+
+
+def name_in_transcript(transcript: Transcript, name: str) -> bool:
+    """Check if the name is mentioned in the transcript."""
+    pattern = rf"\b{re.escape(normalize(name))}\b"
+    return bool(re.search(pattern, normalize(transcript.text)))
+
+
+async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> None:
     """Simple conversational agent for a meeting.
 
     Args:
         meeting_url: The URL of the meeting to join.
+        name_trigger: If True, the agent will only respond if its name is mentioned.
     """
     settings = get_settings()
     transcript_url = AnyUrl("transcript://live")
@@ -140,6 +156,10 @@ async def run(*, meeting_url: str | None = None) -> None:
                 )
                 transcript = transcript_after(transcript_full, last_time)
                 transcript_event.clear()
+
+                if name_trigger and not name_in_transcript(transcript, settings.name):
+                    continue
+
                 last_time = transcript.segments[-1].start
 
                 async for chunk in agent.astream(
