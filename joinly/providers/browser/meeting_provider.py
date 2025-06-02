@@ -3,6 +3,7 @@ from contextlib import AsyncExitStack
 from typing import Self
 
 from joinly.core import MeetingProvider
+from joinly.providers.browser.browser_agent import BrowserAgent
 from joinly.providers.browser.browser_session import BrowserSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
@@ -14,13 +15,24 @@ from joinly.providers.browser.meeting_controller import BrowserMeetingController
 class BrowserMeetingProvider(MeetingProvider):
     """A meeting provider that uses a web browser to join meetings."""
 
-    def __init__(self) -> None:
-        """Initialize the browser meeting provider."""
+    def __init__(
+        self,
+        *,
+        vnc_server: bool = False,
+        browser_agent: bool = False,
+    ) -> None:
+        """Initialize the browser meeting provider.
+
+        Args:
+            vnc_server (bool): Whether to start a VNC server for the virtual display.
+            browser_agent (bool): Whether to use a browser agent for the meeting
+                controller.
+        """
         env = os.environ.copy()
         pulse_server = PulseServer(env=env)
         virtual_speaker = VirtualSpeaker(env=env)
         virtual_microphone = VirtualMicrophone(env=env)
-        virtual_display = VirtualDisplay(env=env)
+        virtual_display = VirtualDisplay(env=env, use_vnc_server=vnc_server)
         browser_session = BrowserSession(env=env)
         self._services = [
             pulse_server,
@@ -33,7 +45,7 @@ class BrowserMeetingProvider(MeetingProvider):
 
         self.meeting_controller = BrowserMeetingController(
             browser_session=browser_session,
-            browser_agent=None,
+            browser_agent=BrowserAgent(env=env) if browser_agent else None,
         )
         self.audio_reader = virtual_speaker
         self.audio_writer = virtual_microphone

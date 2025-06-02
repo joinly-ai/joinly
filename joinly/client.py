@@ -21,6 +21,7 @@ from notion_client import AsyncClient as NotionClient
 from pydantic import AnyUrl
 
 from joinly.server import mcp
+from joinly.settings import get_settings
 from joinly.types import Transcript
 
 logger = logging.getLogger(__name__)
@@ -74,10 +75,9 @@ def get_new_messages(
     ]
 
 
-async def run(
-    meeting_url: str | None = None, participant_name: str | None = None
-) -> None:
+async def run(meeting_url: str | None = None) -> None:
     """Simple conversational agent for a meeting."""
+    settings = get_settings()
     transcript_url = AnyUrl("transcript://live")
     transcript_event = asyncio.Event()
 
@@ -151,7 +151,7 @@ async def run(
 
         await client.call_tool(
             "join_meeting",
-            {"meeting_url": meeting_url, "participant_name": participant_name},
+            {"meeting_url": meeting_url, "participant_name": settings.name},
         )
 
         try:
@@ -192,6 +192,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     meeting_url = sys.argv[1] if len(sys.argv) > 1 else None
-    participant_name = sys.argv[2] if len(sys.argv) > 2 else "joinly"  # noqa: PLR2004
 
-    asyncio.run(run(meeting_url=meeting_url, participant_name=participant_name))
+    asyncio.run(run(meeting_url=meeting_url))

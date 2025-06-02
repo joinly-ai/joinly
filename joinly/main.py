@@ -1,14 +1,36 @@
 import asyncio
+import json
 import logging
+from typing import Any
 
 import click
 from dotenv import load_dotenv
 
 from joinly import client
 from joinly.server import mcp
+from joinly.settings import Settings, set_settings
 from joinly.utils import configure_logging
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_kv(
+    _ctx: click.Context, _param: click.Parameter, value: tuple[str]
+) -> dict[str, object]:
+    """Convert (--foo-arg key=value) repeated tuples to dict."""
+    out: dict[str, object] = {}
+    for item in value:
+        try:
+            k, v = item.split("=", 1)
+        except ValueError as exc:
+            msg = f"{item!r} is not of the form key=value"
+            raise click.BadParameter(msg) from exc
+
+        try:
+            out[k] = json.loads(v)
+        except json.JSONDecodeError:
+            out[k] = v
+    return out
 
 
 @click.command()
@@ -23,6 +45,7 @@ logger = logging.getLogger(__name__)
     type=str,
     help="The host to bind the server to. Only applicable with --server.",
     default="127.0.0.1",
+    show_default=True,
 )
 @click.option(
     "-p",
@@ -30,13 +53,98 @@ logger = logging.getLogger(__name__)
     type=int,
     help="The port to bind the server to. Only applicable with --server.",
     default=8000,
+    show_default=True,
 )
 @click.option(
     "-n",
-    "--participant-name",
+    "--name",
     type=str,
     help="The meeting participant name.",
     default="joinly",
+    show_default=True,
+)
+@click.option(
+    "-m",
+    "--meeting-provider",
+    type=str,
+    help="Meeting provider to use.",
+    default="browser",
+    show_default=True,
+)
+@click.option(
+    "--vad",
+    type=str,
+    help="Voice Activity Detection service to use.",
+    default="silero",
+    show_default=True,
+)
+@click.option(
+    "--stt",
+    type=str,
+    help="Speech-to-Text service to use.",
+    default="whisper",
+    show_default=True,
+)
+@click.option(
+    "--tts",
+    type=str,
+    help="Text-to-Speech service to use.",
+    default="kokoro",
+    show_default=True,
+)
+@click.option(
+    "--meeting-provider-arg",
+    "meeting_provider_args",
+    multiple=True,
+    metavar="KEY=VAL",
+    callback=_parse_kv,
+    help="Arguments for the meeting provider in the form of key=value. "
+    "Can be specified multiple times.",
+)
+@click.option(
+    "--vad-arg",
+    "vad_args",
+    multiple=True,
+    metavar="KEY=VAL",
+    callback=_parse_kv,
+    help="Arguments for the VAD service in the form of key=value. "
+    "Can be specified multiple times.",
+)
+@click.option(
+    "--stt-arg",
+    "stt_args",
+    multiple=True,
+    metavar="KEY=VAL",
+    callback=_parse_kv,
+    help="Arguments for the STT service in the form of key=value. "
+    "Can be specified multiple times.",
+)
+@click.option(
+    "--tts-arg",
+    "tts_args",
+    multiple=True,
+    metavar="KEY=VAL",
+    callback=_parse_kv,
+    help="Arguments for the TTS service in the form of key=value. "
+    "Can be specified multiple times.",
+)
+@click.option(
+    "--transcription-controller-arg",
+    "transcription_controller_args",
+    multiple=True,
+    metavar="KEY=VAL",
+    callback=_parse_kv,
+    help="Arguments for the transcription controller in the form of key=value. "
+    "Can be specified multiple times.",
+)
+@click.option(
+    "--speech-controller-arg",
+    "speech_controller_args",
+    multiple=True,
+    metavar="KEY=VAL",
+    callback=_parse_kv,
+    help="Arguments for the speech controller in the form of key=value. "
+    "Can be specified multiple times.",
 )
 @click.option(
     "-v",
@@ -53,21 +161,24 @@ logger = logging.getLogger(__name__)
     default=None,
     type=str,
     required=False,
-    envvar="MEETING_URL",
+    envvar="JOINLY_MEETING_URL",
 )
 def cli(  # noqa: PLR0913
     *,
     server: bool,
     host: str,
     port: int,
-    participant_name: str,
     meeting_url: str | None = None,
     verbose: int,
     quiet: bool,
     logging_plain: bool,
+    **cli_settings: dict[str, Any],
 ) -> None:
     """Start the meeting session."""
     load_dotenv()
+
+    settings = Settings(**cli_settings)  # type: ignore[arg-type]
+    set_settings(settings)
 
     configure_logging(
         verbose=verbose,
@@ -78,7 +189,7 @@ def cli(  # noqa: PLR0913
     if server:
         mcp.run(transport="streamable-http", host=host, port=port)
     else:
-        asyncio.run(client.run(meeting_url, participant_name=participant_name))
+        asyncio.run(client.run(meeting_url))
 
 
 if __name__ == "__main__":
