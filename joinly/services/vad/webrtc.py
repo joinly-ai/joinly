@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Self
@@ -10,19 +11,15 @@ from joinly.types import VADWindow
 
 logger = logging.getLogger(__name__)
 
-BYTE_DEPTH_FLOAT32 = 4
-BYTE_DEPTH_INT16 = 2
 
-
-class SileroVAD(VAD):
-    """Detect speech in audio streams and chunk audio bytes using webrtcvad."""
+class WebrtcVAD(VAD):
+    """A class to detect speech in audio streams and chunk audio bytes using webrtcvad."""
 
     def __init__(
         self,
         *,
         aggressiveness: int = 2,
     ) -> None:
-        """Initialize SileroVAD."""
         self._aggressiveness = aggressiveness
         self._vad = webrtcvad.Vad(self._aggressiveness)
         self._sample_rate = 16000
@@ -31,28 +28,21 @@ class SileroVAD(VAD):
         # Note: Do not enforce self._byte_depth here, as we support both 2 and 4
 
     async def __aenter__(self) -> Self:
-        """Enter async context manager, initialize VAD."""
         logger.info("Initialized WebrtcVAD (SileroVAD wrapper)")
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        """Exit async context manager."""
         pass
 
     async def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:
-        """Stream audio and yield VADWindow objects based on detected speech."""
         if reader.sample_rate != self._sample_rate:
-            msg = (
-                f"Expected sample rate {self._sample_rate}, "
-                f"got {reader.sample_rate}"
+            raise ValueError(
+                f"Expected sample rate {self._sample_rate}, got {reader.sample_rate}"
             )
-            raise ValueError(msg)
-        if reader.byte_depth not in (BYTE_DEPTH_INT16, BYTE_DEPTH_FLOAT32):
-            msg = (
-                "webrtcvad only supports 16-bit PCM (byte_depth=2), "
-                f"but got byte_depth={reader.byte_depth}."
+        if reader.byte_depth not in (2, 4):
+            raise ValueError(
+                f"webrtcvad only supports 16-bit PCM (byte_depth=2), but got byte_depth={reader.byte_depth}."
             )
-            raise ValueError(msg)
 
         idx: int = 0
         window_size: int = self._window_size_samples * reader.byte_depth
@@ -71,16 +61,15 @@ class SileroVAD(VAD):
                 window_bytes = bytes(buffer[:window_size])
 
                 # --- Convert only for VAD, never for yield ---
-                if reader.byte_depth == BYTE_DEPTH_FLOAT32:
+                if reader.byte_depth == 4:
                     # float32 PCM [-1.0, 1.0] → int16 PCM [-32768, 32767]
                     arr32 = np.frombuffer(window_bytes, dtype=np.float32)
                     arr16 = np.clip(arr32 * 32767, -32768, 32767).astype(np.int16)
                     vad_bytes = arr16.tobytes()
-                elif reader.byte_depth == BYTE_DEPTH_INT16:
+                elif reader.byte_depth == 2:
                     vad_bytes = window_bytes
                 else:
-                    msg = "Unsupported byte depth for VAD."
-                    raise ValueError(msg)
+                    raise ValueError("Unsupported byte depth for VAD.")
 
                 is_speech = self._vad.is_speech(vad_bytes, self._sample_rate)
 
@@ -110,4 +99,3 @@ class SileroVAD(VAD):
                 del buffer[:window_size]
                 idx += 1
                 last_is_speech = is_speech
-
