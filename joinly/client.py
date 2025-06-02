@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import datetime
 import logging
 import re
 import sys
@@ -117,16 +118,15 @@ async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> 
     )
 
     prompt = (
-        "You are a helpful assistant in a meeting. "
-        "Be formal and concise. "
-        "You will receive messages from the meeting transcript. "
-        "Your task is to respond to the messages as they come in. "
-        "You can ask questions, provide information, or summarize the meeting. "
-        "You should not provide any personal opinions or make any decisions. "
-        "You should only respond to the messages you receive. "
-        "You should not ask for clarification or provide any additional information. "
-        "Do not use normal messages but the tools provided to you. "
-        "If interrupted, stop your response."
+        f"Today is {datetime.datetime.now(tz=datetime.UTC).strftime('%d.%m.%Y')}. "
+        f"You are {settings.name}, a professional and knowledgeable meeting assistant. "
+        "Provide concise, valuable contributions to the meeting discussions. "
+        "You receive real-time transcripts from the ongoing meeting. "
+        "Respond thoughtfully when appropriate, but avoid unnecessary interruptions. "
+        "Use available tools when needed to assist participants. "
+        "Always finish your response with the 'finish' tool. "
+        "If nothing requires your input, use the 'finish' tool immediately. "
+        "If interrupted mid-response, gracefully conclude and use 'finish'."
     )
 
     client = Client(mcp, message_handler=_message_handler)
