@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from typing import Self
 
 import numpy as np
-import webrtcvad
+from silero_vad_lite import SileroVAD as SileroVADModel
 
 from joinly.core import VAD, AudioReader
 from joinly.types import VADWindow
@@ -13,40 +13,67 @@ logger = logging.getLogger(__name__)
 
 
 class SileroVAD(VAD):
-    """A class to detect speech in audio streams and chunk audio bytes using webrtcvad."""
+    """A class to detect speech in audio streams and chunk audio bytes."""
 
     def __init__(
         self,
         *,
-        aggressiveness: int = 2,
+        speech_threshold: float = 0.5,
     ) -> None:
-        self._aggressiveness = aggressiveness
-        self._vad = webrtcvad.Vad(self._aggressiveness)
-        self._sample_rate = 16000
-        self._frame_duration = 30  # ms
-        self._window_size_samples = int(self._sample_rate * self._frame_duration / 1000)
-        # Note: Do not enforce self._byte_depth here, as we support both 2 and 4
+        """Initialize the VADService.
+
+        Args:
+            speech_threshold: The threshold for speech detection (default is 0.5).
+        """
+        self._speech_threshold = speech_threshold
+        self._model: SileroVADModel | None = None
 
     async def __aenter__(self) -> Self:
-        logger.info("Initialized WebrtcVAD (SileroVAD wrapper)")
+        """Initialize the VAD model and prepare for processing."""
+        logger.info("Loading VAD model")
+        self._model = await asyncio.to_thread(
+            SileroVADModel,
+            16000,
+        )
+        logger.info("Loaded VAD model")
+
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        pass
+        """Clean up resources when stopping the processor."""
+        if self._model is not None:
+            del self._model
+            self._model = None
 
-    async def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:
-        if reader.sample_rate != self._sample_rate:
-            raise ValueError(
-                f"Expected sample rate {self._sample_rate}, got {reader.sample_rate}"
+    async def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:  # noqa: C901
+        """Process the audio stream and yield speech segments.
+
+        For non-speech segments, keeps one window in buffer to mark one previous
+        window as well as speech.
+
+        Args:
+            reader: An AudioReader providing audio data.
+
+        Yields:
+            VADFrame: A frame containing the audio segment, start time, and end time.
+        """
+        if self._model is None:
+            msg = "VAD model not initialized"
+            raise RuntimeError(msg)
+
+        if reader.sample_rate != self._model.sample_rate:
+            msg = (
+                f"Expected sample rate {self._model.sample_rate}, "
+                f"got {reader.sample_rate}"
             )
+            raise ValueError(msg)
         if reader.byte_depth not in (2, 4):
-            raise ValueError(
-                f"webrtcvad only supports 16-bit PCM (byte_depth=2), but got byte_depth={reader.byte_depth}."
-            )
+            msg = f"Unsupported byte depth: {reader.byte_depth}"
+            raise ValueError(msg)
 
         idx: int = 0
-        window_size: int = self._window_size_samples * reader.byte_depth
-        chunk_dur: float = self._window_size_samples / self._sample_rate
+        window_size: int = self._model.window_size_samples * reader.byte_depth
+        chunk_dur: float = self._model.window_size_samples / reader.sample_rate
         buffer = bytearray()
         pending: bytes = b""
         last_is_speech: bool = False
@@ -59,21 +86,15 @@ class SileroVAD(VAD):
 
             while len(buffer) >= window_size:
                 window_bytes = bytes(buffer[:window_size])
-
-                # --- Convert only for VAD, never for yield ---
-                if reader.byte_depth == 4:
-                    # float32 PCM [-1.0, 1.0] → int16 PCM [-32768, 32767]
-                    arr32 = np.frombuffer(window_bytes, dtype=np.float32)
-                    arr16 = np.clip(arr32 * 32767, -32768, 32767).astype(np.int16)
-                    vad_bytes = arr16.tobytes()
-                elif reader.byte_depth == 2:
-                    vad_bytes = window_bytes
+                if reader.byte_depth == 4:  # noqa: PLR2004
+                    samples = np.frombuffer(window_bytes, dtype=np.float32)
                 else:
-                    raise ValueError("Unsupported byte depth for VAD.")
+                    arr16 = np.frombuffer(window_bytes, dtype=np.int16)
+                    samples = arr16.astype(np.float32) / 32768.0
 
-                is_speech = self._vad.is_speech(vad_bytes, self._sample_rate)
+                prob = await asyncio.to_thread(self._model.process, samples)
+                is_speech = prob > self._speech_threshold
 
-                # Yield the *original* window_bytes in the format given by the reader
                 if not is_speech:
                     if pending:
                         yield VADWindow(
@@ -81,7 +102,7 @@ class SileroVAD(VAD):
                             start=(idx - 1) * chunk_dur,
                             is_speech=last_is_speech,
                         )
-                    pending = window_bytes
+                    pending = bytes(window_bytes)
                 else:
                     if pending:
                         yield VADWindow(
@@ -90,8 +111,9 @@ class SileroVAD(VAD):
                             is_speech=True,
                         )
                     pending = b""
+
                     yield VADWindow(
-                        pcm=window_bytes,
+                        pcm=bytes(window_bytes),
                         start=idx * chunk_dur,
                         is_speech=True,
                     )

@@ -1,23 +1,18 @@
 import asyncio
 import contextlib
-import datetime
 import logging
-import os
 import sys
 from typing import Any
 
 from dotenv import load_dotenv
 from fastmcp import Client
-from langchain.tools import tool
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import AzureChatOpenAI
-from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import ToolNode, create_react_agent
 from mcp import ResourceUpdatedNotification, ServerNotification
-from notion_client import AsyncClient as NotionClient
 from pydantic import AnyUrl
 
 from joinly.server import mcp
@@ -91,44 +86,20 @@ async def run(meeting_url: str | None = None) -> None:
             transcript_event.set()
 
     llm = AzureChatOpenAI(
-        azure_deployment="gpt-4.1",
+        azure_deployment="gpt-4o-mini",
         api_version="2024-12-01-preview",
     )
 
-    search_tool = TavilySearch(max_results=5, topic="general")
-
-    database_id = os.getenv("NOTION_DATABASE_ID")
-    notion = os.getenv("NOTION_KEY")
-    notion = NotionClient(auth=os.getenv("NOTION_KEY"))
-
-    @tool
-    async def notion_create_page(title: str, content: str) -> str:
-        """Creates a new Notion page with the given title in the default database."""
-        new_page = await notion.pages.create(
-            parent={"database_id": database_id},
-            properties={"Name": {"title": [{"text": {"content": title}}]}},
-        )
-        await notion.blocks.children.append(
-            block_id=new_page["id"],
-            children=[
-                {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {"rich_text": [{"text": {"content": content}}]},
-                }
-            ],
-        )
-        return f"Created page: {new_page['url']}"
-
     prompt = (
-        f"Today is {datetime.datetime.now(tz=datetime.UTC).strftime('%d.%m.%Y')}. "
         "You are a helpful assistant in a meeting. "
         "Be formal and concise. "
-        "You will receive transcripts as messages from the live meeting. "
-        "Your task is to respond as a meeting participant using the speak tool "
-        "and/or send message to the chat. "
-        "Use the search tool to get up to date information where required. "
-        "Never use normal messages but only the tools provided to you. "
+        "You will receive messages from the meeting transcript. "
+        "Your task is to respond to the messages as they come in. "
+        "You can ask questions, provide information, or summarize the meeting. "
+        "You should not provide any personal opinions or make any decisions. "
+        "You should only respond to the messages you receive. "
+        "You should not ask for clarification or provide any additional information. "
+        "Do not use normal messages but the tools provided to you. "
         "If interrupted, stop your response."
     )
 
@@ -138,8 +109,6 @@ async def run(meeting_url: str | None = None) -> None:
         await client.session.subscribe_resource(transcript_url)
 
         tools = await load_mcp_tools(client.session)
-        tools.append(search_tool)
-        tools.append(notion_create_page)
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         memory = MemorySaver()
         prompt_logger = PromptLogger()
