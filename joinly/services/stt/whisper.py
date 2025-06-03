@@ -78,7 +78,7 @@ class WhisperSTT(STT):
             msg = "Model not initialized"
             raise RuntimeError(msg)
 
-        queue = asyncio.Queue[tuple[bytes, float] | None](maxsize=10)
+        queue = asyncio.Queue[tuple[bytes, float, float] | None](maxsize=10)
         buffer_task = asyncio.create_task(self._buffer_windows(windows, queue))
 
         try:
@@ -86,8 +86,8 @@ class WhisperSTT(STT):
                 item = await queue.get()
                 if item is None:
                     break
-                pcm, start = item
-                async for segment in self._transcribe(pcm, start):
+                pcm, start, end = item
+                async for segment in self._transcribe(pcm, start, end):
                     yield segment
         finally:
             buffer_task.cancel()
@@ -95,7 +95,7 @@ class WhisperSTT(STT):
     async def _buffer_windows(
         self,
         windows: AsyncIterator[VADWindow],
-        queue: asyncio.Queue[tuple[bytes, float] | None],
+        queue: asyncio.Queue[tuple[bytes, float, float] | None],
     ) -> None:
         """Buffer audio windows into the queue.
 
@@ -126,23 +126,26 @@ class WhisperSTT(STT):
                         len(buffer),
                         len(buffer) / (16000 * 4),
                     )
-                    await queue.put((bytes(buffer), start))
+                    end = window.start + int(len(window.pcm) / (16000 * 4))
+                    await queue.put((bytes(buffer), start, end))
                     buffer.clear()
                     start = -1
                     silence_bytes = 0
 
         if start >= 0 and buffer:
-            await queue.put((bytes(buffer), start))
+            end = start + int(len(buffer) / (16000 * 4))
+            await queue.put((bytes(buffer), start, end))
         await queue.put(None)
 
     async def _transcribe(
-        self, pcm: bytes, start: float
+        self, pcm: bytes, start: float, end: float | None = None
     ) -> AsyncIterator[TranscriptSegment]:
         """Process the input audio chunk and yield transcriptions.
 
         Args:
             pcm: Audio data in bytes format.
             start: The start time of the audio segment.
+            end: The end time of the audio segment.
 
         Yields:
             TranscriptSegment: The transcribed segment.
@@ -178,6 +181,6 @@ class WhisperSTT(STT):
                 if text:
                     yield TranscriptSegment(
                         text=text,
-                        start=start + seg.start,
-                        end=start + seg.end,
+                        start=min(start + seg.start, end or float("inf")),
+                        end=min(start + seg.end, end or float("inf")),
                     )
