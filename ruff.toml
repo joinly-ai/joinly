@@ -46,6 +46,9 @@ convention = "google"
 "scripts/**/*.py" = [
     "INP001",
 ]
+"examples/**/*.py" = [
+    "INP001",
+]
 
 [format]
 quote-style = "double"
