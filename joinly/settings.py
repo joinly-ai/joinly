@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     name: str = Field(default="joinly")
 
     meeting_provider: str | type[MeetingProvider] = Field(default="browser")
-    vad: str | type[VAD] = Field(default="silero")
+    vad: str | type[VAD] = Field(default="webrtc")
     stt: str | type[STT] = Field(default="whisper")
     tts: str | type[TTS] = Field(default="kokoro")
     transcription_controller: str | type[TranscriptionController] = Field(
