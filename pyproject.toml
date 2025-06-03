@@ -20,11 +20,16 @@ dependencies = [
     "playwright>=1.51.0",
     "python-dotenv>=1.1.0",
     "semchunk>=3.2.1",
-    "silero-vad-lite>=0.2.1",
+    "webrtcvad-wheels>=2.0.14",
 ]
 
 [project.scripts]
 joinly = "joinly.main:cli"
+
+[project.optional-dependencies]
+silero = [
+    "silero-vad-lite>=0.2.1",
+]
 
 [build-system]
 requires = ["hatchling"]

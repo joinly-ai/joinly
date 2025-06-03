@@ -14,19 +14,40 @@ T = TypeVar("T")
 
 
 def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
-    """Turn direct type, dotted path, or short token into a class object."""
+    """Turn direct type, dotted path, or short token into a class object.
+
+    Discovers paths by convention:
+    - if `spec` is a type, return it directly.
+    - if `spec` is a dotted path, import the module and return the class.
+    - if `spec` is a short token, map to
+        `<base>.<token_lowercase>.<token_camelcase><suffix>`.
+    """
     if isinstance(spec, type):
         return spec
 
-    if "." not in spec and spec[0].islower():
-        parts = re.split(r"[_\- ]+", spec)
-        spec = "".join(p.capitalize() for p in parts) + suffix
+    if "." in spec:
+        # fully qualified
+        mod, _, cls = spec.rpartition(".")
+    else:
+        # short token
+        if spec.lower().endswith(suffix.lower()):
+            base_name = spec[: -len(suffix)]
+        else:
+            base_name = "".join(p.capitalize() for p in re.split(r"[_\- ]+", spec))
+        mod = f"{base}.{base_name.lower()}"
+        cls = base_name + suffix
 
-    if "." not in spec:
-        spec = f"{base}.{spec}"
+    try:
+        module = importlib.import_module(mod)
+    except ModuleNotFoundError as e:
+        msg = f"Module '{mod}' not found"
+        raise ImportError(msg) from e
 
-    module_path, _, cls_name = spec.rpartition(".")
-    return getattr(importlib.import_module(module_path), cls_name)
+    try:
+        return getattr(module, cls)
+    except AttributeError as e:
+        msg = f"Cannot resolve class '{cls}' in module '{mod}'"
+        raise ImportError(msg) from e
 
 
 class SessionContainer:
@@ -67,7 +88,7 @@ class SessionContainer:
 
             transcription_controller = await self._build(
                 self._settings.transcription_controller,
-                "joinly.controllers",
+                "joinly.controllers.transcription",
                 "TranscriptionController",
                 self._settings.transcription_controller_args
                 | {
@@ -78,7 +99,7 @@ class SessionContainer:
             )
             speech_controller = await self._build(
                 self._settings.speech_controller,
-                "joinly.controllers",
+                "joinly.controllers.speech",
                 "SpeechController",
                 self._settings.speech_controller_args
                 | {
