@@ -1,123 +1,88 @@
 import asyncio
 import logging
-from collections.abc import AsyncIterator
 from typing import Self
 
-import numpy as np
 from silero_vad_lite import SileroVAD as SileroVADModel
 
-from joinly.core import VAD, AudioReader
-from joinly.types import VADWindow
+from joinly.services.vad.base import BasePaddedVAD
 
 logger = logging.getLogger(__name__)
 
 
-class SileroVAD(VAD):
-    """A class to detect speech in audio streams and chunk audio bytes."""
+class SileroVAD(BasePaddedVAD):
+    """Voice activity detection using Silero."""
 
     def __init__(
         self,
         *,
+        sample_rate: int = 16000,
         speech_threshold: float = 0.5,
     ) -> None:
         """Initialize the VADService.
 
         Args:
+            sample_rate: The sample rate of the audio data (default is 16000).
             speech_threshold: The threshold for speech detection (default is 0.5).
         """
+        self._sample_rate = sample_rate
         self._speech_threshold = speech_threshold
         self._model: SileroVADModel | None = None
 
     async def __aenter__(self) -> Self:
         """Initialize the VAD model and prepare for processing."""
+        if self._sample_rate not in (8000, 16000):
+            msg = (
+                f"Unsupported sample rate {self._sample_rate}. "
+                "Supported sample rates are 8000 and 16000."
+            )
+            raise ValueError(msg)
+
         logger.info("Loading VAD model")
         self._model = await asyncio.to_thread(
             SileroVADModel,
-            16000,
+            self._sample_rate,
         )
         logger.info("Loaded VAD model")
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        """Clean up resources when stopping the processor."""
+        """Clean up resources."""
         if self._model is not None:
             del self._model
             self._model = None
 
-    async def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:  # noqa: C901
-        """Process the audio stream and yield speech segments.
+    @property
+    def sample_rate(self) -> int:
+        """Expected sample rate of the audio data."""
+        return self._sample_rate
 
-        For non-speech segments, keeps one window in buffer to mark one previous
-        window as well as speech.
+    @property
+    def byte_depth(self) -> int:
+        """Expected byte depth of the audio data (e.g., 2 for 16-bit PCM)."""
+        return 4
+
+    @property
+    def window_size_samples(self) -> int:
+        """Expected window size in samples."""
+        if self._model is None:
+            msg = "VAD model is not initialized"
+            raise RuntimeError(msg)
+        return self._model.window_size_samples
+
+    async def is_speech(self, window: bytes) -> bool:
+        """Check if the given audio window contains speech.
 
         Args:
-            reader: An AudioReader providing audio data.
+            window: The audio window to check.
 
-        Yields:
-            VADFrame: A frame containing the audio segment, start time, and end time.
+        Returns:
+            bool: True if the window contains speech, False otherwise.
         """
         if self._model is None:
-            msg = "VAD model not initialized"
+            msg = "VAD model is not initialized"
             raise RuntimeError(msg)
 
-        if reader.sample_rate != self._model.sample_rate:
-            msg = (
-                f"Expected sample rate {self._model.sample_rate}, "
-                f"got {reader.sample_rate}"
-            )
-            raise ValueError(msg)
-        if reader.byte_depth not in (2, 4):
-            msg = f"Unsupported byte depth: {reader.byte_depth}"
-            raise ValueError(msg)
+        speech_prob = self._model.process(window)
 
-        idx: int = 0
-        window_size: int = self._model.window_size_samples * reader.byte_depth
-        chunk_dur: float = self._model.window_size_samples / reader.sample_rate
-        buffer = bytearray()
-        pending: bytes = b""
-        last_is_speech: bool = False
-
-        while True:
-            chunk = await reader.read()
-            if not chunk:
-                break
-            buffer.extend(chunk)
-
-            while len(buffer) >= window_size:
-                window_bytes = bytes(buffer[:window_size])
-                if reader.byte_depth == 4:  # noqa: PLR2004
-                    samples = np.frombuffer(window_bytes, dtype=np.float32)
-                else:
-                    arr16 = np.frombuffer(window_bytes, dtype=np.int16)
-                    samples = arr16.astype(np.float32) / 32768.0
-
-                prob = await asyncio.to_thread(self._model.process, samples)
-                is_speech = prob > self._speech_threshold
-
-                if not is_speech:
-                    if pending:
-                        yield VADWindow(
-                            pcm=pending,
-                            start=(idx - 1) * chunk_dur,
-                            is_speech=last_is_speech,
-                        )
-                    pending = bytes(window_bytes)
-                else:
-                    if pending:
-                        yield VADWindow(
-                            pcm=pending,
-                            start=(idx - 1) * chunk_dur,
-                            is_speech=True,
-                        )
-                    pending = b""
-
-                    yield VADWindow(
-                        pcm=bytes(window_bytes),
-                        start=idx * chunk_dur,
-                        is_speech=True,
-                    )
-
-                del buffer[:window_size]
-                idx += 1
-                last_is_speech = is_speech
+        return speech_prob > self._speech_threshold

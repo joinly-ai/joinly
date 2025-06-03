@@ -1,101 +1,92 @@
 import asyncio
 import logging
-from collections.abc import AsyncIterator
 from typing import Self
 
-import numpy as np
 import webrtcvad
 
-from joinly.core import VAD, AudioReader
-from joinly.types import VADWindow
+from joinly.services.vad.base import BasePaddedVAD
 
 logger = logging.getLogger(__name__)
 
 
-class WebrtcVAD(VAD):
-    """A class to detect speech in audio streams and chunk audio bytes using webrtcvad."""
+class WebrtcVAD(BasePaddedVAD):
+    """Voice activity detection using webrtcvad."""
 
     def __init__(
         self,
         *,
-        aggressiveness: int = 2,
+        sample_rate: int = 16000,
+        window_duration: int = 30,
+        aggressiveness: int = 3,
     ) -> None:
+        """Initialize webrtc VAD.
+
+        Args:
+            sample_rate: The sample rate of the audio data (default is 16000).
+            window_duration: The duration of each window in ms (default is 30).
+                This determines the size of the audio chunks processed by VAD.
+            aggressiveness: The aggressiveness level for VAD (0-3, default is 3).
+        """
+        self._sample_rate = sample_rate
+        self._window_duration = window_duration
         self._aggressiveness = aggressiveness
-        self._vad = webrtcvad.Vad(self._aggressiveness)
-        self._sample_rate = 16000
-        self._frame_duration = 30  # ms
-        self._window_size_samples = int(self._sample_rate * self._frame_duration / 1000)
-        # Note: Do not enforce self._byte_depth here, as we support both 2 and 4
+        self._window_size_samples = int(
+            self._sample_rate * self._window_duration / 1000
+        )
+        self._vad: webrtcvad.Vad | None = None
+        self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> Self:
-        logger.info("Initialized WebrtcVAD (SileroVAD wrapper)")
+        """Initialize webrtc VAD."""
+        if self._sample_rate not in (8000, 16000, 32000, 48000):
+            msg = (
+                f"Unsupported sample rate {self._sample_rate}. "
+                "Supported sample rates are 8000, 16000, 32000, and 48000."
+            )
+            raise ValueError(msg)
+        if self._window_duration not in (10, 20, 30):
+            msg = (
+                f"Unsupported window duration {self._window_duration}. "
+                "Supported window durations are 10, 20, and 30 milliseconds."
+            )
+            raise ValueError(msg)
+
+        self._vad = webrtcvad.Vad(self._aggressiveness)
+
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        pass
+        """Clean up resources."""
+        if self._vad is not None:
+            del self._vad
+            self._vad = None
 
-    async def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:
-        if reader.sample_rate != self._sample_rate:
-            raise ValueError(
-                f"Expected sample rate {self._sample_rate}, got {reader.sample_rate}"
-            )
-        if reader.byte_depth not in (2, 4):
-            raise ValueError(
-                f"webrtcvad only supports 16-bit PCM (byte_depth=2), but got byte_depth={reader.byte_depth}."
-            )
+    @property
+    def sample_rate(self) -> int:
+        """Expected sample rate of the audio data."""
+        return self._sample_rate
 
-        idx: int = 0
-        window_size: int = self._window_size_samples * reader.byte_depth
-        chunk_dur: float = self._window_size_samples / self._sample_rate
-        buffer = bytearray()
-        pending: bytes = b""
-        last_is_speech: bool = False
+    @property
+    def byte_depth(self) -> int:
+        """Expected byte depth of the audio data (e.g., 2 for 16-bit PCM)."""
+        return 2
 
-        while True:
-            chunk = await reader.read()
-            if not chunk:
-                break
-            buffer.extend(chunk)
+    @property
+    def window_size_samples(self) -> int:
+        """Expected window size in samples."""
+        return self._window_size_samples
 
-            while len(buffer) >= window_size:
-                window_bytes = bytes(buffer[:window_size])
+    async def is_speech(self, window: bytes) -> bool:
+        """Check if the given audio window contains speech.
 
-                # --- Convert only for VAD, never for yield ---
-                if reader.byte_depth == 4:
-                    # float32 PCM [-1.0, 1.0] → int16 PCM [-32768, 32767]
-                    arr32 = np.frombuffer(window_bytes, dtype=np.float32)
-                    arr16 = np.clip(arr32 * 32767, -32768, 32767).astype(np.int16)
-                    vad_bytes = arr16.tobytes()
-                elif reader.byte_depth == 2:
-                    vad_bytes = window_bytes
-                else:
-                    raise ValueError("Unsupported byte depth for VAD.")
+        Args:
+            window: The audio window to check.
 
-                is_speech = self._vad.is_speech(vad_bytes, self._sample_rate)
+        Returns:
+            bool: True if the window contains speech, False otherwise.
+        """
+        if self._vad is None:
+            msg = "VAD is not initialized"
+            raise RuntimeError(msg)
 
-                # Yield the *original* window_bytes in the format given by the reader
-                if not is_speech:
-                    if pending:
-                        yield VADWindow(
-                            pcm=pending,
-                            start=(idx - 1) * chunk_dur,
-                            is_speech=last_is_speech,
-                        )
-                    pending = window_bytes
-                else:
-                    if pending:
-                        yield VADWindow(
-                            pcm=pending,
-                            start=(idx - 1) * chunk_dur,
-                            is_speech=True,
-                        )
-                    pending = b""
-                    yield VADWindow(
-                        pcm=window_bytes,
-                        start=idx * chunk_dur,
-                        is_speech=True,
-                    )
-
-                del buffer[:window_size]
-                idx += 1
-                last_is_speech = is_speech
+        return self._vad.is_speech(window, self._sample_rate, self._window_size_samples)
