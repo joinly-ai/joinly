@@ -94,13 +94,14 @@ async def get_transcript(ctx: Context) -> Transcript:
     description="Join a meeting with the given URL and participant name.",
 )
 async def join_meeting(
+    ctx: Context,
     meeting_url: Annotated[
-        str | None, Field(description="URL to join an online meeting")
+        str | None, Field(default=None, description="URL to join an online meeting")
     ],
     participant_name: Annotated[
-        str | None, Field(description="Name of the participant to join as")
+        str | None,
+        Field(default=None, description="Name of the participant to join as"),
     ],
-    ctx: Context,
 ) -> str:
     """Join a meeting with the given URL and participant name."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
@@ -126,8 +127,8 @@ async def leave_meeting(
     description="Speak the given text in the meeting using TTS.",
 )
 async def speak_text(
-    text: Annotated[str, Field(description="Text to be spoken")],
     ctx: Context,
+    text: Annotated[str, Field(description="Text to be spoken")],
 ) -> str:
     """Speak the given text in the meeting using TTS."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
@@ -140,8 +141,8 @@ async def speak_text(
     description="Send a chat message in the meeting.",
 )
 async def send_chat_message(
-    message: Annotated[str, Field(description="Message to be sent")],
     ctx: Context,
+    message: Annotated[str, Field(description="Message to be sent")],
 ) -> str:
     """Send a chat message in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session

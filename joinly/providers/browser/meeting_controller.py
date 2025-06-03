@@ -9,6 +9,7 @@ from playwright.async_api import Page
 from joinly.providers.base import DefaultMeetingController
 from joinly.providers.browser.browser_agent import BrowserAgent
 from joinly.providers.browser.browser_session import BrowserSession
+from joinly.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,7 @@ class BrowserMeetingController(DefaultMeetingController):
             raise ValueError(msg)
 
         if name is None:
-            msg = "Participant name is required to join a meeting."
-            logger.error(msg)
-            raise ValueError(msg)
+            name = get_settings().name
 
         logger.info("Joining the meeting: %s as %s", url, name)
 
