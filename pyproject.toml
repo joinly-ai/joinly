@@ -26,6 +26,11 @@ dependencies = [
 [project.scripts]
 joinly = "joinly.main:cli"
 
+[project.optional-dependencies]
+silero = [
+    "silero-vad-lite>=0.2.1",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
