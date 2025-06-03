@@ -81,7 +81,7 @@ def _parse_kv(
     "--vad",
     type=str,
     help="Voice Activity Detection service to use.",
-    default="silero",
+    default="webrtc",
     show_default=True,
 )
 @click.option(

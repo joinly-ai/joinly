@@ -31,6 +31,7 @@ ignore = [
     "Q002",
     "Q003",
     "W191",
+    "EXE002",
 ]
 fixable = ["ALL"]
 unfixable = []
