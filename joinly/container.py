@@ -40,7 +40,13 @@ def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
     try:
         module = importlib.import_module(mod)
     except ModuleNotFoundError as e:
-        msg = f"Module '{mod}' not found"
+        if e.name == mod:
+            msg = f"Module '{mod}' not found."
+        else:
+            msg = (
+                f"Missing dependency '{e.name}' when importing module '{mod}'. "
+                "You may need to install optional dependencies for this component."
+            )
         raise ImportError(msg) from e
 
     try:
