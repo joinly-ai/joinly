@@ -1,19 +1,16 @@
 import asyncio
 import contextlib
 import datetime
+import json
 import logging
 import re
-import sys
 import unicodedata
-from typing import Any
 
-from dotenv import load_dotenv
 from fastmcp import Client
-from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_mcp_adapters.tools import load_mcp_tools
-from langchain_openai import AzureChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import ToolNode, create_react_agent
 from mcp import ResourceUpdatedNotification, ServerNotification
@@ -26,39 +23,30 @@ from joinly.types import Transcript
 logger = logging.getLogger(__name__)
 
 
-def format_messages(messages: list[BaseMessage]) -> str:
-    """Format messages for logging."""
-    m_str = []
-    for m in messages:
-        s = f"{m.type} ({m.name}): {m.content}" if m.name else f"{m.type}: {m.content}"
-        if (
-            hasattr(m, "additional_kwargs")
-            and m.additional_kwargs
-            and (tools := m.additional_kwargs.get("tool_calls"))
-        ):
-            tool_str = [
-                f"{t['function']['name']}: {t['function']['arguments']}" for t in tools
-            ]
-            s += f" ({', '.join(tool_str)})"
-        m_str.append(s)
-    return "\n".join(m_str)
-
-
-class PromptLogger(BaseCallbackHandler):
-    """Callback that logs the exact prompt the model receives."""
-
-    def on_chat_model_start(
-        self,
-        serialized: dict[str, Any],  # noqa: ARG002
-        messages: list[list[BaseMessage]],
-        **_: Any,  # noqa: ANN401
-    ) -> None:
-        """Log the prompt the model receives."""
-        logger.info("PROMPT\n%s", format_messages([m for b in messages for m in b]))
+def log_chunk(chunk) -> None:  # noqa: ANN001
+    """Log an update chunk from langgraph."""
+    if "agent" in chunk:
+        for m in chunk["agent"]["messages"]:
+            for t in m.additional_kwargs.get("tool_calls", []):
+                args_str = ", ".join(
+                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                    for k, v in json.loads(t["function"]["arguments"]).items()
+                )
+                logger.info("%s: %s", t["function"]["name"], args_str)
+    if "tools" in chunk:
+        for m in chunk["tools"]["messages"]:
+            logger.info("%s: %s", m.name, m.content)
 
 
 def transcript_to_messages(transcript: Transcript) -> list[HumanMessage]:
-    """Convert a transcript to a list of HumanMessage."""
+    """Convert a transcript to a list of HumanMessage.
+
+    Args:
+        transcript: The transcript to convert.
+
+    Returns:
+        A list of HumanMessage objects representing the transcript segments.
+    """
     return [
         HumanMessage(
             content=s.text,
@@ -74,29 +62,56 @@ def transcript_after(transcript: Transcript, after: float) -> Transcript:
     Args:
         transcript: The original transcript.
         after: The time (seconds) after which to include segments.
+
+    Returns:
+        A new Transcript object containing only segments that start
+            after the specified time.
     """
     segments = [s for s in transcript.segments if s.start > after]
     return Transcript(segments=segments)
 
 
 def normalize(s: str) -> str:
-    """Normalize a string."""
+    """Normalize a string.
+
+    Args:
+        s: The string to normalize.
+
+    Returns:
+        The normalized string.
+    """
     normalized = unicodedata.normalize("NFKD", s.casefold().strip())
     chars = (c for c in normalized if unicodedata.category(c) != "Mn")
     return re.sub(r"[^\w\s]", "", "".join(chars))
 
 
 def name_in_transcript(transcript: Transcript, name: str) -> bool:
-    """Check if the name is mentioned in the transcript."""
+    """Check if the name is mentioned in the transcript.
+
+    Args:
+        transcript: The transcript to check.
+        name: The name to look for.
+
+    Returns:
+        True if the name is mentioned in the transcript, False otherwise.
+    """
     pattern = rf"\b{re.escape(normalize(name))}\b"
     return bool(re.search(pattern, normalize(transcript.text)))
 
 
-async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> None:
+async def run(
+    *,
+    meeting_url: str | None = None,
+    model_name: str = "gpt-4o",
+    model_provider: str | None = None,
+    name_trigger: bool = False,
+) -> None:
     """Simple conversational agent for a meeting.
 
     Args:
         meeting_url: The URL of the meeting to join.
+        model_name: The model to use for the agent.
+        model_provider: The provider for the model.
         name_trigger: If True, the agent will only respond if its name is mentioned.
     """
     settings = get_settings()
@@ -112,10 +127,7 @@ async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> 
             logger.info("Transcription update received")
             transcript_event.set()
 
-    llm = AzureChatOpenAI(
-        azure_deployment="gpt-4.1",
-        api_version="2024-12-01-preview",
-    )
+    llm = init_chat_model(model_name, model_provider=model_provider)
 
     prompt = (
         f"Today is {datetime.datetime.now(tz=datetime.UTC).strftime('%d.%m.%Y')}. "
@@ -135,9 +147,9 @@ async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> 
         await client.session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
-        def finish() -> None:
-            """Finish tool to end the conversation."""
-            return
+        def finish() -> str:
+            """Finish tool to end the turn."""
+            return "Finished."
 
         tools = [finish]
         tools.extend(await load_mcp_tools(client.session))
@@ -145,7 +157,6 @@ async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> 
         llm_binded = llm.bind_tools(tools, tool_choice="required")
 
         memory = MemorySaver()
-        prompt_logger = PromptLogger()
         agent = create_react_agent(
             llm_binded, tool_node, prompt=prompt, checkpointer=memory
         )
@@ -162,41 +173,27 @@ async def run(*, meeting_url: str | None = None, name_trigger: bool = False) -> 
                 transcript_full = Transcript.model_validate_json(
                     (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
                 )
-                transcript = transcript_after(transcript_full, last_time)
+                transcript = transcript_after(transcript_full, after=last_time)
                 transcript_event.clear()
 
                 if name_trigger and not name_in_transcript(transcript, settings.name):
                     continue
 
                 last_time = transcript.segments[-1].start
+                for segment in transcript.segments:
+                    logger.info(
+                        '%s: "%s"',
+                        segment.speaker if segment.speaker else "User",
+                        segment.text,
+                    )
 
                 async for chunk in agent.astream(
                     {"messages": transcript_to_messages(transcript)},
-                    config={
-                        "callbacks": [prompt_logger],
-                        "configurable": {"thread_id": "1"},
-                    },
+                    config={"configurable": {"thread_id": "1"}},
                     stream_mode="updates",
                 ):
-                    if "agent" in chunk:
-                        logger.info(
-                            "AGENT\n%s", format_messages(chunk["agent"]["messages"])
-                        )
-                    elif "tools" in chunk:
-                        logger.info(
-                            "TOOLS\n%s", format_messages(chunk["tools"]["messages"])
-                        )
+                    log_chunk(chunk)
 
         finally:
             with contextlib.suppress(Exception):
                 await client.call_tool("leave_meeting")
-
-
-if __name__ == "__main__":
-    load_dotenv()
-
-    logging.basicConfig(level=logging.INFO)
-
-    meeting_url = sys.argv[1] if len(sys.argv) > 1 else None
-
-    asyncio.run(run(meeting_url=meeting_url))

@@ -64,9 +64,23 @@ def _parse_kv(
     show_default=True,
 )
 @click.option(
+    "--model-name",
+    type=str,
+    help="The name of the model to use in the client. Only applicable with --client.",
+    default="gpt-4o",
+    show_default=True,
+)
+@click.option(
+    "--model-provider",
+    type=str,
+    help="The provider of the model to use in the client. "
+    "Only applicable with --client.",
+    default=None,
+)
+@click.option(
     "--name-trigger",
     is_flag=True,
-    help="Trigger the agent only when the name is mentioned in the transcript."
+    help="Trigger the agent only when the name is mentioned in the transcript. "
     "Only applicable with --client.",
 )
 @click.option(
@@ -174,6 +188,8 @@ def cli(  # noqa: PLR0913
     server: bool,
     host: str,
     port: int,
+    model_name: str,
+    model_provider: str | None,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -196,7 +212,14 @@ def cli(  # noqa: PLR0913
     if server:
         mcp.run(transport="streamable-http", host=host, port=port)
     else:
-        asyncio.run(client.run(meeting_url=meeting_url, name_trigger=name_trigger))
+        asyncio.run(
+            client.run(
+                meeting_url=meeting_url,
+                model_name=model_name,
+                model_provider=model_provider,
+                name_trigger=name_trigger,
+            )
+        )
 
 
 if __name__ == "__main__":

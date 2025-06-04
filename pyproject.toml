@@ -12,6 +12,7 @@ dependencies = [
     "faster-whisper>=1.1.1",
     "fastmcp>=2.3.3",
     "kokoro-onnx>=0.4.8",
+    "langchain>=0.3.25",
     "langchain-mcp-adapters>=0.0.3",
     "langchain-openai>=0.3.16",
     "langgraph>=0.4.1",
