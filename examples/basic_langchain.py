@@ -7,12 +7,14 @@
 #     "langgraph",
 #     "mcp",
 #     "py-dotenv",
+#     "rich",
 # ]
 # ///
 
 import asyncio
 import contextlib
 import datetime
+import json
 import logging
 import sys
 
@@ -45,9 +47,7 @@ class Transcript(BaseModel):
     segments: list[TranscriptSegment]
 
 
-def transcript_to_messages(
-    transcript: Transcript, *, after: float = -1.0
-) -> list[HumanMessage]:
+def transcript_to_messages(transcript: Transcript) -> list[HumanMessage]:
     """Convert a transcript to a list of HumanMessage."""
     return [
         HumanMessage(
@@ -55,11 +55,16 @@ def transcript_to_messages(
             name=s.speaker if s.speaker is not None else "Unknown",
         )
         for s in transcript.segments
-        if s.start > after
     ]
 
 
-async def run(
+def transcript_after(transcript: Transcript, after: float) -> Transcript:
+    """Get a new transcript including only segments starting after given time."""
+    segments = [s for s in transcript.segments if s.start > after]
+    return Transcript(segments=segments)
+
+
+async def run(  # noqa: C901
     mcp_url: str,
     meeting_url: str,
     model_name: str,
@@ -82,7 +87,6 @@ async def run(
             and isinstance(message.root, ResourceUpdatedNotification)
             and message.root.params.uri == transcript_url
         ):
-            logger.info("Transcription update received")
             transcript_event.set()
 
     llm = init_chat_model(model_name, model_provider=model_provider)
@@ -105,13 +109,15 @@ async def run(
             read_stream, write_stream, message_handler=_message_handler
         ) as session,
     ):
+        logger.info("Connecting to MCP server at %s", mcp_url)
         await session.initialize()
+        logger.info("Connected to MCP server")
         await session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
-        def finish() -> None:
-            """Finish tool to end the conversation."""
-            return
+        def finish() -> str:
+            """Finish tool to end the turn."""
+            return "Finished."
 
         tools = [finish]
         tools.extend(await load_mcp_tools(session))
@@ -124,27 +130,51 @@ async def run(
         )
         last_time = -1.0
 
+        logger.info("Joining meeting at %s", meeting_url)
         await session.call_tool(
             "join_meeting", {"meeting_url": meeting_url, "participant_name": "joinly"}
         )
+        logger.info("Joined meeting successfully")
 
         try:
             while True:
                 await transcript_event.wait()
                 resource = await session.read_resource(transcript_url)
-                transcript = Transcript.model_validate_json(resource.contents[0].text)  # type: ignore[attr-defined]
+                transcript = transcript_after(
+                    Transcript.model_validate_json(resource.contents[0].text),  # type: ignore[attr-defined]
+                    after=last_time,
+                )
                 transcript_event.clear()
+                if not transcript.segments:
+                    logger.warning("No new segments in the transcript after update")
+                    continue
+
+                last_time = transcript.segments[-1].end
+                for segment in transcript.segments:
+                    logger.info(
+                        '%s: "%s"',
+                        segment.speaker if segment.speaker else "User",
+                        segment.text,
+                    )
 
                 async for chunk in agent.astream(
-                    {"messages": transcript_to_messages(transcript, after=last_time)},
+                    {"messages": transcript_to_messages(transcript)},
                     config={"configurable": {"thread_id": "1"}},
                     stream_mode="updates",
                 ):
+                    if "agent" in chunk:
+                        for m in chunk["agent"]["messages"]:
+                            for t in m.additional_kwargs.get("tool_calls", []):
+                                args_str = ", ".join(
+                                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                                    for k, v in json.loads(
+                                        t["function"]["arguments"]
+                                    ).items()
+                                )
+                                logger.info("%s: %s", t["function"]["name"], args_str)
                     if "tools" in chunk:
                         for m in chunk["tools"]["messages"]:
                             logger.info("%s: %s", m.name, m.content)
-
-                last_time = transcript.segments[-1].start
 
         finally:
             with contextlib.suppress(Exception):
@@ -153,7 +183,14 @@ async def run(
 
 if __name__ == "__main__":
     load_dotenv()
-    logging.basicConfig()
+    from rich.logging import RichHandler
+
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(rich_tracebacks=True)],
+    )
     logger.setLevel(logging.INFO)
 
     if len(sys.argv) not in (3, 4, 5):
