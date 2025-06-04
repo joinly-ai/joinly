@@ -23,21 +23,6 @@ from joinly.types import Transcript
 logger = logging.getLogger(__name__)
 
 
-def log_chunk(chunk) -> None:  # noqa: ANN001
-    """Log an update chunk from langgraph."""
-    if "agent" in chunk:
-        for m in chunk["agent"]["messages"]:
-            for t in m.additional_kwargs.get("tool_calls", []):
-                args_str = ", ".join(
-                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                    for k, v in json.loads(t["function"]["arguments"]).items()
-                )
-                logger.info("%s: %s", t["function"]["name"], args_str)
-    if "tools" in chunk:
-        for m in chunk["tools"]["messages"]:
-            logger.info("%s: %s", m.name, m.content)
-
-
 def transcript_to_messages(transcript: Transcript) -> list[HumanMessage]:
     """Convert a transcript to a list of HumanMessage.
 
@@ -97,6 +82,21 @@ def name_in_transcript(transcript: Transcript, name: str) -> bool:
     """
     pattern = rf"\b{re.escape(normalize(name))}\b"
     return bool(re.search(pattern, normalize(transcript.text)))
+
+
+def log_chunk(chunk) -> None:  # noqa: ANN001
+    """Log an update chunk from langgraph."""
+    if "agent" in chunk:
+        for m in chunk["agent"]["messages"]:
+            for t in m.additional_kwargs.get("tool_calls", []):
+                args_str = ", ".join(
+                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                    for k, v in json.loads(t["function"]["arguments"]).items()
+                )
+                logger.info("%s: %s", t["function"]["name"], args_str)
+    if "tools" in chunk:
+        for m in chunk["tools"]["messages"]:
+            logger.info("%s: %s", m.name, m.content)
 
 
 async def run(

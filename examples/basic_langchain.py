@@ -64,7 +64,22 @@ def transcript_after(transcript: Transcript, after: float) -> Transcript:
     return Transcript(segments=segments)
 
 
-async def run(  # noqa: C901
+def log_chunk(chunk) -> None:  # noqa: ANN001
+    """Log an update chunk from langgraph."""
+    if "agent" in chunk:
+        for m in chunk["agent"]["messages"]:
+            for t in m.additional_kwargs.get("tool_calls", []):
+                args_str = ", ".join(
+                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                    for k, v in json.loads(t["function"]["arguments"]).items()
+                )
+                logger.info("%s: %s", t["function"]["name"], args_str)
+    if "tools" in chunk:
+        for m in chunk["tools"]["messages"]:
+            logger.info("%s: %s", m.name, m.content)
+
+
+async def run(
     mcp_url: str,
     meeting_url: str,
     model_name: str,
@@ -162,19 +177,7 @@ async def run(  # noqa: C901
                     config={"configurable": {"thread_id": "1"}},
                     stream_mode="updates",
                 ):
-                    if "agent" in chunk:
-                        for m in chunk["agent"]["messages"]:
-                            for t in m.additional_kwargs.get("tool_calls", []):
-                                args_str = ", ".join(
-                                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                                    for k, v in json.loads(
-                                        t["function"]["arguments"]
-                                    ).items()
-                                )
-                                logger.info("%s: %s", t["function"]["name"], args_str)
-                    if "tools" in chunk:
-                        for m in chunk["tools"]["messages"]:
-                            logger.info("%s: %s", m.name, m.content)
+                    log_chunk(chunk)
 
         finally:
             with contextlib.suppress(Exception):
