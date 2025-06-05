@@ -13,6 +13,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@playwright/mcp": "^0.0.20"
+    "@playwright/mcp": "^0.0.28"
   }
 }

@@ -41,11 +41,14 @@ class BrowserMeetingProvider(MeetingProvider):
             virtual_display,
             browser_session,
         ]
+        browser_agent_service = BrowserAgent(env=env) if browser_agent else None
+        if browser_agent_service:
+            self._services.append(browser_agent_service)
         self._stack = AsyncExitStack()
 
         self.meeting_controller = BrowserMeetingController(
             browser_session=browser_session,
-            browser_agent=BrowserAgent(env=env) if browser_agent else None,
+            browser_agent=browser_agent_service,
         )
         self.audio_reader = virtual_speaker
         self.audio_writer = virtual_microphone

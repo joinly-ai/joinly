@@ -8,6 +8,7 @@ from langchain_openai import AzureChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class BrowserAgent:
     async def __aenter__(self) -> Self:
         """Start the MCP client and initialize the agent."""
         cdp_endpoint = self._env.get("CDP_ENDPOINT", None)
-        args = []
+        args = ["--caps", "core,wait"]
         if cdp_endpoint is not None:
             args += ["--cdp-endpoint", cdp_endpoint]
         if self._mcp_port is not None:
@@ -60,8 +61,13 @@ class BrowserAgent:
             api_version="2024-12-01-preview",
         )
 
+        prompt = (
+            "You are a browser agent that can navigate web pages, "
+            "take snapshots, and interact with web elements. "
+            "You will use the tools provided to fulfill tasks."
+        )
         tools = await load_mcp_tools(session)
-        self._agent = create_react_agent(llm, tools)
+        self._agent = create_react_agent(llm, tools, prompt=prompt)
 
         logger.info("Browser agent initialized successfully.")
 
@@ -72,11 +78,14 @@ class BrowserAgent:
         await self._exit_stack.aclose()
         self._agent = None
 
-    async def run(self, task: str) -> None:
+    async def run(self, page: Page, task: str) -> None:  # noqa: ARG002
         """Run the agent with the given task.
 
         Args:
+            page (Page): The Playwright page instance.
             task (str): The task to run the agent with.
+
+        TODO: feedback on success or failure of the task
         """
         if self._agent is None:
             msg = "Agent is not initialized"
@@ -84,11 +93,11 @@ class BrowserAgent:
 
         logger.info("Running browser agent with task: %s", task)
 
-        prompt = f"Fulfill the following task requiring browser navigation. First, make sure you are on the right tab using the tab list tool. Then, get the elements on the page using the snapshot tool. Task: {task}"  # noqa: E501
+        prompt = f"Task: {task}"
 
         async for chunk in self._agent.astream(
-            {"messages": prompt}, stream_mode="updates"
+            {"messages": prompt}, {"recursion_limit": 10}, stream_mode="updates"
         ):
             logger.info(chunk)
 
-        logger.info("Browser agent run completed for task: %s.", task)
+        logger.info("Browser agent run completed for task: %s", task)
