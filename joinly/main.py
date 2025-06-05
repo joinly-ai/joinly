@@ -13,6 +13,8 @@ from joinly.utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+
 
 def _parse_kv(
     _ctx: click.Context, _param: click.Parameter, value: tuple[str]
@@ -69,6 +71,7 @@ def _parse_kv(
     help="The name of the model to use in the client. Only applicable with --client.",
     default="gpt-4o",
     show_default=True,
+    envvar="JOINLY_MODEL_NAME",
 )
 @click.option(
     "--model-provider",
@@ -76,6 +79,7 @@ def _parse_kv(
     help="The provider of the model to use in the client. "
     "Only applicable with --client.",
     default=None,
+    envvar="JOINLY_MODEL_PROVIDER",
 )
 @click.option(
     "--name-trigger",
@@ -198,8 +202,6 @@ def cli(  # noqa: PLR0913
     **cli_settings: dict[str, Any],
 ) -> None:
     """Start the meeting session."""
-    load_dotenv()
-
     settings = Settings(**cli_settings)  # type: ignore[arg-type]
     set_settings(settings)
 
