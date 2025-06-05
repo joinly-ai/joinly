@@ -1,20 +1,31 @@
 import asyncio
-import contextlib
 import logging
-import re
+from typing import TYPE_CHECKING
 
-from playwright.async_api import Error as PlaywrightError
-from playwright.async_api import Page
-
-from joinly.providers.base import DefaultMeetingController
+from joinly.providers.base import BaseMeetingController
 from joinly.providers.browser.browser_agent import BrowserAgent
 from joinly.providers.browser.browser_session import BrowserSession
+from joinly.providers.browser.platforms.base import BrowserPlatformController
+from joinly.providers.browser.platforms.google_meet import (
+    GoogleMeetBrowserPlatformController,
+)
+from joinly.providers.browser.platforms.teams import TeamsBrowserPlatformController
+from joinly.providers.browser.platforms.zoom import ZoomBrowserPlatformController
 from joinly.settings import get_settings
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
+PLATFORMS: list[type[BrowserPlatformController]] = [
+    GoogleMeetBrowserPlatformController,
+    TeamsBrowserPlatformController,
+    ZoomBrowserPlatformController,
+]
 
-class BrowserMeetingController(DefaultMeetingController):
+
+class BrowserMeetingController(BaseMeetingController):
     """A class to represent a browser meeting controller."""
 
     def __init__(
@@ -31,102 +42,131 @@ class BrowserMeetingController(DefaultMeetingController):
         self._browser_session: BrowserSession = browser_session
         self._browser_agent: BrowserAgent | None = browser_agent
         self._page: Page | None = None
+        self._platform_controller: BrowserPlatformController | None = None
         self._lock = asyncio.Lock()
 
-    async def join(self, url: str | None = None, name: str | None = None) -> None:
-        """Join the meeting by clicking the join button."""
-        if self._page is None or self._page.is_closed():
-            self._page = await self._browser_session.get_page()
+    async def _get_platform_controller(
+        self, url: str
+    ) -> BrowserPlatformController | None:
+        """Get the platform-specific meeting controller based on the URL.
 
-        if url is None:
-            msg = "Meeting URL is required to join a meeting."
-            logger.error(msg)
-            raise ValueError(msg)
+        Args:
+            url: The URL of the meeting.
 
-        if name is None:
-            name = get_settings().name
+        Returns:
+            The platform-specific meeting controller, or None if not found.
+        """
+        for platform_controller_type in PLATFORMS:
+            if platform_controller_type.url_pattern.match(url):
+                return platform_controller_type()
 
-        logger.info("Joining the meeting: %s as %s", url, name)
+        logger.info("No matching platform controller found for URL: %s", url)
+        return None
 
-        async with self._lock:
-            try:
-                await self._page.goto(url, wait_until="load", timeout=20000)
-            except PlaywrightError as e:
-                msg = "Failed to navigate to the meeting URL"
-                logger.exception(msg)
-                raise RuntimeError(msg) from e
+    async def _invoke_action(
+        self,
+        action: str,
+        prompt: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        """Invoke an action using the platform controller or browser agent.
 
-            if self._browser_agent is not None:
-                await asyncio.sleep(5)
-                await self._browser_agent.run(
-                    f"Join the meeting which is opened with the name {name}."
-                )
-                return
+        This method is used to perform actions in the browser. First tries to use the
+        platform controller if available, otherwise falls back to the browser agent.
+        Raise an error if neither is available or failed to perform the action.
 
-            async def _dismiss_audio_missing(page: Page) -> None:
-                await page.click("button:has-text('Continue without audio')", timeout=0)
+        Args:
+            action: The action to invoke.
+            prompt: The prompt for the action.
+            *args: Positional arguments for the action.
+            **kwargs: Keyword arguments for the action.
 
-            dismiss_audio_missing = asyncio.create_task(
-                _dismiss_audio_missing(self._page)
-            )
-
-            try:
-                name_field = self._page.get_by_placeholder(
-                    re.compile("name", re.IGNORECASE)
-                )
-                await name_field.fill(name, timeout=20000)
-
-                join_btn = self._page.get_by_role(
-                    "button", name=re.compile(r"^join", re.IGNORECASE)
-                )
-                await join_btn.click(timeout=3000)
-                dismiss_audio_missing.cancel()
-
-            except PlaywrightError as e:
-                msg = "Failed to join the meeting"
-                logger.exception(msg)
-                raise RuntimeError(msg) from e
-            finally:
-                dismiss_audio_missing.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await dismiss_audio_missing
-
-        logger.info(
-            "Joined the meeting: %s as %s",
-            url,
-            name,
-        )
-
-    async def leave(self) -> None:
-        """Leave the meeting."""
+        Raises:
+            RuntimeError: If neither the platform controller nor the browser agent is
+                initialized, or if the action fails.
+        """
         if self._page is None or self._page.is_closed():
             msg = "Meeting not joined or already left."
             logger.error(msg)
             raise RuntimeError(msg)
 
-        logger.info("Leaving the meeting.")
-
         async with self._lock:
+            if self._platform_controller is not None:
+                logger.info(
+                    "Using platform controller %s to perform action '%s'.",
+                    self._platform_controller.__class__.__name__,
+                    action,
+                )
+                try:
+                    await getattr(self._platform_controller, action)(
+                        self._page, *args, **kwargs
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to perform action '%s' using platform controller.",
+                        action,
+                    )
+                else:
+                    logger.info("Action '%s' performed successfully.", action)
+                    return
+
             if self._browser_agent is not None:
-                await self._browser_agent.run(
-                    "Leave the meeting you are currently in but leave the page open."
-                )
-                return
+                try:
+                    await self._browser_agent.run(self._page, prompt)
+                except Exception:
+                    logger.exception(
+                        "Failed to perform action '%s' using browser agent.", action
+                    )
+                else:
+                    logger.info("Action '%s' performed successfully.", action)
+                    return
 
-            try:
-                leave_btn = self._page.get_by_role(
-                    "button", name=re.compile(r"^leave", re.IGNORECASE)
-                )
-                await leave_btn.click(timeout=1000)
-                await self._page.wait_for_timeout(500)
+        if self._platform_controller is None and self._browser_agent is None:
+            logger.error(
+                "Neither platform controller nor browser agent is available. "
+                "Cannot perform action: %s.",
+                action,
+            )
 
-                await self._page.close()
-            except PlaywrightError as e:
-                msg = "Failed to leave the meeting"
-                logger.exception(msg)
-                raise RuntimeError(msg) from e
-            else:
-                logger.info("Left the meeting.")
+        msg = f"Failed to perform action '{action}'."
+        raise RuntimeError(msg)
+
+    async def join(self, url: str | None = None, name: str | None = None) -> None:
+        """Join a meeting.
+
+        Args:
+            url: The URL of the meeting to join.
+            name: The name of the participant. If None, uses the default name from
+                settings.
+        """
+        if url is None:
+            msg = "Meeting URL is required to join a meeting."
+            logger.error(msg)
+            raise ValueError(msg)
+
+        if self._page is None or self._page.is_closed():
+            self._page = await self._browser_session.get_page()
+            self._platform_controller = await self._get_platform_controller(url)
+        else:
+            msg = "Meeting already joined. Leave the meeting before joining a new one."
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        if name is None:
+            name = get_settings().name
+
+        prompt = f"Join the meeting at {url} as {name}."
+        await self._invoke_action("join", prompt, url=url, name=name)
+
+    async def leave(self) -> None:
+        """Leave the current meeting."""
+        prompt = "Leave the meeting."
+        await self._invoke_action("leave", prompt)
+        self._platform_controller = None
+        if self._page is not None and not self._page.is_closed():
+            await self._page.close()
+            self._page = None
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.
@@ -134,63 +174,5 @@ class BrowserMeetingController(DefaultMeetingController):
         Args:
             message: The message to send.
         """
-        if self._page is None or self._page.is_closed():
-            msg = "Meeting not joined or already left."
-            logger.error(msg)
-            raise RuntimeError(msg)
-
-        logger.info("Sending chat message: %s", message)
-
-        async with self._lock:
-            try:
-                chat_input = self._page.locator("div[contenteditable='true']")
-                is_chat_visible = await chat_input.is_visible(timeout=1000)
-
-                if not is_chat_visible:
-                    chat_button = self._page.get_by_role(
-                        "button", name=re.compile(r"^chat", re.IGNORECASE)
-                    )
-                    await chat_button.wait_for(timeout=2000)
-                    await chat_button.click()
-                    await self._page.wait_for_timeout(1000)
-
-                await chat_input.wait_for(timeout=2000)
-                await chat_input.fill(message)
-                await self._page.wait_for_timeout(500)
-                await self._page.keyboard.press("Enter")
-            except PlaywrightError as e:
-                msg = "Failed to send chat message"
-                logger.exception(msg)
-                raise RuntimeError(msg) from e
-            else:
-                logger.info("Chat message sent.")
-
-    async def start_screen_sharing(self) -> None:
-        """Start screen sharing in the meeting."""
-        if self._page is None or self._page.is_closed():
-            msg = "Meeting not joined or already left."
-            logger.error(msg)
-            raise RuntimeError(msg)
-
-        logger.info("Starting screen sharing.")
-
-        async with self._lock:
-            try:
-                screen_share_btn = self._page.get_by_role(
-                    "button", name=re.compile(r"^share", re.IGNORECASE)
-                )
-                await screen_share_btn.wait_for(timeout=2000)
-                await screen_share_btn.click(timeout=2000)
-                await self._page.wait_for_timeout(500)
-
-                screen_share_btn = self._page.get_by_role(
-                    "button", name=re.compile(r"^share a screen", re.IGNORECASE)
-                )
-                await screen_share_btn.wait_for(timeout=2000)
-                await screen_share_btn.click(timeout=2000)
-            except PlaywrightError as e:
-                msg = "Failed to start screen sharing"
-                logger.exception(msg)
-                raise RuntimeError(msg) from e
-            else:
-                logger.info("Screen sharing started.")
+        prompt = f"Send the following message in the meeting chat: {message}"
+        await self._invoke_action("send_chat_message", prompt, message=message)
