@@ -3,8 +3,8 @@ import os
 from contextlib import AsyncExitStack
 from typing import Self
 
+from langchain.chat_models import init_chat_model
 from langchain_mcp_adapters.tools import load_mcp_tools
-from langchain_openai import AzureChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -17,7 +17,12 @@ class BrowserAgent:
     """A class to manage the browser operations."""
 
     def __init__(
-        self, *, env: dict[str, str] | None = None, mcp_port: int | None = None
+        self,
+        *,
+        env: dict[str, str] | None = None,
+        mcp_port: int | None = None,
+        model_name: str = "gpt-4o",
+        model_provider: str | None = None,
     ) -> None:
         """Initialize the BrowserAgent class.
 
@@ -25,9 +30,14 @@ class BrowserAgent:
             env (dict[str, str]): Environment variables for the Browser MCP.
             mcp_port (int | None): The port for the MCP server, 0 for auto-assign,
                 None for stdio only (default: None).
+            model_name (str): The name of the model to use (default: "gpt-4o").
+            model_provider (str | None): The provider of the model, otherwise
+                it is automatically determined (default: None).
         """
         self._env: dict[str, str] = env if env is not None else os.environ.copy()
         self._mcp_port: int | None = mcp_port
+        self._model_name: str = model_name
+        self._model_provider: str | None = model_provider
 
         self._agent = None
         self._exit_stack: AsyncExitStack = AsyncExitStack()
@@ -56,9 +66,8 @@ class BrowserAgent:
 
         await session.initialize()
 
-        llm = AzureChatOpenAI(
-            azure_deployment="gpt-4o-mini",
-            api_version="2024-12-01-preview",
+        llm = init_chat_model(
+            self._model_name, model_provider=self._model_provider, temperature=0.0
         )
 
         prompt = (

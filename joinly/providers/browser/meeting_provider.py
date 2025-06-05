@@ -20,6 +20,8 @@ class BrowserMeetingProvider(MeetingProvider):
         *,
         vnc_server: bool = False,
         browser_agent: bool = False,
+        model_name: str = "gpt-4o",
+        model_provider: str | None = None,
     ) -> None:
         """Initialize the browser meeting provider.
 
@@ -27,6 +29,9 @@ class BrowserMeetingProvider(MeetingProvider):
             vnc_server (bool): Whether to start a VNC server for the virtual display.
             browser_agent (bool): Whether to use a browser agent for the meeting
                 controller.
+            model_name (str): The name of the model to use for the browser agent.
+            model_provider (str | None): The provider of the model, otherwise it is
+                automatically determined.
         """
         env = os.environ.copy()
         pulse_server = PulseServer(env=env)
@@ -41,9 +46,15 @@ class BrowserMeetingProvider(MeetingProvider):
             virtual_display,
             browser_session,
         ]
-        browser_agent_service = BrowserAgent(env=env) if browser_agent else None
+
+        browser_agent_service = (
+            BrowserAgent(env=env, model_name=model_name, model_provider=model_provider)
+            if browser_agent
+            else None
+        )
         if browser_agent_service:
             self._services.append(browser_agent_service)
+
         self._stack = AsyncExitStack()
 
         self.meeting_controller = BrowserMeetingController(
