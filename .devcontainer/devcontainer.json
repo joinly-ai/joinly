@@ -4,6 +4,11 @@
         "context": "..",
         "dockerfile": "Dockerfile"
     },
+    "features": {
+        "ghcr.io/devcontainers/features/node": {
+            "version": "lts"
+        }
+    },
     "customizations": {
         "vscode": {
             "extensions": [
