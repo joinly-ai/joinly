@@ -3,32 +3,23 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Protocol
 
 from joinly.types import (
-    SpeechSegment,
+    AudioFormat,
+    SpeechWindow,
     Transcript,
     TranscriptSegment,
-    VADWindow,
 )
 
 
-class AudioStream(Protocol):
-    """Common audio-stream properties.
-
-    Attributes:
-        sample_rate (int): The sample rate of the audio stream in Hz.
-        byte_depth (int): The byte depth of the audio stream in bytes.
-        chunk_size (int): The size of audio chunks in bytes.
-    """
-
-    sample_rate: int
-    byte_depth: int
-    chunk_size: int
-
-
-class AudioReader(AudioStream, Protocol):
+class AudioReader(Protocol):
     """Protocol for audio stream sources.
 
     Defines the interface for objects that provide audio data.
+
+    Attributes:
+        format (AudioFormat): The format of the audio data being read.
     """
+
+    format: AudioFormat
 
     async def read(self) -> bytes:
         """Read a chunk of audio data.
@@ -39,11 +30,18 @@ class AudioReader(AudioStream, Protocol):
         ...
 
 
-class AudioWriter(AudioStream, Protocol):
+class AudioWriter(Protocol):
     """Protocol for audio output destinations.
 
     Defines the interface for objects that consume audio data.
+
+    Attributes:
+        format (AudioFormat): The format of the audio data being written.
+        chunk_size (int): The smallest accepted size of an audio chunk in bytes.
     """
+
+    format: AudioFormat
+    chunk_size: int
 
     async def write(self, pcm: bytes) -> None:
         """Write audio data to the sink.
@@ -60,15 +58,22 @@ class VAD(Protocol):
     Defines the interface for detecting speech in audio streams.
     """
 
-    def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:
+    def stream(self, reader: AudioReader) -> AsyncIterator[SpeechWindow]:
         """Extract windows containing speech from an audio source.
+
+        The audio included in SpeechWindow must be in the same format as
+        the AudioReader's format.
 
         Args:
             reader: The audio reader to process.
 
         Returns:
-            AsyncIterator[VADWindow]: Stream of audio windows containing vad
+            AsyncIterator[SpeechWindow]: Stream of audio windows containing speech
                 information.
+
+        Raises:
+            IncompatibleAudioFormatError: If the audio format of the reader is
+                incompatible with the expected format.
         """
         ...
 
@@ -80,16 +85,23 @@ class STT(Protocol):
     """
 
     def stream(
-        self, windows: AsyncIterator[VADWindow]
+        self, windows: AsyncIterator[SpeechWindow], audio_format: AudioFormat
     ) -> AsyncIterator[TranscriptSegment]:
         """Transcribe an utterance into text segments.
 
+        If the audio format is not supported, an exception should be raised.
+
         Args:
             windows: An asynchronous iterator of audio windows to transcribe.
+            audio_format: The format of the audio windows.
 
         Returns:
             AsyncIterator[TranscriptSegment]: Stream of transcript segments with text
                 and timing.
+
+        Raises:
+            IncompatibleAudioFormatError: If the audio format is incompatible
+                with the expected format.
         """
         ...
 
@@ -100,23 +112,50 @@ class TTS(Protocol):
     Defines the interface for converting text to audio.
     """
 
-    def stream(self, text: str) -> AsyncIterator[SpeechSegment]:
+    def stream(self, text: str, audio_format: AudioFormat) -> AsyncIterator[bytes]:
         """Convert text to synthesized speech.
+
+        The audio data yielded must be in the specified format. If the audio format
+        is not supported, an exception should be raised.
 
         Args:
             text: The text to synthesize.
+            audio_format: The format of the audio to be generated.
 
         Returns:
-            AsyncIterator[SpeechSegment]: Stream of speech segments with audio and text.
+            AsyncIterator[bytes]: Stream of raw PCM audio data in the specified format.
+
+        Raises:
+            IncompatibleAudioFormatError: If the audio format is incompatible
+                with the expected format.
         """
         ...
 
 
-class MeetingController(Protocol):
-    """Protocol for controlling meeting interactions.
+class MeetingProvider(Protocol):
+    """Protocol defining the interface for meeting providers.
 
-    Defines the interface for joining, interacting with, and leaving meetings.
+    A provider must implement audio input/output capabilities and meeting control
+    functionality. This protocol ensures all providers have a consistent interface.
     """
+
+    @property
+    def audio_reader(self) -> AudioReader:
+        """Get the audio reader for the provider.
+
+        Returns:
+            AudioReader: The audio input source.
+        """
+        ...
+
+    @property
+    def audio_writer(self) -> AudioWriter:
+        """Get the audio writer for the provider.
+
+        Returns:
+            AudioWriter: The audio output destination.
+        """
+        ...
 
     async def join(self, url: str | None = None, name: str | None = None) -> None:
         """Join a meeting.
@@ -144,7 +183,16 @@ class TranscriptionController(Protocol):
     """Protocol for controlling transcription processes.
 
     Defines the interface for starting and stopping transcriptions.
+
+    Attributes:
+        reader (AudioReader): The audio reader to use for transcription.
+        vad (VAD): The voice activity detection service to use.
+        stt (STT): The speech-to-text service to use for transcription.
     """
+
+    reader: AudioReader
+    vad: VAD
+    stt: STT
 
     @property
     def transcript(self) -> Transcript:
@@ -164,6 +212,14 @@ class TranscriptionController(Protocol):
         """
         ...
 
+    async def start(self) -> None:
+        """Start the transcription process."""
+        ...
+
+    async def stop(self) -> None:
+        """Stop the transcription process."""
+        ...
+
     def add_listener(
         self, listener: Callable[[str], Coroutine[None, None, None]]
     ) -> Callable[[], None]:
@@ -181,34 +237,38 @@ class TranscriptionController(Protocol):
 class SpeechController(Protocol):
     """Protocol for controlling speech output.
 
-    Defines the interface for speaking text aloud.
+    Defines the interface for speaking text.
+
+    Attributes:
+        writer (AudioWriter): The audio writer to use for output.
+        tts (TTS): The text-to-speech service to use for generating speech.
+        no_speech_event (asyncio.Event): An event that is set when no speech is
+            detected.
     """
+
+    writer: AudioWriter
+    tts: TTS
+    no_speech_event: asyncio.Event
+
+    async def start(self) -> None:
+        """Start the speech output process."""
+        ...
+
+    async def stop(self) -> None:
+        """Stop the speech output process."""
+        ...
 
     async def speak_text(self, text: str) -> None:
         """Speak the provided text.
 
         Args:
             text: The text to speak.
+
+        Raises:
+            SpeechInterruptedError: If the speech is interrupted before completion.
         """
         ...
 
     async def wait_until_no_speech(self) -> None:
         """Wait until no speech is emitted."""
         ...
-
-
-class MeetingProvider(Protocol):
-    """Protocol defining the interface for meeting providers.
-
-    A provider must implement audio input/output capabilities and meeting control
-    functionality. This protocol ensures all providers have a consistent interface.
-
-    Attributes:
-        meeting_controller (MeetingController): The controller for managing meetings.
-        audio_reader (AudioReader): The audio input source for the provider.
-        audio_writer (AudioWriter): The audio output destination for the provider.
-    """
-
-    meeting_controller: MeetingController
-    audio_reader: AudioReader
-    audio_writer: AudioWriter

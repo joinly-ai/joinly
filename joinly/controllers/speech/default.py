@@ -1,13 +1,17 @@
 import asyncio
 import contextlib
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Self
 
+from semchunk.semchunk import chunkerify
+
 from joinly.core import TTS, AudioWriter, SpeechController
-from joinly.types import SpeechSegment
 
 logger = logging.getLogger(__name__)
+
+_SENT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 @dataclass
@@ -23,11 +27,12 @@ class SpeakJob:
 class DefaultSpeechController(SpeechController):
     """A class to manage the speech flow."""
 
+    writer: AudioWriter
+    tts: TTS
+    no_speech_event: asyncio.Event
+
     def __init__(
         self,
-        writer: AudioWriter,
-        tts: TTS,
-        no_speech_event: asyncio.Event,
         *,
         queue_size: int = 10,
         non_interruptable: float = 0.5,
@@ -35,37 +40,39 @@ class DefaultSpeechController(SpeechController):
         """Initialize the SpeechFlowController.
 
         Args:
-            writer (AudioWriter): The audio writer to use for audio output.
-            tts (TTS): The text-to-speech service to use for audio output.
-            no_speech_event (asyncio.Event): An event to signal when no speech is
-                detected.
             queue_size (int): The maximum size of the speech queue (default is 10).
             non_interruptable (float): The duration in seconds from the start for
                 which speech cannot be interrupted (default is 0.5).
         """
-        self._writer = writer
-        self._tts = tts
-        self._no_speech_event = no_speech_event
         self.queue_size = queue_size
         self.non_interruptable = non_interruptable
-        self._chunk_size = writer.chunk_size
-        self._chunk_dur = writer.chunk_size / (writer.sample_rate * writer.byte_depth)
+        self._chunk_dur: float = 0.0
         self._queue: asyncio.Queue[SpeakJob] | None = None
         self._worker_task: asyncio.Task | None = None
+        self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
 
     async def __aenter__(self) -> Self:
-        """Set up the audio stream and queue."""
-        if self._queue is not None or self._worker_task is not None:
-            msg = "Audio queue already started"
-            raise RuntimeError(msg)
-
-        self._queue = asyncio.Queue(maxsize=self.queue_size)
-        self._worker_task = asyncio.create_task(self._worker_loop())
-
+        """Enter the audio stream context."""
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Stop the audio stream and clean up resources."""
+        await self.stop()
+
+    async def start(self) -> None:
+        """Start the speech controller with the given writer and TTS."""
+        if self._queue is not None or self._worker_task is not None:
+            msg = "Audio queue already started"
+            raise RuntimeError(msg)
+
+        self._chunk_dur = self.writer.chunk_size / (
+            self.writer.format.sample_rate * self.writer.format.byte_depth
+        )
+        self._queue = asyncio.Queue(maxsize=self.queue_size)
+        self._worker_task = asyncio.create_task(self._worker_loop())
+
+    async def stop(self) -> None:
+        """Stop the speech controller and clean up resources."""
         if self._worker_task is not None:
             self._worker_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -137,6 +144,18 @@ class DefaultSpeechController(SpeechController):
                 job.done.set()
                 self._queue.task_done()
 
+    async def _chunk_text(self, text: str) -> list[str]:
+        """Chunk the text into smaller segments for processing."""
+        chunks_nested: list[list[str]] = await asyncio.to_thread(
+            self._chunker,
+            _SENT_RE.split(text),
+        )  # type: ignore[operator]
+        chunks: list[str] = [chunk for sublist in chunks_nested for chunk in sublist]
+
+        logger.info("Splitted into chunks: %s", chunks)
+
+        return chunks
+
     async def _speak_text(  # noqa: C901
         self, text: str, *, interrupt: bool, interruptable: bool
     ) -> None:
@@ -149,12 +168,14 @@ class DefaultSpeechController(SpeechController):
 
         Raises:
             RuntimeError: If the speech was interrupted.
+
+        TODO: use chunking!
         """
         logger.info("Speaking text: %s", text)
 
-        tts_stream = self._tts.stream(text)
+        tts_stream = self.tts.stream(text, self.writer.format)
 
-        async def _next_segment() -> SpeechSegment:
+        async def _next_segment() -> bytes:
             return await tts_stream.__anext__()
 
         next_segment = asyncio.create_task(_next_segment())
@@ -180,29 +201,28 @@ class DefaultSpeechController(SpeechController):
                 next_segment = asyncio.create_task(_next_segment())
 
                 if not interrupt and chunk_num == 0:
-                    await self._no_speech_event.wait()
+                    await self.no_speech_event.wait()
 
-                for i in range(0, len(segment.pcm), self._chunk_size):
+                for i in range(0, len(segment), self.writer.chunk_size):
                     if (
                         interruptable
                         and chunk_num * self._chunk_dur >= self.non_interruptable
-                        and not self._no_speech_event.is_set()
+                        and not self.no_speech_event.is_set()
                     ):
                         # estimate spoken text until interruption
-                        chunk_words = segment.text.split(" ")
+                        chunk_words = text.split(" ")
                         spoken_chunk_text = chunk_words[
-                            : int(i / len(segment.pcm) * len(chunk_words))
+                            : int(i / len(segment) * len(chunk_words))
                         ]
                         spoken_text.extend(spoken_chunk_text)
                         interrupted = True
                         break
 
-                    await self._writer.write(segment.pcm[i : i + self._chunk_size])
+                    await self.writer.write(segment[i : i + self.writer.chunk_size])
                     chunk_num += 1
 
                 if interrupted:
                     break
-                spoken_text.append(segment.text)
 
         except Exception as e:
             msg = (

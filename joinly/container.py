@@ -96,27 +96,24 @@ class SessionContainer:
                 self._settings.transcription_controller,
                 "joinly.controllers.transcription",
                 "TranscriptionController",
-                self._settings.transcription_controller_args
-                | {
-                    "reader": meeting_provider.audio_reader,
-                    "vad": vad,
-                    "stt": stt,
-                },
+                self._settings.transcription_controller_args,
             )
+            transcription_controller.reader = meeting_provider.audio_reader
+            transcription_controller.vad = vad
+            transcription_controller.stt = stt
+
             speech_controller = await self._build(
                 self._settings.speech_controller,
                 "joinly.controllers.speech",
                 "SpeechController",
-                self._settings.speech_controller_args
-                | {
-                    "writer": meeting_provider.audio_writer,
-                    "tts": tts,
-                    "no_speech_event": transcription_controller.no_speech_event,
-                },
+                self._settings.speech_controller_args,
             )
+            speech_controller.writer = meeting_provider.audio_writer
+            speech_controller.tts = tts
+            speech_controller.no_speech_event = transcription_controller.no_speech_event
 
             meeting_session = MeetingSession(
-                meeting_controller=meeting_provider.meeting_controller,
+                meeting_provider=meeting_provider,
                 transcription_controller=transcription_controller,
                 speech_controller=speech_controller,
             )

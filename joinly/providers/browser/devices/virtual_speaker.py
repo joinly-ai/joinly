@@ -11,6 +11,7 @@ from joinly.core import AudioReader
 from joinly.providers.browser.devices.pulse_module_manager import (
     PulseModuleManager,
 )
+from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +41,14 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             sink_name (str | None): The name of the sink (default is None).
             env: Optional environment dictionary to set the sink name.
         """
-        self.sample_rate = sample_rate
+        self.format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
         self.frames_per_chunk = frames_per_chunk
         self.pipe_size = pipe_size
         self.fifo_path = fifo_path
         self.sink_name: str = (
             sink_name if sink_name is not None else f"virt.{uuid.uuid4()}"
         )
-        self.byte_depth = 4  # f32le
-        self.chunk_size = frames_per_chunk * self.byte_depth
+        self.chunk_size = frames_per_chunk * self.format.byte_depth
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
@@ -84,7 +84,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             "module-pipe-sink",
             f"sink_name={self.sink_name}",
             f"file={self.fifo_path}",
-            f"rate={self.sample_rate}",
+            f"rate={self.format.sample_rate}",
             "format=float32le",
             "channels=1",
             "use_system_clock_for_timing=yes",
@@ -113,7 +113,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             self.sink_name,
             self._module_id,
             self.fifo_path,
-            self.sample_rate,
+            self.format.sample_rate,
         )
 
         return self

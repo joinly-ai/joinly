@@ -3,6 +3,7 @@ import logging
 from collections.abc import AsyncIterator
 
 from joinly.core import VAD, AudioReader
+from joinly.types import IncompatibleAudioFormatError, SpeechWindow
 from joinly.utils.audio import convert_byte_depth
 from joinly.utils.logging import LOGGING_TRACE
 
@@ -30,7 +31,7 @@ class BasePaddedVAD(VAD, abc.ABC):
         """Expected window size in samples."""
         ...
 
-    async def stream(self, reader: AudioReader) -> AsyncIterator[VADWindow]:
+    async def stream(self, reader: AudioReader) -> AsyncIterator[SpeechWindow]:
         """Process the audio stream and yield speech segments.
 
         For non-speech segments, keeps one window in buffer to mark one previous
@@ -40,15 +41,19 @@ class BasePaddedVAD(VAD, abc.ABC):
             reader: An AudioReader providing audio data.
 
         Yields:
-            VADFrame: A frame containing the audio segment, start time, and end time.
+            SpeechWindow: A frame containing the audio segment, start time, and
+                end time.
         """
-        if reader.sample_rate != self.sample_rate:
-            msg = f"Expected sample rate {self.sample_rate}, got {reader.sample_rate}"
-            raise ValueError(msg)
+        if reader.format.sample_rate != self.sample_rate:
+            msg = (
+                f"Expected sample rate {self.sample_rate}, "
+                f"got {reader.format.sample_rate}"
+            )
+            raise IncompatibleAudioFormatError(msg)
 
         idx: int = 0
-        window_size: int = self.window_size_samples * reader.byte_depth
-        chunk_dur: float = self.window_size_samples / reader.sample_rate
+        window_size: int = self.window_size_samples * reader.format.byte_depth
+        chunk_dur: float = self.window_size_samples / reader.format.sample_rate
         buffer = bytearray()
         pending: bytes = b""
         last_is_speech: bool = False
@@ -64,7 +69,7 @@ class BasePaddedVAD(VAD, abc.ABC):
 
                 is_speech = await self.is_speech(
                     convert_byte_depth(
-                        window_bytes, reader.byte_depth, self.byte_depth
+                        window_bytes, reader.format.byte_depth, self.byte_depth
                     )
                 )
 
@@ -78,7 +83,7 @@ class BasePaddedVAD(VAD, abc.ABC):
 
                 if not is_speech:
                     if pending:
-                        yield VADWindow(
+                        yield SpeechWindow(
                             pcm=pending,
                             start=(idx - 1) * chunk_dur,
                             is_speech=last_is_speech,
@@ -86,14 +91,14 @@ class BasePaddedVAD(VAD, abc.ABC):
                     pending = window_bytes
                 else:
                     if pending:
-                        yield VADWindow(
+                        yield SpeechWindow(
                             pcm=pending,
                             start=(idx - 1) * chunk_dur,
                             is_speech=True,
                         )
                     pending = b""
 
-                    yield VADWindow(
+                    yield SpeechWindow(
                         pcm=window_bytes,
                         start=idx * chunk_dur,
                         is_speech=True,
@@ -104,7 +109,7 @@ class BasePaddedVAD(VAD, abc.ABC):
                 last_is_speech = is_speech
 
         if pending:
-            yield VADWindow(
+            yield SpeechWindow(
                 pcm=pending,
                 start=(idx - 1) * chunk_dur,
                 is_speech=last_is_speech,

@@ -12,6 +12,7 @@ from joinly.core import AudioWriter
 from joinly.providers.browser.devices.pulse_module_manager import (
     PulseModuleManager,
 )
+from joinly.types import AudioFormat
 from joinly.utils.logging import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
@@ -47,15 +48,16 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
                 pacing.
             env: Optional environment dictionary to set the audio source name.
         """
-        self.sample_rate = sample_rate
+        self.format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
         self.pipe_size = pipe_size
         self.fifo_path = fifo_path
         self.source_name: str = (
             source_name if source_name is not None else f"virtmic.{uuid.uuid4()}"
         )
-        self.byte_depth = 4  # float32le
-        self.chunk_size = int(sample_rate * chunk_ms / 1000) * self.byte_depth
-        self.chunk_ms = self.chunk_size / (self.byte_depth * self.sample_rate) * 1000
+        self.chunk_size = int(sample_rate * chunk_ms / 1000) * self.format.byte_depth
+        self.chunk_ms = (
+            self.chunk_size / (self.format.byte_depth * self.format.sample_rate) * 1000
+        )
         self.queue_size = queue_size
         self.max_missed_chunks = max_missed_chunks
         self._env: dict[str, str] = env if env is not None else {}
@@ -88,7 +90,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             "module-pipe-source",
             f"source_name={self.source_name}",
             f"file={self.fifo_path}",
-            f"rate={self.sample_rate}",
+            f"rate={self.format.sample_rate}",
             "format=float32le",
             "channels=1",
             env=self._env,
@@ -119,7 +121,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             self.source_name,
             self._module_id,
             self.fifo_path,
-            self.sample_rate,
+            self.format.sample_rate,
         )
 
         return self

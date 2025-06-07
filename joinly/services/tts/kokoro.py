@@ -2,19 +2,16 @@ import asyncio
 import logging
 import os
 import pathlib
-import re
 from collections.abc import AsyncIterator
 from typing import Self
 
 from kokoro_onnx import Kokoro
-from semchunk.semchunk import chunkerify
 
 from joinly.core import TTS
-from joinly.types import SpeechSegment
+from joinly.types import AudioFormat, IncompatibleAudioFormatError
+from joinly.utils.audio import convert_byte_depth
 
 logger = logging.getLogger(__name__)
-
-_SENT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 class KokoroTTS(TTS):
@@ -24,7 +21,6 @@ class KokoroTTS(TTS):
         """Initialize the TTS service."""
         self._voice = voice
         self._model: Kokoro | None = None
-        self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
         self._sem = asyncio.BoundedSemaphore(1)
 
     async def __aenter__(self) -> Self:
@@ -53,30 +49,27 @@ class KokoroTTS(TTS):
             del self._model
             self._model = None
 
-    async def stream(self, text: str) -> AsyncIterator[SpeechSegment]:
+    async def stream(
+        self, text: str, audio_format: AudioFormat
+    ) -> AsyncIterator[bytes]:
         """Convert text to speech and stream the audio data.
 
         Args:
             text: The text to convert to speech.
+            audio_format: The format of the audio data to be returned.
 
         Yields:
-            SpeechSegment: The audio data and corresponding text segments.
+            bytes: The audio data for each text segment.
         """
+        if audio_format.sample_rate != 24000:  # noqa: PLR2004
+            msg = f"Unsupported sample rate {audio_format.sample_rate}, expected 24000"
+            raise IncompatibleAudioFormatError(msg)
+
         logger.info("Streaming TTS for text: %s", text)
 
-        chunks_nested: list[list[str]] = await asyncio.to_thread(
-            self._chunker,
-            _SENT_RE.split(text),
-        )  # type: ignore[operator]
-        chunks: list[str] = [chunk for sublist in chunks_nested for chunk in sublist]
-
-        logger.info("Splitted into chunks: %s", chunks)
-        for chunk in chunks:
-            audio_data = await self._tts(chunk)
-            yield SpeechSegment(
-                pcm=audio_data,
-                text=chunk,
-            )
+        audio_data = await self._tts(text)
+        audio_data = convert_byte_depth(audio_data, 4, audio_format.byte_depth)
+        yield audio_data
 
         logger.info("Finished streaming TTS for text: %s", text)
 

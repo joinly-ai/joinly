@@ -9,7 +9,12 @@ from faster_whisper import WhisperModel
 
 from joinly.core import STT
 from joinly.settings import get_settings
-from joinly.types import TranscriptSegment, VADWindow
+from joinly.types import (
+    AudioFormat,
+    IncompatibleAudioFormatError,
+    SpeechWindow,
+    TranscriptSegment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +69,13 @@ class WhisperSTT(STT):
             self._model = None
 
     async def stream(
-        self, windows: AsyncIterator[VADWindow]
+        self, windows: AsyncIterator[SpeechWindow], audio_format: AudioFormat
     ) -> AsyncIterator[TranscriptSegment]:
         """Stream audio windows and yield transcribed segments.
 
         Args:
-            windows: An AsyncIterator of VADWindow objects.
+            windows: An AsyncIterator of SpeechWindow objects.
+            audio_format: The format of the audio data.
 
         Yields:
             TranscriptSegment: The transcribed segments.
@@ -77,6 +83,20 @@ class WhisperSTT(STT):
         if self._model is None:
             msg = "Model not initialized"
             raise RuntimeError(msg)
+
+        if audio_format.sample_rate != 16000:  # noqa: PLR2004
+            msg = (
+                f"Unsupported audio sample rate: {audio_format.sample_rate}. "
+                "Whisper requires 16000 Hz."
+            )
+            raise IncompatibleAudioFormatError(msg)
+
+        if audio_format.byte_depth != 4:  # noqa: PLR2004
+            msg = (
+                f"Unsupported audio byte depth: {audio_format.byte_depth}. "
+                "Whisper requires 4 bytes per sample (float32)."
+            )
+            raise IncompatibleAudioFormatError(msg)
 
         queue = asyncio.Queue[tuple[bytes, float, float] | None](maxsize=10)
         buffer_task = asyncio.create_task(self._buffer_windows(windows, queue))
@@ -94,13 +114,13 @@ class WhisperSTT(STT):
 
     async def _buffer_windows(
         self,
-        windows: AsyncIterator[VADWindow],
+        windows: AsyncIterator[SpeechWindow],
         queue: asyncio.Queue[tuple[bytes, float, float] | None],
     ) -> None:
         """Buffer audio windows into the queue.
 
         Args:
-            windows: An AsyncIterator of VADWindow objects.
+            windows: An AsyncIterator of SpeechWindow objects.
             queue: The queue to put buffered audio chunks into.
         """
         buffer = bytearray()
