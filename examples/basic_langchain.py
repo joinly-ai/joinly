@@ -1,11 +1,11 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#     "fastmcp",
 #     "langchain",
 #     "langchain-mcp-adapters",
 #     "langchain-openai",
 #     "langgraph",
-#     "mcp",
 #     "py-dotenv",
 #     "rich",
 # ]
@@ -19,14 +19,14 @@ import logging
 import sys
 
 from dotenv import load_dotenv
+from fastmcp import Client
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import ToolNode, create_react_agent
-from mcp import ClientSession, ResourceUpdatedNotification, ServerNotification
-from mcp.client.streamable_http import streamablehttp_client
+from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl, BaseModel
 
 logger = logging.getLogger(__name__)
@@ -118,23 +118,19 @@ async def run(
         "If interrupted mid-response, gracefully conclude and use 'finish'."
     )
 
-    async with (
-        streamablehttp_client(mcp_url) as (read_stream, write_stream, _),
-        ClientSession(
-            read_stream, write_stream, message_handler=_message_handler
-        ) as session,
-    ):
-        logger.info("Connecting to MCP server at %s", mcp_url)
-        await session.initialize()
+    client = Client(mcp_url, message_handler=_message_handler)
+
+    logger.info("Connecting to MCP server at %s", mcp_url)
+    async with client:
         logger.info("Connected to MCP server")
-        await session.subscribe_resource(transcript_url)
+        await client.session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
         def finish() -> str:
             """Finish tool to end the turn."""
             return "Finished."
 
-        tools = await load_mcp_tools(session)
+        tools = await load_mcp_tools(client.session)
         tools.append(finish)
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         llm_binded = llm.bind_tools(tools, tool_choice="required")
@@ -146,7 +142,7 @@ async def run(
         last_time = -1.0
 
         logger.info("Joining meeting at %s", meeting_url)
-        await session.call_tool(
+        await client.call_tool(
             "join_meeting", {"meeting_url": meeting_url, "participant_name": "joinly"}
         )
         logger.info("Joined meeting successfully")
@@ -154,11 +150,10 @@ async def run(
         try:
             while True:
                 await transcript_event.wait()
-                resource = await session.read_resource(transcript_url)
-                transcript = transcript_after(
-                    Transcript.model_validate_json(resource.contents[0].text),  # type: ignore[attr-defined]
-                    after=last_time,
+                transcript_full = Transcript.model_validate_json(
+                    (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
                 )
+                transcript = transcript_after(transcript_full, after=last_time)
                 transcript_event.clear()
                 if not transcript.segments:
                     logger.warning("No new segments in the transcript after update")
@@ -181,7 +176,7 @@ async def run(
 
         finally:
             with contextlib.suppress(Exception):
-                await session.call_tool("leave_meeting")
+                await client.call_tool("leave_meeting")
 
 
 if __name__ == "__main__":
