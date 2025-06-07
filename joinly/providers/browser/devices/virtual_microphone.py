@@ -12,7 +12,7 @@ from joinly.core import AudioWriter
 from joinly.providers.browser.devices.pulse_module_manager import (
     PulseModuleManager,
 )
-from joinly.utils import LOGGING_TRACE
+from joinly.utils.logging import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
 
