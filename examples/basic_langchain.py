@@ -134,8 +134,8 @@ async def run(
             """Finish tool to end the turn."""
             return "Finished."
 
-        tools = [finish]
-        tools.extend(await load_mcp_tools(session))
+        tools = await load_mcp_tools(session)
+        tools.append(finish)
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         llm_binded = llm.bind_tools(tools, tool_choice="required")
 
