@@ -93,7 +93,7 @@ async def run(
         model_name: The model to use for the agent.
         model_provider: The provider for the model.
     """
-    transcript_url = AnyUrl("transcript://joinly/live")
+    transcript_url = AnyUrl("transcript://live")
     transcript_event = asyncio.Event()
 
     async def _message_handler(message) -> None:  # noqa: ANN001
@@ -120,9 +120,7 @@ async def run(
 
     config = {
         "mcpServers": {
-            # A remote HTTP server
-            "joinly": {"url": mcp_url, "transport": "streamable-http"},
-            "notionApi": {
+            "notion": {
                 "command": "npx",
                 "args": ["-y", "@notionhq/notion-mcp-server"],
                 "env": {
@@ -132,19 +130,23 @@ async def run(
         }
     }
 
-    client = Client(config, message_handler=_message_handler)
+    # separate joinly client, since fastmcp does not support notifications
+    # in proxy server mode yet (v2.7.0)
+    joinly_client = Client(mcp_url, message_handler=_message_handler)
+    client = Client(config)
 
-    logger.info("Connecting to MCP server at %s", mcp_url)
-    async with client:
-        logger.info("Connected to MCP server")
-        await client.session.subscribe_resource(transcript_url)
+    logger.info("Connecting via MCP")
+    async with joinly_client, client:
+        logger.info("Connected")
+        await joinly_client.session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
         def finish() -> str:
             """Finish tool to end the turn."""
             return "Finished."
 
-        tools = await load_mcp_tools(client.session)
+        tools = await load_mcp_tools(joinly_client.session)
+        tools.extend(await load_mcp_tools(client.session))
         tools.append(finish)
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         llm_binded = llm.bind_tools(tools, tool_choice="required")
@@ -156,8 +158,8 @@ async def run(
         last_time = -1.0
 
         logger.info("Joining meeting at %s", meeting_url)
-        await client.call_tool(
-            "joinly_join_meeting",
+        await joinly_client.call_tool(
+            "join_meeting",
             {"meeting_url": meeting_url, "participant_name": "joinly"},
         )
         logger.info("Joined meeting successfully")
@@ -166,7 +168,7 @@ async def run(
             while True:
                 await transcript_event.wait()
                 transcript_full = Transcript.model_validate_json(
-                    (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+                    (await joinly_client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
                 )
                 transcript = transcript_after(transcript_full, after=last_time)
                 transcript_event.clear()
@@ -191,7 +193,7 @@ async def run(
 
         finally:
             with contextlib.suppress(Exception):
-                await client.call_tool("joinly_leave_meeting")
+                await joinly_client.call_tool("leave_meeting")
 
 
 if __name__ == "__main__":
