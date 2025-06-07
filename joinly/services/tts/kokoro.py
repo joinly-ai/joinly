@@ -65,13 +65,9 @@ class KokoroTTS(TTS):
             msg = f"Unsupported sample rate {audio_format.sample_rate}, expected 24000"
             raise IncompatibleAudioFormatError(msg)
 
-        logger.info("Streaming TTS for text: %s", text)
-
         audio_data = await self._tts(text)
         audio_data = convert_byte_depth(audio_data, 4, audio_format.byte_depth)
         yield audio_data
-
-        logger.info("Finished streaming TTS for text: %s", text)
 
     async def _tts(self, text: str) -> bytes:
         """Convert text to speech."""

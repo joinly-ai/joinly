@@ -1,5 +1,7 @@
 import numpy as np
 
+from joinly.types import AudioFormat
+
 BYTE_DEPTH_16 = 2
 BYTE_DEPTH_32 = 4
 
@@ -36,3 +38,16 @@ def convert_byte_depth(data: bytes, source_depth: int, target_depth: int) -> byt
         "Only conversion between 16-bit and 32-bit PCM is supported."
     )
     raise ValueError(msg)
+
+
+def calculate_audio_duration(byte_size: int, audio_format: AudioFormat) -> float:
+    """Calculate the duration of audio data in seconds.
+
+    Args:
+        byte_size: The size of the audio data in bytes.
+        audio_format: An AudioFormat object containing sample rate and byte depth.
+
+    Returns:
+        float: The duration of the audio data in seconds.
+    """
+    return byte_size / (audio_format.sample_rate * audio_format.byte_depth)
