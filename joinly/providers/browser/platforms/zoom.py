@@ -21,7 +21,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         page: Page,
         url: str,
         name: str,
-        passcode: str | None = None,  # noqa: ARG002
+        passcode: str | None = None,
     ) -> None:
         """Join the Zoom meeting.
 
@@ -53,10 +53,28 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         try:
             join_button = page.locator("button:has-text('Join')")
             if await join_button.is_visible(timeout=2000):
-                logger.info("Join button still present, clicking again.")
+                logger.debug("Join button still present, clicking again.")
+                await join_button.click(timeout=5000)
                 await join_button.click(timeout=5000)
         except Exception as e:  # noqa: BLE001
             logger.debug(f"No additional Join button found or error occurred: {e}")  # noqa: G004
+
+        try:
+            join_button = page.locator("button:has-text('Join')")
+            meeting_passcode = page.locator(
+                "#input-for-passcode, input[placeholder*='Passcode']"
+            )
+            if await meeting_passcode.is_visible(timeout=2000):
+                logger.info("Meeting passcode required.")
+                if passcode is not None:
+                    await meeting_passcode.fill(passcode, timeout=10000)
+                    await join_button.click(timeout=5000)
+                else:
+                    logger.error("Passcode is required but not provided.")
+        except Exception as e:  # noqa: BLE001
+            logger.debug(
+                f"No additional Passcode required button found or error occurred: {e}"  # noqa: G004
+            )
 
     async def leave(self, page: Page) -> None:
         """Leave the Zoom meeting using the icon-based button."""
@@ -77,7 +95,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                 "button:has(span.footer-button-base__button-label:has-text('Leave'))"
             )
             if await leave_button.is_visible(timeout=2000):
-                logger.info("Leave button still present, clicking again.")
+                logger.debug("Leave button still present, clicking again.")
                 await leave_button.click(timeout=5000)
         except Exception as e:  # noqa: BLE001
             logger.debug(f"No additional Leave button found or error occurred: {e}")  # noqa: G004
