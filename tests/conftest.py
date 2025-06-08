@@ -1,13 +1,15 @@
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from joinly.container import SessionContainer
+from joinly.providers.browser.meeting_provider import PLATFORMS
 from joinly.session import MeetingSession
-from tests.utils.meeting_mockup import serve_meeting_mockup
+from tests.utils.mockup_browser_controller import MockupBrowserPlatformController
+from tests.utils.mockup_browser_meeting import serve_mockup_browser_meeting
 
 
 def speech_audio_samples() -> list[dict[str, Any]]:
@@ -25,17 +27,30 @@ def speech_audio_samples() -> list[dict[str, Any]]:
 
 
 @pytest.fixture(params=speech_audio_samples(), scope="session")
-async def meeting_mockup(
+async def mockup_browser_meeting(
     request: pytest.FixtureRequest,
 ) -> AsyncGenerator[dict[str, Any], None]:
-    """Fixture to set up a meeting mockup for testing."""
+    """Fixture to set up a mockup browser meeting for testing."""
     audio_sample_info = request.param
-    async with serve_meeting_mockup(audio_sample_info["filepath"]) as url:
+    async with serve_mockup_browser_meeting(audio_sample_info["filepath"]) as url:
         yield {
             "url": url,
             "transcription": audio_sample_info["transcription"],
             "duration": audio_sample_info["duration"],
         }
+
+
+@pytest.fixture(autouse=True)
+def _inject_mockup_browser_controller(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    """Injects the MockupBrowserPlatformController if the fixture is requested."""
+    if "mockup_browser_meeting" in request.fixturenames:
+        PLATFORMS.insert(0, MockupBrowserPlatformController)
+        yield
+        PLATFORMS.remove(MockupBrowserPlatformController)
+    else:
+        yield
 
 
 @pytest.fixture
