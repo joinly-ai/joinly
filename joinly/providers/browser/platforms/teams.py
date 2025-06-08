@@ -18,13 +18,20 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         r"^(?:https?://)?(?:[a-z0-9-]+\.)?teams\.microsoft\.com/"
     )
 
-    async def join(self, page: Page, url: str, name: str) -> None:
+    async def join(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+        passcode: str | None = None,  # noqa: ARG002
+    ) -> None:
         """Join the Teams meeting.
 
         Args:
             page: The Playwright page instance.
             url: The URL of the Teams meeting.
             name: The name of the participant.
+            passcode: The passcode for the meeting (if required).
         """
         await page.goto(url, wait_until="load", timeout=20000)
 

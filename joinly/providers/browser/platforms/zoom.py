@@ -16,13 +16,20 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         r"^(?:https?://)?(?:[a-z0-9-]+\.)?zoom\.us/"
     )
 
-    async def join(self, page: Page, url: str, name: str) -> None:
+    async def join(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+        passcode: str | None = None,  # noqa: ARG002
+    ) -> None:
         """Join the Zoom meeting.
 
         Args:
             page: The Playwright page instance.
             url: The URL of the Zoom meeting.
             name: The name of the participant.
+            passcode: The passcode for the meeting (if required).
         """
         # Convert the standard join URL to the web client format
         if re.search(r"/j/\d+", url):

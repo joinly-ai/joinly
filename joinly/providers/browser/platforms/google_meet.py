@@ -13,12 +13,19 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         r"^(?:https?://)?(?:www\.)?meet\.google\.com/"
     )
 
-    async def join(self, page: Page, url: str, name: str) -> None:  # noqa: ARG002
+    async def join(
+        self,
+        page: Page,
+        url: str,
+        name: str,  # noqa: ARG002
+        passcode: str | None = None,  # noqa: ARG002
+    ) -> None:
         """Join the Google Meet meeting.
 
         Args:
             page: The Playwright page instance.
             url: The URL of the Google Meet meeting.
             name: The name of the participant.
+            passcode: The passcode for the meeting (if required).
         """
         await page.goto(url, wait_until="load", timeout=20000)

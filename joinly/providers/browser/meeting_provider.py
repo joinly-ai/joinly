@@ -192,13 +192,19 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         msg = f"Failed to perform action '{action}'."
         raise RuntimeError(msg)
 
-    async def join(self, url: str | None = None, name: str | None = None) -> None:
+    async def join(
+        self,
+        url: str | None = None,
+        name: str | None = None,
+        passcode: str | None = None,
+    ) -> None:
         """Join a meeting.
 
         Args:
             url: The URL of the meeting to join.
             name: The name of the participant. If None, uses the default name from
                 settings.
+            passcode: The password or passcode for the meeting (if required).
         """
         if url is None:
             msg = "Meeting URL is required to join a meeting."
@@ -217,7 +223,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             name = get_settings().name
 
         prompt = f"Join the meeting at {url} as {name}."
-        await self._invoke_action("join", prompt, url=url, name=name)
+        if passcode:
+            prompt += f" If asked, use the passcode: {passcode}."
+        await self._invoke_action("join", prompt, url=url, name=name, passcode=passcode)
 
     async def leave(self) -> None:
         """Leave the current meeting."""
