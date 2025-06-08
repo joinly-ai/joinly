@@ -16,6 +16,7 @@ import contextlib
 import datetime
 import json
 import logging
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -111,21 +112,35 @@ async def run(
         "You are a professional and knowledgeable meeting assistant named joinly. "
         "Provide concise, valuable contributions to the meeting discussions. "
         "You receive real-time transcripts from the ongoing meeting. "
-        "Respond thoughtfully when appropriate, but avoid unnecessary interruptions. "
+        "Respond thoughtfully when appropriate. "
         "Use available tools when needed to assist participants. "
-        "Always finish your response with the 'finish' tool. "
-        "If nothing requires your input, use the 'finish' tool immediately. "
+        "Please also talk when you are working on a task, "
+        "You are on a call only with one other participant called Hannes."
         "If interrupted mid-response, gracefully conclude and use 'finish'."
     )
+
+    load_dotenv()
 
     config = {
         "mcpServers": {
             "notion": {
                 "command": "npx",
                 "args": ["-y", "@notionhq/notion-mcp-server"],
+                "env": {"OPENAPI_MCP_HEADERS": os.getenv("OPENAPI_MCP_HEADERS")},
+            },
+            "slack": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-slack"],
                 "env": {
-                    "OPENAPI_MCP_HEADERS": '{"Authorization": "Bearer ntn_", "Notion-Version": "2022-06-28" }'  # noqa: E501
+                    "SLACK_BOT_TOKEN": os.getenv("SLACK_BOT_TOKEN"),
+                    "SLACK_TEAM_ID": os.getenv("SLACK_TEAM_ID"),
+                    "SLACK_CHANNEL_IDS": os.getenv("SLACK_CHANNEL_IDS"),
                 },
+            },
+            "tavily": {
+                "command": "npx",
+                "args": ["-y", "tavily-mcp@0.2.2"],
+                "env": {"TAVILY_API_KEY": os.getenv("TAVILY_API_KEY")},
             },
         }
     }
