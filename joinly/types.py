@@ -34,12 +34,12 @@ class SpeechWindow:
     """A class to represent an audio window with voice activity detection.
 
     Attributes:
-        pcm (bytes): The raw PCM audio data for the window.
+        data (bytes): The raw PCM audio data for the window.
         start (float): The start time of the window in seconds.
         is_speech (bool): Whether the window contains speech.
     """
 
-    pcm: bytes
+    data: bytes
     start: float
     is_speech: bool
 

@@ -71,7 +71,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
 
 
 mcp = FastMCP(
-    "meeting-agent-mcp",
+    "joinly",
     lifespan=session_lifespan,
     notification_options=NotificationOptions(resources_changed=True),
     capabilities={"resources": {"subscribe": True}},

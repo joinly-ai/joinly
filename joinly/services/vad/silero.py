@@ -5,6 +5,7 @@ from typing import Self
 from silero_vad_lite import SileroVAD as SileroVADModel
 
 from joinly.services.vad.base import BasePaddedVAD
+from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
 
@@ -24,19 +25,20 @@ class SileroVAD(BasePaddedVAD):
             sample_rate: The sample rate of the audio data (default is 16000).
             speech_threshold: The threshold for speech detection (default is 0.5).
         """
-        self._sample_rate = sample_rate
-        self._speech_threshold = speech_threshold
-        self._model: SileroVADModel | None = None
-
-    async def __aenter__(self) -> Self:
-        """Initialize the VAD model and prepare for processing."""
-        if self._sample_rate not in (8000, 16000):
+        if sample_rate not in (8000, 16000):
             msg = (
-                f"Unsupported sample rate {self._sample_rate}. "
+                f"Unsupported sample rate {sample_rate}. "
                 "Supported sample rates are 8000 and 16000."
             )
             raise ValueError(msg)
 
+        self._sample_rate = sample_rate
+        self._speech_threshold = speech_threshold
+        self._model: SileroVADModel | None = None
+        self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
+
+    async def __aenter__(self) -> Self:
+        """Initialize the VAD model and prepare for processing."""
         logger.info("Loading VAD model")
         self._model = await asyncio.to_thread(
             SileroVADModel,
@@ -51,16 +53,6 @@ class SileroVAD(BasePaddedVAD):
         if self._model is not None:
             del self._model
             self._model = None
-
-    @property
-    def sample_rate(self) -> int:
-        """Expected sample rate of the audio data."""
-        return self._sample_rate
-
-    @property
-    def byte_depth(self) -> int:
-        """Expected byte depth of the audio data (e.g., 2 for 16-bit PCM)."""
-        return 4
 
     @property
     def window_size_samples(self) -> int:
