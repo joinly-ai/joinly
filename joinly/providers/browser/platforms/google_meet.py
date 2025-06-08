@@ -38,7 +38,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await page.click("button:has-text('Ask to join')")
 
     async def leave(self, page: Page) -> None:
-        """Leave the Teams meeting.
+        """Leave the Google Meet meeting.
 
         Args:
             page: The Playwright page instance.
@@ -50,7 +50,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await page.wait_for_timeout(500)
 
     async def send_chat_message(self, page: Page, message: str) -> None:
-        """Send a chat message in the Teams meeting.
+        """Send a chat message in the Google Meet meeting.
 
         Args:
             page: The Playwright page instance.
