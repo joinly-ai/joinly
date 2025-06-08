@@ -17,7 +17,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         self,
         page: Page,
         url: str,
-        name: str,  # noqa: ARG002
+        name: str,
         passcode: str | None = None,  # noqa: ARG002
     ) -> None:
         """Join the Google Meet meeting.
@@ -29,3 +29,10 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             passcode: The passcode for the meeting (if required).
         """
         await page.goto(url, wait_until="load", timeout=20000)
+
+        # Wait for and fill in the name field
+        name_field = page.locator("#input-for-name, input[placeholder*='Your name']")
+        await name_field.fill(name)
+
+        # Click the "Join" button
+        await page.click("button:has-text('Ask to join')")
