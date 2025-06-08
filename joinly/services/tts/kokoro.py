@@ -8,8 +8,7 @@ from typing import Self
 from kokoro_onnx import Kokoro
 
 from joinly.core import TTS
-from joinly.types import AudioFormat, IncompatibleAudioFormatError
-from joinly.utils.audio import convert_byte_depth
+from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +21,7 @@ class KokoroTTS(TTS):
         self._voice = voice
         self._model: Kokoro | None = None
         self._sem = asyncio.BoundedSemaphore(1)
+        self.audio_format = AudioFormat(sample_rate=24000, byte_depth=4)
 
     async def __aenter__(self) -> Self:
         """Load the TTS model."""
@@ -49,24 +49,16 @@ class KokoroTTS(TTS):
             del self._model
             self._model = None
 
-    async def stream(
-        self, text: str, audio_format: AudioFormat
-    ) -> AsyncIterator[bytes]:
+    async def stream(self, text: str) -> AsyncIterator[bytes]:
         """Convert text to speech and stream the audio data.
 
         Args:
             text: The text to convert to speech.
-            audio_format: The format of the audio data to be returned.
 
         Yields:
             bytes: The audio data for each text segment.
         """
-        if audio_format.sample_rate != 24000:  # noqa: PLR2004
-            msg = f"Unsupported sample rate {audio_format.sample_rate}, expected 24000"
-            raise IncompatibleAudioFormatError(msg)
-
         audio_data = await self._tts(text)
-        audio_data = convert_byte_depth(audio_data, 4, audio_format.byte_depth)
         yield audio_data
 
     async def _tts(self, text: str) -> bytes:

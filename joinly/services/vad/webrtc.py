@@ -5,6 +5,7 @@ from typing import Self
 import webrtcvad
 
 from joinly.services.vad.base import BasePaddedVAD
+from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,19 @@ class WebrtcVAD(BasePaddedVAD):
                 This determines the size of the audio chunks processed by VAD.
             aggressiveness: The aggressiveness level for VAD (0-3, default is 3).
         """
+        if sample_rate not in (8000, 16000, 32000, 48000):
+            msg = (
+                f"Unsupported sample rate {sample_rate}. "
+                "Supported sample rates are 8000, 16000, 32000, and 48000."
+            )
+            raise ValueError(msg)
+        if window_duration not in (10, 20, 30):
+            msg = (
+                f"Unsupported window duration {window_duration}. "
+                "Supported window durations are 10, 20, and 30 milliseconds."
+            )
+            raise ValueError(msg)
+
         self._sample_rate = sample_rate
         self._window_duration = window_duration
         self._aggressiveness = aggressiveness
@@ -34,25 +48,12 @@ class WebrtcVAD(BasePaddedVAD):
             self._sample_rate * self._window_duration / 1000
         )
         self._vad: webrtcvad.Vad | None = None
+        self.audio_format = AudioFormat(sample_rate=self._sample_rate, byte_depth=2)
         self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> Self:
         """Initialize webrtc VAD."""
-        if self._sample_rate not in (8000, 16000, 32000, 48000):
-            msg = (
-                f"Unsupported sample rate {self._sample_rate}. "
-                "Supported sample rates are 8000, 16000, 32000, and 48000."
-            )
-            raise ValueError(msg)
-        if self._window_duration not in (10, 20, 30):
-            msg = (
-                f"Unsupported window duration {self._window_duration}. "
-                "Supported window durations are 10, 20, and 30 milliseconds."
-            )
-            raise ValueError(msg)
-
         self._vad = webrtcvad.Vad(self._aggressiveness)
-
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -60,16 +61,6 @@ class WebrtcVAD(BasePaddedVAD):
         if self._vad is not None:
             del self._vad
             self._vad = None
-
-    @property
-    def sample_rate(self) -> int:
-        """Expected sample rate of the audio data."""
-        return self._sample_rate
-
-    @property
-    def byte_depth(self) -> int:
-        """Expected byte depth of the audio data (e.g., 2 for 16-bit PCM)."""
-        return 2
 
     @property
     def window_size_samples(self) -> int:

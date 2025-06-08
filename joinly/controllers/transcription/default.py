@@ -7,6 +7,7 @@ from typing import Self
 
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
 from joinly.types import SpeechWindow, Transcript
+from joinly.utils.audio import convert_audio_format
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,15 @@ class DefaultTranscriptionController(TranscriptionController):
         last_speech: float = float("inf")
         dropped_frames: int = 0
 
-        vad_stream = self.vad.stream(self.reader)
+        async def _frame_iterator() -> AsyncIterator[bytes]:
+            """Yield audio frames from the reader."""
+            while True:
+                frame = await self.reader.read()
+                yield convert_audio_format(
+                    frame, self.reader.audio_format, self.vad.audio_format
+                )
+
+        vad_stream = self.vad.stream(_frame_iterator())
         async for frame in vad_stream:
             if frame.is_speech:
                 last_speech = frame.start
@@ -173,21 +182,24 @@ class DefaultTranscriptionController(TranscriptionController):
                     dropped_frames = 0
 
     async def _stt_utterance(self, queue: asyncio.Queue[SpeechWindow | None]) -> None:
-        """Process speech frames for transcription."""
+        """Process speech windows for transcription."""
         end_ts: float | None = None
 
-        async def _frame_iterator() -> AsyncIterator[SpeechWindow]:
-            """Yield frames from the frame queue."""
+        async def _window_iterator() -> AsyncIterator[SpeechWindow]:
+            """Yield windows from the window queue."""
             nonlocal end_ts
             while True:
-                frame = await queue.get()
-                if frame is None:
+                window = await queue.get()
+                if window is None:
                     end_ts = time.monotonic()
                     break
-                yield frame
+                window.data = convert_audio_format(
+                    window.data, self.vad.audio_format, self.stt.audio_format
+                )
+                yield window
 
         seg_count = 0
-        stt_stream = self.stt.stream(_frame_iterator(), self.reader.format)
+        stt_stream = self.stt.stream(_window_iterator())
         async for segment in stt_stream:
             self._transcript.add_segment(segment)
             logger.info(

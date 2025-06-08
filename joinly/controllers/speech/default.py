@@ -9,7 +9,7 @@ from semchunk.semchunk import chunkerify
 
 from joinly.core import TTS, AudioWriter, SpeechController
 from joinly.types import AudioFormat, SpeechInterruptedError
-from joinly.utils.audio import calculate_audio_duration
+from joinly.utils.audio import calculate_audio_duration, convert_audio_format
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,6 @@ class DefaultSpeechController(SpeechController):
         """
         self.job_queue_size = job_queue_size
         self.non_interruptable = non_interruptable
-        self._chunk_dur: float = 0.0
         self._job_queue: asyncio.Queue[SpeakJob] | None = None
         self._worker_task: asyncio.Task | None = None
         self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
@@ -71,9 +70,6 @@ class DefaultSpeechController(SpeechController):
             msg = "Audio queue already started"
             raise RuntimeError(msg)
 
-        self._chunk_dur = self.writer.chunk_size / (
-            self.writer.format.sample_rate * self.writer.format.byte_depth
-        )
         self._job_queue = asyncio.Queue(maxsize=self.job_queue_size)
         self._worker_task = asyncio.create_task(self._worker_loop())
 
@@ -179,7 +175,7 @@ class DefaultSpeechController(SpeechController):
             queue (asyncio.Queue[object]): The queue to put the speech segments into.
         """
         for chunk in chunks:
-            async for segment in self.tts.stream(chunk, self.writer.format):
+            async for segment in self.tts.stream(chunk):
                 await queue.put(segment)
             await queue.put(_CHUNK_END)
         await queue.put(_TEXT_END)
@@ -254,7 +250,13 @@ class DefaultSpeechController(SpeechController):
                     logger.info("Finished speaking text: %s", text)
                     break
 
-                buffer.extend(cast("bytes", segment))
+                buffer.extend(
+                    convert_audio_format(
+                        cast("bytes", segment),
+                        self.tts.audio_format,
+                        self.writer.audio_format,
+                    )
+                )
 
                 # await active speech to not interrupt it
                 if not interrupt and chunk_idx == 0:
@@ -265,7 +267,9 @@ class DefaultSpeechController(SpeechController):
                     if (
                         interruptable
                         and not self.no_speech_event.is_set()
-                        and calculate_audio_duration(byte_size, self.writer.format)
+                        and calculate_audio_duration(
+                            byte_size, self.writer.audio_format
+                        )
                         > self.non_interruptable
                     ):
                         spoken_text = " ".join(
@@ -274,7 +278,7 @@ class DefaultSpeechController(SpeechController):
                                 await self._estimate_spoken_text(
                                     chunks[chunk_idx],
                                     chunk_byte_size,
-                                    self.writer.format,
+                                    self.writer.audio_format,
                                 ),
                             ]
                         )

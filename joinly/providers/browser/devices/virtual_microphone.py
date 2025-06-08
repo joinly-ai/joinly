@@ -48,15 +48,19 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
                 pacing.
             env: Optional environment dictionary to set the audio source name.
         """
-        self.format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
+        self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
         self.pipe_size = pipe_size
         self.fifo_path = fifo_path
         self.source_name: str = (
             source_name if source_name is not None else f"virtmic.{uuid.uuid4()}"
         )
-        self.chunk_size = int(sample_rate * chunk_ms / 1000) * self.format.byte_depth
+        self.chunk_size = (
+            int(sample_rate * chunk_ms / 1000) * self.audio_format.byte_depth
+        )
         self.chunk_ms = (
-            self.chunk_size / (self.format.byte_depth * self.format.sample_rate) * 1000
+            self.chunk_size
+            / (self.audio_format.byte_depth * self.audio_format.sample_rate)
+            * 1000
         )
         self.queue_size = queue_size
         self.max_missed_chunks = max_missed_chunks
@@ -90,7 +94,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             "module-pipe-source",
             f"source_name={self.source_name}",
             f"file={self.fifo_path}",
-            f"rate={self.format.sample_rate}",
+            f"rate={self.audio_format.sample_rate}",
             "format=float32le",
             "channels=1",
             env=self._env,
@@ -121,7 +125,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             self.source_name,
             self._module_id,
             self.fifo_path,
-            self.format.sample_rate,
+            self.audio_format.sample_rate,
         )
 
         return self
@@ -181,17 +185,17 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         else:
             logger.warning("No FIFO file to remove")
 
-    async def write(self, pcm: bytes) -> None:
+    async def write(self, data: bytes) -> None:
         """Write the incoming audio chunk.
 
         Args:
-            pcm (bytes): Audio data to be written.
+            data (bytes): Audio data to be written.
         """
         if self._queue is None:
             msg = "Audio streamer not started"
             raise RuntimeError(msg)
 
-        view = memoryview(pcm)
+        view = memoryview(data)
         while len(view) >= self.chunk_size:
             logger.log(
                 LOGGING_TRACE,
