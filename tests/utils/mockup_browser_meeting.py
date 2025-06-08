@@ -7,7 +7,7 @@ import aiofiles
 import aiohttp.web
 
 
-def _create_meeting_mockup_html() -> str:
+def _create_mockup_meeting_html() -> str:
     """Create the HTML template for audio playback."""
     return """
     <!DOCTYPE html>
@@ -28,7 +28,9 @@ def _create_meeting_mockup_html() -> str:
 
 
 @contextlib.asynccontextmanager
-async def serve_meeting_mockup(speech_file_path: Path) -> AsyncGenerator[str, None]:
+async def serve_mockup_browser_meeting(
+    speech_file_path: Path,
+) -> AsyncGenerator[str, None]:
     """Start a temporary HTTP server serving a meeting page mockup for testing purposes.
 
     This function creates a temporary HTTP server that serves two endpoints:
@@ -60,7 +62,7 @@ async def serve_meeting_mockup(speech_file_path: Path) -> AsyncGenerator[str, No
 
     async def handle_index(_request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response(
-            text=_create_meeting_mockup_html(), content_type="text/html"
+            text=_create_mockup_meeting_html(), content_type="text/html"
         )
 
     async def handle_speech(_request: aiohttp.web.Request) -> aiohttp.web.Response:
