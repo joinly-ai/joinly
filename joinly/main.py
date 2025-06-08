@@ -56,6 +56,7 @@ def _parse_kv(
     help="The host to bind the server to. Only applicable with --server.",
     default="127.0.0.1",
     show_default=True,
+    envvar="JOINLY_SERVER_HOST",
 )
 @click.option(
     "-p",
@@ -64,6 +65,7 @@ def _parse_kv(
     help="The port to bind the server to. Only applicable with --server.",
     default=8000,
     show_default=True,
+    envvar="JOINLY_SERVER_PORT",
 )
 @click.option(
     "--model-name",

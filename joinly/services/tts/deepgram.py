@@ -71,13 +71,13 @@ class DeepgramTTS(TTS):
             self._speak_options.model,
         )
         await self._client.start(self._speak_options)
-        logger.info("Connected to Deepgram TTS service.")
+        logger.info("Connected to Deepgram TTS service")
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the asynchronous context manager."""
-        logger.info("Closing Deepgram TTS service connection.")
+        logger.info("Closing Deepgram TTS service connection")
         await self._client.finish()
         self._queue = None
 
