@@ -96,6 +96,15 @@ def _parse_kv(
     show_default=True,
 )
 @click.option(
+    "--vnc-server",
+    is_flag=True,
+    help="Enable VNC server for the meeting provider. "
+    "Only applicable with --meeting-provider browser. "
+    "This is a shortcut for --meeting-provider-arg vnc_server=True.",
+    default=False,
+    show_default=True,
+)
+@click.option(
     "--vad",
     type=str,
     help="Voice Activity Detection service to use.",
@@ -194,6 +203,7 @@ def cli(  # noqa: PLR0913
     port: int,
     model_name: str,
     model_provider: str | None,
+    vnc_server: bool,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -202,6 +212,11 @@ def cli(  # noqa: PLR0913
     **cli_settings: dict[str, Any],
 ) -> None:
     """Start the meeting session."""
+    if vnc_server:
+        cli_settings["meeting_provider_args"] = cli_settings.get(
+            "meeting_provider_args", {}
+        )
+        cli_settings["meeting_provider_args"]["vnc_server"] = True
     settings = Settings(**cli_settings)  # type: ignore[arg-type]
     set_settings(settings)
 
