@@ -8,29 +8,51 @@ class ProviderNotSupportedError(Exception):
     """Raised when a provider does not support a requested feature."""
 
 
+class IncompatibleAudioFormatError(Exception):
+    """Raised when an audio format is incompatible with the expected or given format."""
+
+
 class SpeechInterruptedError(Exception):
     """Raised when speech is interrupted by detected speech."""
 
 
 @dataclass
-class VADWindow:
-    """A class to represent an audio window with vad."""
+class AudioFormat:
+    """Properties of pcm audio.
 
-    pcm: bytes
+    Attributes:
+        sample_rate (int): The sample rate of the audio stream in Hz.
+        byte_depth (int): The byte depth of the audio stream in bytes.
+    """
+
+    sample_rate: int
+    byte_depth: int
+
+
+@dataclass
+class SpeechWindow:
+    """A class to represent an audio window with voice activity detection.
+
+    Attributes:
+        data (bytes): The raw PCM audio data for the window.
+        start (float): The start time of the window in seconds.
+        is_speech (bool): Whether the window contains speech.
+    """
+
+    data: bytes
     start: float
     is_speech: bool
 
 
-@dataclass
-class SpeechSegment:
-    """A class to represent synthesized speech."""
-
-    text: str
-    pcm: bytes
-
-
 class TranscriptSegment(BaseModel):
-    """A class to represent a segment of a transcript."""
+    """A class to represent a segment of a transcript.
+
+    Attributes:
+        text (str): The text of the segment.
+        start (float): The start time of the segment in seconds.
+        end (float): The end time of the segment in seconds.
+        speaker (str | None): The speaker of the segment, if available.
+    """
 
     text: str
     start: float
@@ -79,17 +101,29 @@ class Transcript(BaseModel):
     @computed_field
     @property
     def segments(self) -> list[TranscriptSegment]:
-        """The segments of the transcript sorted by start time."""
+        """The segments of the transcript sorted by start time.
+
+        Returns:
+            list[TranscriptSegment]: A sorted list of TranscriptSegment objects.
+        """
         return sorted(self._segments, key=lambda s: s.start)
 
     @property
     def text(self) -> str:
-        """Return the full text of the transcript."""
+        """Return the full text of the transcript.
+
+        Returns:
+            str: The concatenated text of all segments in the transcript.
+        """
         return " ".join([segment.text for segment in self.segments])
 
     @property
     def speakers(self) -> set[str]:
-        """Return a set of unique speakers in the transcript."""
+        """Return a set of unique speakers in the transcript.
+
+        Returns:
+            set[str]: A set of unique speaker identifiers.
+        """
         return {
             segment.speaker for segment in self.segments if segment.speaker is not None
         }

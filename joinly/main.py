@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from joinly import client
 from joinly.server import mcp
 from joinly.settings import Settings, set_settings
-from joinly.utils import configure_logging
+from joinly.utils.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 

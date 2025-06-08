@@ -31,6 +31,9 @@ joinly = "joinly.main:cli"
 silero = [
     "silero-vad-lite>=0.2.1",
 ]
+deepgram = [
+    "deepgram-sdk>=4.1.1",
+]
 
 [build-system]
 requires = ["hatchling"]

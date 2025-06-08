@@ -9,7 +9,12 @@ from faster_whisper import WhisperModel
 
 from joinly.core import STT
 from joinly.settings import get_settings
-from joinly.types import TranscriptSegment, VADWindow
+from joinly.types import (
+    AudioFormat,
+    SpeechWindow,
+    TranscriptSegment,
+)
+from joinly.utils.audio import calculate_audio_duration
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +39,12 @@ class WhisperSTT(STT):
                 a segment.
             hotwords: A list of hotwords to improve transcription accuracy.
         """
-        self._model_name = model_name
-        self._min_audio = min_audio
-        self._min_silence = min_silence
+        self.model_name = model_name
+        self.min_audio = min_audio
+        self.min_silence = min_silence
         hotwords_arr = (hotwords or []) + [get_settings().name]
         self._hotwords_str = " ".join(hotwords_arr)
+        self.audio_format = AudioFormat(sample_rate=16000, byte_depth=4)
         self._model: WhisperModel | None = None
         self._sem = asyncio.BoundedSemaphore(1)
 
@@ -48,7 +54,7 @@ class WhisperSTT(STT):
 
         self._model = await asyncio.to_thread(
             WhisperModel,
-            self._model_name,
+            self.model_name,
             device="cpu",
             compute_type="int8",
         )
@@ -64,12 +70,12 @@ class WhisperSTT(STT):
             self._model = None
 
     async def stream(
-        self, windows: AsyncIterator[VADWindow]
+        self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
         """Stream audio windows and yield transcribed segments.
 
         Args:
-            windows: An AsyncIterator of VADWindow objects.
+            windows: An AsyncIterator of SpeechWindow objects.
 
         Yields:
             TranscriptSegment: The transcribed segments.
@@ -86,39 +92,39 @@ class WhisperSTT(STT):
                 item = await queue.get()
                 if item is None:
                     break
-                pcm, start, end = item
-                async for segment in self._transcribe(pcm, start, end):
+                data, start, end = item
+                async for segment in self._transcribe(data, start, end):
                     yield segment
         finally:
             buffer_task.cancel()
 
     async def _buffer_windows(
         self,
-        windows: AsyncIterator[VADWindow],
+        windows: AsyncIterator[SpeechWindow],
         queue: asyncio.Queue[tuple[bytes, float, float] | None],
     ) -> None:
         """Buffer audio windows into the queue.
 
         Args:
-            windows: An AsyncIterator of VADWindow objects.
+            windows: An AsyncIterator of SpeechWindow objects.
             queue: The queue to put buffered audio chunks into.
         """
         buffer = bytearray()
         start: float = -1
         silence_bytes: int = 0
-        min_bytes: int = int(16000 * 4 * self._min_audio)
-        min_silence_bytes: int = int(16000 * 4 * self._min_silence)
+        min_bytes: int = int(16000 * 4 * self.min_audio)
+        min_silence_bytes: int = int(16000 * 4 * self.min_silence)
 
         async for window in windows:
             if window.is_speech and start < 0:
                 start = window.start
 
             if start >= 0:
-                buffer.extend(window.pcm)
+                buffer.extend(window.data)
                 if window.is_speech:
                     silence_bytes = 0
                 else:
-                    silence_bytes += len(window.pcm)
+                    silence_bytes += len(window.data)
 
                 if len(buffer) >= min_bytes and silence_bytes >= min_silence_bytes:
                     logger.debug(
@@ -126,7 +132,7 @@ class WhisperSTT(STT):
                         len(buffer),
                         len(buffer) / (16000 * 4),
                     )
-                    end = window.start + int(len(window.pcm) / (16000 * 4))
+                    end = window.start + int(len(window.data) / (16000 * 4))
                     await queue.put((bytes(buffer), start, end))
                     buffer.clear()
                     start = -1
@@ -138,12 +144,12 @@ class WhisperSTT(STT):
         await queue.put(None)
 
     async def _transcribe(
-        self, pcm: bytes, start: float, end: float | None = None
+        self, data: bytes, start: float, end: float | None = None
     ) -> AsyncIterator[TranscriptSegment]:
         """Process the input audio chunk and yield transcriptions.
 
         Args:
-            pcm: Audio data in bytes format.
+            data: Audio data in bytes format.
             start: The start time of the audio segment.
             end: The end time of the audio segment.
 
@@ -157,11 +163,11 @@ class WhisperSTT(STT):
         async with self._sem:
             logger.info(
                 "Processing audio chunk of size: %d (%.2fs)",
-                len(pcm),
-                len(pcm) / (16000 * 4),
+                len(data),
+                calculate_audio_duration(len(data), self.audio_format),
             )
 
-            audio_segment = np.frombuffer(pcm, dtype=np.float32)
+            audio_segment = np.frombuffer(data, dtype=np.float32)
             segments, _ = await asyncio.to_thread(
                 self._model.transcribe,
                 audio_segment,
