@@ -15,13 +15,16 @@ class BrowserPlatformController(Protocol):
 
     url_pattern: ClassVar[re.Pattern[str]]
 
-    async def join(self, page: Page, url: str, name: str) -> None:
+    async def join(
+        self, page: Page, url: str, name: str, passcode: str | None = None
+    ) -> None:
         """Join a meeting.
 
         Args:
             page: The Playwright Page object to interact with.
             url: The meeting URL to join.
             name: The name to use in the meeting.
+            passcode: The passcode for the meeting (if required).
         """
         ...
 
@@ -48,7 +51,13 @@ class BaseBrowserPlatformController(BrowserPlatformController):
 
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(r"^$")
 
-    async def join(self, page: Page, url: str, name: str) -> None:  # noqa: ARG002
+    async def join(
+        self,
+        page: Page,  # noqa: ARG002
+        url: str,  # noqa: ARG002
+        name: str,  # noqa: ARG002
+        passcode: str | None = None,  # noqa: ARG002
+    ) -> None:
         """Join a meeting at the specified URL."""
         msg = "Provider does not support joining meetings."
         raise ProviderNotSupportedError(msg)

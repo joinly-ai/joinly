@@ -10,23 +10,25 @@ from joinly.types import Transcript
 
 
 async def test_meeting_transcription_mockup(
-    meeting_mockup: dict[str, Any], meeting_session: MeetingSession
+    mockup_browser_meeting: dict[str, Any], meeting_session: MeetingSession
 ) -> None:
-    """Test transcription with meeting mockup."""
+    """Test transcription with mockup browser meeting."""
     await _run_meeting_transcription_test(
         meeting_session=meeting_session,
-        meeting_url=meeting_mockup["url"],
-        ground_truth_transcription=meeting_mockup["transcription"],
-        duration_seconds=meeting_mockup["duration"] + 5,
+        meeting_url=mockup_browser_meeting["url"],
+        ground_truth_transcription=mockup_browser_meeting["transcription"],
+        duration_seconds=mockup_browser_meeting["duration"] + 5,
     )
 
 
-async def test_mcp_meeting_transcription_mockup(meeting_mockup: dict[str, Any]) -> None:
-    """Test transcription with meeting mockup."""
+async def test_mcp_meeting_transcription_mockup(
+    mockup_browser_meeting: dict[str, Any],
+) -> None:
+    """Test transcription with mockup browser meeting."""
     await _run_mcp_meeting_transcription_test(
-        meeting_url=meeting_mockup["url"],
-        ground_truth_transcription=meeting_mockup["transcription"],
-        duration_seconds=meeting_mockup["duration"] + 5,
+        meeting_url=mockup_browser_meeting["url"],
+        ground_truth_transcription=mockup_browser_meeting["transcription"],
+        duration_seconds=mockup_browser_meeting["duration"] + 5,
     )
 
 
