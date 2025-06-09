@@ -46,8 +46,6 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         name_field = page.locator("#input-for-name, input[placeholder*='Name']")
         await name_field.fill(name, timeout=10000)
 
-        await page.wait_for_timeout(2000)
-
         # Click the "Join" button
         await page.click("button:has-text('Join')", timeout=5000)
 
@@ -108,30 +106,6 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             timeout=5000,
         )
 
-    async def unmute(self, page: Page) -> None:
-        """Unmute the microphone in Zoom."""
-        try:
-            mic_button = page.locator("button:has-text('Unmute')")
-            if await mic_button.is_visible(timeout=500):
-                logger.info("Unmute button found, clicking it.")
-                await mic_button.click(timeout=500)
-            else:
-                logger.info("Unmute button not found or not visible.")
-        except Exception:  # noqa: BLE001
-            logger.info("Could not find the Unmute button.")
-
-    async def mute(self, page: Page) -> None:
-        """Mute the microphone in Zoom."""
-        try:
-            mic_button = page.locator("button:has-text('Mute')")
-            if await mic_button.is_visible(timeout=500):
-                logger.info("Mute button found, clicking it.")
-                await mic_button.click(timeout=500)
-            else:
-                logger.debug("Mute button not found or not visible.")
-        except Exception:  # noqa: BLE001
-            logger.info("Could not find the Mute button.")
-
     async def send_chat_message(self, page: Page, message: str) -> None:
         """Send a chat message in Zoom."""
         chat_input = page.locator("div[contenteditable='true']")
@@ -162,6 +136,32 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
         # Send the message
         await page.keyboard.press("Enter")
+
+    async def mute(self, page: Page) -> None:
+        """Mute the microphone in Zoom."""
+        try:
+            mic_button = page.locator(
+                "button:has-text('Mute'):not(:has-text('Unmute'))"
+            )
+            if await mic_button.is_visible(timeout=500):
+                logger.debug("Mute button found, clicking it.")
+                await mic_button.click(timeout=500)
+            else:
+                logger.debug("Mute button not found or not visible.")
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not find the Mute button.")
+
+    async def unmute(self, page: Page) -> None:
+        """Unmute the microphone in Zoom."""
+        try:
+            mic_button = page.locator("button:has-text('Unmute')")
+            if await mic_button.is_visible(timeout=500):
+                logger.debug("Unmute button found, clicking it.")
+                await mic_button.click(timeout=500)
+            else:
+                logger.debug("Unmute button not found or not visible.")
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not find the Unmute button.")
 
     async def start_screen_sharing(self, page: Page) -> None:
         """Start screen sharing in Zoom."""
