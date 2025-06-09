@@ -99,3 +99,11 @@ class MeetingSession:
             message (str): The message to be sent.
         """
         await self._meeting_provider.send_chat_message(message)
+
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        await self._meeting_provider.mute()
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
+        await self._meeting_provider.unmute()

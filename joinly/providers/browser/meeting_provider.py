@@ -292,3 +292,13 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         """
         prompt = f"Send the following message in the meeting chat: {message}"
         await self._invoke_action("send_chat_message", prompt, message=message)
+
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        prompt = "Mute yourself."
+        await self._invoke_action("mute", prompt)
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
+        prompt = "Unmute yourself."
+        await self._invoke_action("unmute", prompt)

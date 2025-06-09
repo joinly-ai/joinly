@@ -24,3 +24,13 @@ class BaseMeetingProvider(MeetingProvider):
         """Send a chat message in the meeting."""
         msg = "Provider does not support sending chat messages."
         raise ProviderNotSupportedError(msg)
+
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        msg = "Provider does not support muting."
+        raise ProviderNotSupportedError(msg)
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
+        msg = "Provider does not support unmuting."
+        raise ProviderNotSupportedError(msg)

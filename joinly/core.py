@@ -181,6 +181,14 @@ class MeetingProvider(Protocol):
         """
         ...
 
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        ...
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
+        ...
+
 
 class TranscriptionController(Protocol):
     """Protocol for controlling transcription processes.

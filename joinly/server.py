@@ -157,5 +157,31 @@ async def send_chat_message(
     return "Sent message."
 
 
+@mcp.tool(
+    "mute_yourself",
+    description="Mute yourself in the meeting.",
+)
+async def mute_yourself(
+    ctx: Context,
+) -> str:
+    """Mute yourself in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.mute()
+    return "Muted yourself."
+
+
+@mcp.tool(
+    "unmute_yourself",
+    description="Unmute yourself in the meeting.",
+)
+async def unmute_yourself(
+    ctx: Context,
+) -> str:
+    """Unmute yourself in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.unmute()
+    return "Unmuted yourself."
+
+
 if __name__ == "__main__":
     mcp.run(transport="streamable-http")

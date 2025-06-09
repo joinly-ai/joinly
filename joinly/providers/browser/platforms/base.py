@@ -45,6 +45,22 @@ class BrowserPlatformController(Protocol):
         """
         ...
 
+    async def mute(self, page: Page) -> None:
+        """Mute yourself in the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+        """
+        ...
+
+    async def unmute(self, page: Page) -> None:
+        """Unmute yourself in the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+        """
+        ...
+
 
 class BaseBrowserPlatformController(BrowserPlatformController):
     """Base class for browser platform controllers for specific platforms."""
@@ -70,4 +86,14 @@ class BaseBrowserPlatformController(BrowserPlatformController):
     async def send_chat_message(self, page: Page, message: str) -> None:  # noqa: ARG002
         """Send a chat message in the meeting."""
         msg = "Provider does not support sending chat messages."
+        raise ProviderNotSupportedError(msg)
+
+    async def mute(self, page: Page) -> None:  # noqa: ARG002
+        """Mute yourself in the meeting."""
+        msg = "Provider does not support muting."
+        raise ProviderNotSupportedError(msg)
+
+    async def unmute(self, page: Page) -> None:  # noqa: ARG002
+        """Unmute yourself in the meeting."""
+        msg = "Provider does not support unmuting."
         raise ProviderNotSupportedError(msg)
