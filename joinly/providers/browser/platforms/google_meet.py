@@ -35,7 +35,9 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await name_field.fill(name)
 
         # Click the "Join" button
-        await page.click("button:has-text('Ask to join')")
+        await page.locator(
+            "button:has-text('Join now'), button:has-text('Ask to join')"
+        ).click()
 
     async def leave(self, page: Page) -> None:
         """Leave the Google Meet meeting.
