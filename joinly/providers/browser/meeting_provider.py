@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING, Self
 
 from joinly.core import AudioReader, AudioWriter
 from joinly.providers.base import BaseMeetingProvider
-from joinly.providers.browser.agents import BrowserAgent, PlaywrightMcpBrowserAgent
+from joinly.providers.browser.agents import (
+    BrowserAgent,
+    BrowserUseBrowserAgent,
+    PlaywrightMcpBrowserAgent,
+)
 from joinly.providers.browser.browser_session import BrowserSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
@@ -32,6 +36,7 @@ PLATFORMS: list[type[BrowserPlatformController]] = [
 ]
 
 AGENTS: dict[str, type[BrowserAgent]] = {
+    "browser-use": BrowserUseBrowserAgent,
     "playwright-mcp": PlaywrightMcpBrowserAgent,
 }
 

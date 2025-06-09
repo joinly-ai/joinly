@@ -8,13 +8,14 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "browser-use>=0.2.5",
     "click>=8.1.8",
     "faster-whisper>=1.1.1",
     "fastmcp>=2.3.3",
     "kokoro-onnx>=0.4.8",
-    "langchain>=0.3.25",
+    "langchain>=0.3.22",
     "langchain-mcp-adapters>=0.0.3",
-    "langchain-openai>=0.3.16",
+    "langchain-openai>=0.3.11",
     "langgraph>=0.4.1",
     "mcp>=1.7.1",
     "numpy>=2.2.4",
