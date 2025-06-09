@@ -5,7 +5,12 @@ from joinly.types import ProviderNotSupportedError
 class BaseMeetingProvider(MeetingProvider):
     """Base class for meeting providers."""
 
-    async def join(self, url: str | None = None, name: str | None = None) -> None:  # noqa: ARG002
+    async def join(
+        self,
+        url: str | None = None,  # noqa: ARG002
+        name: str | None = None,  # noqa: ARG002
+        passcode: str | None = None,  # noqa: ARG002
+    ) -> None:
         """Join a meeting at the specified URL."""
         msg = "Provider does not support joining meetings."
         raise ProviderNotSupportedError(msg)
