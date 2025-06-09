@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable, Coroutine
 
 from joinly.core import (
-    MeetingController,
+    MeetingProvider,
     SpeechController,
     TranscriptionController,
 )
@@ -12,16 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class MeetingSession:
-    """Orchestrates meeting actions on top of controllers."""
+    """Orchestrates meeting actions."""
 
     def __init__(
         self,
-        meeting_controller: MeetingController,
+        meeting_provider: MeetingProvider,
         transcription_controller: TranscriptionController,
         speech_controller: SpeechController,
     ) -> None:
-        """Initialize a meeting session."""
-        self._meeting_controller = meeting_controller
+        """Initialize a meeting session.
+
+        Args:
+            meeting_provider (MeetingProvider): The meeting provider to use.
+            transcription_controller (TranscriptionController): Controller for managing
+                transcriptions.
+            speech_controller (SpeechController): Controller for managing speech
+                actions.
+        """
+        self._meeting_provider = meeting_provider
         self._transcription_controller = transcription_controller
         self._speech_controller = speech_controller
 
@@ -44,7 +52,10 @@ class MeetingSession:
         return self._transcription_controller.add_listener(listener)
 
     async def join_meeting(
-        self, meeting_url: str | None = None, participant_name: str | None = None
+        self,
+        meeting_url: str | None = None,
+        participant_name: str | None = None,
+        passcode: str | None = None,
     ) -> None:
         """Join a meeting using the provided URL.
 
@@ -53,8 +64,12 @@ class MeetingSession:
                 depending on the meeting provider.
             participant_name (str | None): The name of the participant.
                 Defaults to the sessions participant name.
+            passcode (str | None): The password or passcode for the meeting
+                (if required).
         """
-        await self._meeting_controller.join(meeting_url, participant_name)
+        await self._meeting_provider.join(meeting_url, participant_name, passcode)
+        await self._transcription_controller.start()
+        await self._speech_controller.start()
 
     async def leave_meeting(self, *, force: bool = False) -> None:
         """Leave the current meeting.
@@ -65,7 +80,9 @@ class MeetingSession:
         """
         if not force:
             await self._speech_controller.wait_until_no_speech()
-        await self._meeting_controller.leave()
+        await self._meeting_provider.leave()
+        await self._transcription_controller.stop()
+        await self._speech_controller.stop()
 
     async def speak_text(self, text: str) -> None:
         """Speak the provided text using TTS.
@@ -81,4 +98,4 @@ class MeetingSession:
         Args:
             message (str): The message to be sent.
         """
-        await self._meeting_controller.send_chat_message(message)
+        await self._meeting_provider.send_chat_message(message)

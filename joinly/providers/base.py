@@ -1,9 +1,9 @@
-from joinly.core import MeetingController
+from joinly.core import MeetingProvider
 from joinly.types import ProviderNotSupportedError
 
 
-class BaseMeetingController(MeetingController):
-    """Base class for meeting controllers."""
+class BaseMeetingProvider(MeetingProvider):
+    """Base class for meeting providers."""
 
     async def join(self, url: str | None = None, name: str | None = None) -> None:  # noqa: ARG002
         """Join a meeting at the specified URL."""

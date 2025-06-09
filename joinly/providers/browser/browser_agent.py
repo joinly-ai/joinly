@@ -40,7 +40,7 @@ class BrowserAgent:
         self._model_provider: str | None = model_provider
 
         self._agent = None
-        self._exit_stack: AsyncExitStack = AsyncExitStack()
+        self._stack: AsyncExitStack = AsyncExitStack()
 
     async def __aenter__(self) -> Self:
         """Start the MCP client and initialize the agent."""
@@ -52,7 +52,7 @@ class BrowserAgent:
             args += ["--port", str(self._mcp_port)]
         logger.info("Starting MCP client with args: %s", args)
 
-        read, write = await self._exit_stack.enter_async_context(
+        read, write = await self._stack.enter_async_context(
             stdio_client(
                 StdioServerParameters(
                     command="npx",
@@ -62,7 +62,7 @@ class BrowserAgent:
             )
         )
 
-        session = await self._exit_stack.enter_async_context(ClientSession(read, write))
+        session = await self._stack.enter_async_context(ClientSession(read, write))
 
         await session.initialize()
 
@@ -84,7 +84,7 @@ class BrowserAgent:
 
     async def __aexit__(self, *exc: object) -> None:
         """Exit the MCP client."""
-        await self._exit_stack.aclose()
+        await self._stack.aclose()
         self._agent = None
 
     async def run(self, page: Page, task: str) -> None:  # noqa: ARG002

@@ -16,13 +16,20 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         r"^(?:https?://)?(?:[a-z0-9-]+\.)?zoom\.us/"
     )
 
-    async def join(self, page: Page, url: str, name: str) -> None:
+    async def join(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+        passcode: str | None = None,
+    ) -> None:
         """Join the Zoom meeting.
 
         Args:
             page: The Playwright page instance.
             url: The URL of the Zoom meeting.
             name: The name of the participant.
+            passcode: The passcode for the meeting (if required).
         """
         # Convert the standard join URL to the web client format
         if re.search(r"/j/\d+", url):
@@ -46,10 +53,28 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         try:
             join_button = page.locator("button:has-text('Join')")
             if await join_button.is_visible(timeout=2000):
-                logger.info("Join button still present, clicking again.")
+                logger.debug("Join button still present, clicking again.")
+                await join_button.click(timeout=5000)
                 await join_button.click(timeout=5000)
         except Exception as e:  # noqa: BLE001
             logger.debug(f"No additional Join button found or error occurred: {e}")  # noqa: G004
+
+        try:
+            join_button = page.locator("button:has-text('Join')")
+            meeting_passcode = page.locator(
+                "#input-for-passcode, input[placeholder*='Passcode']"
+            )
+            if await meeting_passcode.is_visible(timeout=2000):
+                logger.info("Meeting passcode required.")
+                if passcode is not None:
+                    await meeting_passcode.fill(passcode, timeout=10000)
+                    await join_button.click(timeout=5000)
+                else:
+                    logger.error("Passcode is required but not provided.")
+        except Exception as e:  # noqa: BLE001
+            logger.debug(
+                f"No additional Passcode required button found or error occurred: {e}"  # noqa: G004
+            )
 
     async def leave(self, page: Page) -> None:
         """Leave the Zoom meeting using the icon-based button."""
@@ -70,7 +95,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                 "button:has(span.footer-button-base__button-label:has-text('Leave'))"
             )
             if await leave_button.is_visible(timeout=2000):
-                logger.info("Leave button still present, clicking again.")
+                logger.debug("Leave button still present, clicking again.")
                 await leave_button.click(timeout=5000)
         except Exception as e:  # noqa: BLE001
             logger.debug(f"No additional Leave button found or error occurred: {e}")  # noqa: G004

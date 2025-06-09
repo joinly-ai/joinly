@@ -6,7 +6,8 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Self
 
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
-from joinly.types import Transcript, VADWindow
+from joinly.types import SpeechWindow, Transcript
+from joinly.utils.audio import convert_audio_format
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,12 @@ logger = logging.getLogger(__name__)
 class DefaultTranscriptionController(TranscriptionController):
     """A class to manage the transcription flow."""
 
-    def __init__(  # noqa: PLR0913
+    reader: AudioReader
+    vad: VAD
+    stt: STT
+
+    def __init__(
         self,
-        reader: AudioReader,
-        vad: VAD,
-        stt: STT,
         *,
         utterance_tail_seconds: float = 0.6,
         max_stt_tasks: int = 5,
@@ -27,9 +29,6 @@ class DefaultTranscriptionController(TranscriptionController):
         """Initialize the TranscriptionController.
 
         Args:
-            reader (AudioReader): The audio reader to use for audio input.
-            vad (VAD): The voice activity detection service to use.
-            stt (STT): The speech-to-text service to use for transcription.
             utterance_tail_seconds (float): The duration in seconds to wait after the
                 last detected speech before considering the utterance complete
                 (default is 0.6).
@@ -38,16 +37,12 @@ class DefaultTranscriptionController(TranscriptionController):
             window_queue_size (int): The maximum size of the window queue
                 (default is 100).
         """
-        self._reader = reader
-        self._vad = vad
-        self._stt = stt
         self.utterance_tail_seconds = utterance_tail_seconds
         self.max_stt_tasks = max_stt_tasks
         self.window_queue_size = window_queue_size
         self._transcript = Transcript()
         self._vad_task: asyncio.Task | None = None
-        self._stt_task: asyncio.Task | None = None
-        self._window_queue: asyncio.Queue[VADWindow | None] | None = None
+        self._window_queue: asyncio.Queue[SpeechWindow | None] | None = None
         self._stt_tasks: set[asyncio.Task] = set()
         self._no_speech_event = asyncio.Event()
         self._listeners: set[Callable[[str], Coroutine[None, None, None]]] = set()
@@ -63,31 +58,38 @@ class DefaultTranscriptionController(TranscriptionController):
         return self._no_speech_event
 
     async def __aenter__(self) -> Self:
-        """Set up the transcription controller."""
-        if self._vad_task is not None or self._stt_task is not None:
+        """Enter the transcription controller."""
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        """Clean up the transcription controller."""
+        await self.stop()
+
+    async def start(self) -> None:
+        """Start the transcription controller with the given reader, vad, and stt."""
+        if self._vad_task is not None:
             msg = "Transcription controller already started"
             raise RuntimeError(msg)
 
         self._no_speech_event.clear()
         self._vad_task = asyncio.create_task(self._vad_worker())
 
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        """Clean up the transcription controller."""
+    async def stop(self) -> None:
+        """Stop the transcription controller and clean up resources."""
         if self._vad_task is not None:
             self._vad_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._vad_task
             self._vad_task = None
 
-        if self._stt_task is not None:
-            self._stt_task.cancel()
+        for task in self._stt_tasks:
+            task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._stt_task
-            self._stt_task = None
+                await task
+        self._stt_tasks.clear()
 
         self._window_queue = None
+        self._no_speech_event.clear()
 
     def add_listener(
         self, listener: Callable[[str], Coroutine[None, None, None]]
@@ -113,7 +115,15 @@ class DefaultTranscriptionController(TranscriptionController):
         last_speech: float = float("inf")
         dropped_frames: int = 0
 
-        vad_stream = self._vad.stream(self._reader)
+        async def _frame_iterator() -> AsyncIterator[bytes]:
+            """Yield audio frames from the reader."""
+            while True:
+                frame = await self.reader.read()
+                yield convert_audio_format(
+                    frame, self.reader.audio_format, self.vad.audio_format
+                )
+
+        vad_stream = self.vad.stream(_frame_iterator())
         async for frame in vad_stream:
             if frame.is_speech:
                 last_speech = frame.start
@@ -129,7 +139,7 @@ class DefaultTranscriptionController(TranscriptionController):
                     )
                     continue
 
-                self._window_queue = asyncio.Queue[VADWindow | None](
+                self._window_queue = asyncio.Queue[SpeechWindow | None](
                     maxsize=self.window_queue_size
                 )
                 task = asyncio.create_task(self._stt_utterance(self._window_queue))
@@ -171,22 +181,25 @@ class DefaultTranscriptionController(TranscriptionController):
                         )
                     dropped_frames = 0
 
-    async def _stt_utterance(self, queue: asyncio.Queue[VADWindow | None]) -> None:
-        """Process speech frames for transcription."""
+    async def _stt_utterance(self, queue: asyncio.Queue[SpeechWindow | None]) -> None:
+        """Process speech windows for transcription."""
         end_ts: float | None = None
 
-        async def _frame_iterator() -> AsyncIterator[VADWindow]:
-            """Yield frames from the frame queue."""
+        async def _window_iterator() -> AsyncIterator[SpeechWindow]:
+            """Yield windows from the window queue."""
             nonlocal end_ts
             while True:
-                frame = await queue.get()
-                if frame is None:
+                window = await queue.get()
+                if window is None:
                     end_ts = time.monotonic()
                     break
-                yield frame
+                window.data = convert_audio_format(
+                    window.data, self.vad.audio_format, self.stt.audio_format
+                )
+                yield window
 
         seg_count = 0
-        stt_stream = self._stt.stream(_frame_iterator())
+        stt_stream = self.stt.stream(_window_iterator())
         async for segment in stt_stream:
             self._transcript.add_segment(segment)
             logger.info(

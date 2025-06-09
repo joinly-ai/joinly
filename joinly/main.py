@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from joinly import client
 from joinly.server import mcp
 from joinly.settings import Settings, set_settings
-from joinly.utils import configure_logging
+from joinly.utils.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ def _parse_kv(
     help="The host to bind the server to. Only applicable with --server.",
     default="127.0.0.1",
     show_default=True,
+    envvar="JOINLY_SERVER_HOST",
 )
 @click.option(
     "-p",
@@ -64,6 +65,7 @@ def _parse_kv(
     help="The port to bind the server to. Only applicable with --server.",
     default=8000,
     show_default=True,
+    envvar="JOINLY_SERVER_PORT",
 )
 @click.option(
     "--model-name",
@@ -93,6 +95,15 @@ def _parse_kv(
     type=str,
     help="Meeting provider to use.",
     default="browser",
+    show_default=True,
+)
+@click.option(
+    "--vnc-server",
+    is_flag=True,
+    help="Enable VNC server for the meeting provider. "
+    "Only applicable with --meeting-provider browser. "
+    "This is a shortcut for --meeting-provider-arg vnc_server=True.",
+    default=False,
     show_default=True,
 )
 @click.option(
@@ -194,6 +205,7 @@ def cli(  # noqa: PLR0913
     port: int,
     model_name: str,
     model_provider: str | None,
+    vnc_server: bool,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -202,6 +214,11 @@ def cli(  # noqa: PLR0913
     **cli_settings: dict[str, Any],
 ) -> None:
     """Start the meeting session."""
+    if vnc_server:
+        cli_settings["meeting_provider_args"] = cli_settings.get(
+            "meeting_provider_args", {}
+        )
+        cli_settings["meeting_provider_args"]["vnc_server"] = True
     settings = Settings(**cli_settings)  # type: ignore[arg-type]
     set_settings(settings)
 
