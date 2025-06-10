@@ -54,8 +54,8 @@ def download_kokoro() -> None:
 
         # progress callback used by urlretrieve
         def _reporthook(block_num: int, block_size: int, total_size: int) -> None:
-            if total_size <= 0:
-                return  # total size unknown, skip visual bar
+            if total_size <= 0 or not sys.stdout.isatty():
+                return
             downloaded = block_num * block_size
             ratio = min(downloaded / total_size, 1.0)
             filled = int(bar_len * ratio)
