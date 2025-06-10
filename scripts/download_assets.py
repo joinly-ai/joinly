@@ -35,7 +35,7 @@ def download_kokoro() -> None:
     """Download Kokoro model and voices."""
     logger.info("Downloading Kokoro model and voices")
     file_urls = [
-        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.fp16.onnx",
+        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
         "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
     ]
     cache_dir = (
