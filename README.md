@@ -197,10 +197,10 @@ events
 # :busts_in_silhouette: Contributing
 Contributions are always welcome! Feel free to open issues for bugs or submit a feature request. We'll do our best to review all contributions promptly and help merge your changes.
 
-Please check our [roadmap]((#pencil2-roadmap)) and don't hesitate to reach out to us!
+Please check our [Roadmap](#pencil2-roadmap) and don't hesitate to reach out to us!
 
 # :memo: License
-This project is licensed under the MIT License ‒ see the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the MIT License ‒ see the [LICENSE](LICENSE) file for details.
 
 # :speech_balloon: Getting help
 If you have questions or feedback, or if you would like to chat with the maintainers or other community members, please use the following links:
