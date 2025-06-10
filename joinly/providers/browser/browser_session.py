@@ -34,6 +34,7 @@ class BrowserSession:
         self._pw_context: BrowserContext | None = None
         self._default_page: Page | None = None
         self._pages = list[Page]()
+        self.cdp_url: str | None = None
 
     async def __aenter__(self) -> Self:
         """Start and connect to the Playwright browser."""
@@ -59,7 +60,6 @@ class BrowserSession:
             "--alsa-output-device=pulse",
             f"--alsa-input-device={self._env.get('PULSE_SOURCE')}",
             "--autoplay-policy=no-user-gesture-required",
-            "--disable-extensions",
             "--allow-http-screen-capture",
             "--auto-select-desktop-capture-source=Entire",
             "--enable-usermedia-screen-capturing",
@@ -74,6 +74,7 @@ class BrowserSession:
             "--disable-dev-shm-usage",
             "--disable-gpu-sandbox",
             "--disable-setuid-sandbox",
+            "--disable-blink-features=AutomationControlled",
             "--no-xshm",
             "--force-device-scale-factor=1",
             "--disable-features=TranslateUI,MediaRouter,WebRtcAutomaticGainControl",
@@ -97,7 +98,7 @@ class BrowserSession:
             logger.error(msg)
             raise RuntimeError(msg)
         logger.info("DevTools URL: %s", cdp_endpoint)
-        self._env["CDP_ENDPOINT"] = cdp_endpoint
+        self.cdp_url = cdp_endpoint
 
         self._pw_browser = await self._pw.chromium.connect_over_cdp(cdp_endpoint)
         self._pw_context = self._pw_browser.contexts[0]
@@ -141,7 +142,7 @@ class BrowserSession:
         self._profile_dir = None
         self._default_page = None
         self._pages = []
-        self._env.pop("CDP_ENDPOINT", None)
+        self.cdp_url = None
 
     async def get_page(self) -> Page:
         """Get a new page in the browser context."""

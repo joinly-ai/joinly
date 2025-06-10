@@ -48,6 +48,7 @@ def _parse_kv(
     help="The meeting participant name.",
     default="joinly",
     show_default=True,
+    envvar="JOINLY_NAME",
 )
 @click.option(
     "-h",
@@ -56,6 +57,7 @@ def _parse_kv(
     help="The host to bind the server to. Only applicable with --server.",
     default="127.0.0.1",
     show_default=True,
+    envvar="JOINLY_SERVER_HOST",
 )
 @click.option(
     "-p",
@@ -64,11 +66,12 @@ def _parse_kv(
     help="The port to bind the server to. Only applicable with --server.",
     default=8000,
     show_default=True,
+    envvar="JOINLY_SERVER_PORT",
 )
 @click.option(
     "--model-name",
     type=str,
-    help="The name of the model to use in the client. Only applicable with --client.",
+    help="The name of the model to use in the client and/or browser agent.",
     default="gpt-4o",
     show_default=True,
     envvar="JOINLY_MODEL_NAME",
@@ -76,8 +79,9 @@ def _parse_kv(
 @click.option(
     "--model-provider",
     type=str,
-    help="The provider of the model to use in the client. "
-    "Only applicable with --client.",
+    help="The provider of the model to use in the client and/or browser agent. "
+    "Automatically determined by the model name, "
+    'but e.g. for Azure OpenAI use "azure_openai".',
     default=None,
     envvar="JOINLY_MODEL_PROVIDER",
 )
@@ -85,7 +89,8 @@ def _parse_kv(
     "--name-trigger",
     is_flag=True,
     help="Trigger the agent only when the name is mentioned in the transcript. "
-    "Only applicable with --client.",
+    "Only applicable with --client. Note: it is recommended to change the name "
+    "to a rather common name that has higher chance being transcribed.",
 )
 @click.option(
     "-m",
@@ -96,23 +101,41 @@ def _parse_kv(
     show_default=True,
 )
 @click.option(
+    "--vnc-server",
+    is_flag=True,
+    help="Enable VNC server for the meeting provider. "
+    "Only applicable with --meeting-provider browser. ",
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--browser-agent",
+    type=str,
+    help="Browser agent to use for the meeting provider. "
+    'Defaults to no browser agent, options are: "playwright-mcp". '
+    "Only applicable with --meeting-provider browser.",
+    default=None,
+    show_default=True,
+    envvar="JOINLY_BROWSER_AGENT",
+)
+@click.option(
     "--vad",
     type=str,
-    help="Voice Activity Detection service to use.",
+    help='Voice Activity Detection service to use. Options are: "webrtc", "silero".',
     default="webrtc",
     show_default=True,
 )
 @click.option(
     "--stt",
     type=str,
-    help="Speech-to-Text service to use.",
+    help='Speech-to-Text service to use. Options are: "whisper".',
     default="whisper",
     show_default=True,
 )
 @click.option(
     "--tts",
     type=str,
-    help="Text-to-Speech service to use.",
+    help='Text-to-Speech service to use. Options are: "kokoro", "deepgram".',
     default="kokoro",
     show_default=True,
 )
@@ -194,6 +217,8 @@ def cli(  # noqa: PLR0913
     port: int,
     model_name: str,
     model_provider: str | None,
+    vnc_server: bool,
+    browser_agent: str | None,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -202,6 +227,20 @@ def cli(  # noqa: PLR0913
     **cli_settings: dict[str, Any],
 ) -> None:
     """Start the meeting session."""
+    if cli_settings.get("meeting_provider") == "browser":
+        if vnc_server:
+            cli_settings["meeting_provider_args"] = cli_settings.get(
+                "meeting_provider_args", {}
+            )
+            cli_settings["meeting_provider_args"]["vnc_server"] = True
+        if browser_agent:
+            cli_settings["meeting_provider_args"]["browser_agent"] = browser_agent
+        if not cli_settings.get("meeting_provider_args", {}).get("browser_agent_args"):
+            cli_settings["meeting_provider_args"]["browser_agent_args"] = {
+                "model_name": model_name,
+                "model_provider": model_provider,
+            }
+
     settings = Settings(**cli_settings)  # type: ignore[arg-type]
     set_settings(settings)
 

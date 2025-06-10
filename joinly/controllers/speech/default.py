@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import logging
-import re
 from dataclasses import dataclass, field
 from typing import Any, Self, cast
 
@@ -12,8 +11,6 @@ from joinly.types import AudioFormat, SpeechInterruptedError
 from joinly.utils.audio import calculate_audio_duration, convert_audio_format
 
 logger = logging.getLogger(__name__)
-
-_SENT_RE = re.compile(r"(?<=[.!?])\s+")
 
 _CHUNK_END = object()
 _TEXT_END = object()
@@ -155,14 +152,7 @@ class DefaultSpeechController(SpeechController):
         Returns:
             list[str]: A list of text chunks.
         """
-        chunks_nested: list[list[str]] = await asyncio.to_thread(
-            self._chunker,
-            _SENT_RE.split(text),
-        )  # type: ignore[operator]
-        chunks: list[str] = [chunk for sublist in chunks_nested for chunk in sublist]
-
-        logger.info("Splitted into chunks: %s", chunks)
-
+        chunks: list[str] = await asyncio.to_thread(self._chunker, text)  # type: ignore[operator]
         return chunks
 
     async def _speech_producer(

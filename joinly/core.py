@@ -154,12 +154,18 @@ class MeetingProvider(Protocol):
         """
         ...
 
-    async def join(self, url: str | None = None, name: str | None = None) -> None:
+    async def join(
+        self,
+        url: str | None = None,
+        name: str | None = None,
+        passcode: str | None = None,
+    ) -> None:
         """Join a meeting.
 
         Args:
             url: The meeting URL to join.
             name: The name to use in the meeting.
+            passcode: The meeting password or passcode.
         """
         ...
 
@@ -173,6 +179,14 @@ class MeetingProvider(Protocol):
         Args:
             message: The message to send.
         """
+        ...
+
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        ...
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
         ...
 
 

@@ -52,7 +52,10 @@ class MeetingSession:
         return self._transcription_controller.add_listener(listener)
 
     async def join_meeting(
-        self, meeting_url: str | None = None, participant_name: str | None = None
+        self,
+        meeting_url: str | None = None,
+        participant_name: str | None = None,
+        passcode: str | None = None,
     ) -> None:
         """Join a meeting using the provided URL.
 
@@ -61,8 +64,10 @@ class MeetingSession:
                 depending on the meeting provider.
             participant_name (str | None): The name of the participant.
                 Defaults to the sessions participant name.
+            passcode (str | None): The password or passcode for the meeting
+                (if required).
         """
-        await self._meeting_provider.join(meeting_url, participant_name)
+        await self._meeting_provider.join(meeting_url, participant_name, passcode)
         await self._transcription_controller.start()
         await self._speech_controller.start()
 
@@ -94,3 +99,11 @@ class MeetingSession:
             message (str): The message to be sent.
         """
         await self._meeting_provider.send_chat_message(message)
+
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        await self._meeting_provider.mute()
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
+        await self._meeting_provider.unmute()

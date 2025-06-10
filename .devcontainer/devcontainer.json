@@ -27,7 +27,7 @@
         "UV_LINK_MODE": "copy",
         "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
     },
-    "postCreateCommand": "uv sync --frozen && uv run scripts/bootstrap_assets.py",
+    "postCreateCommand": "uv sync --frozen && uv run scripts/download_assets.py",
     "postStartCommand": "uv run pre-commit install",
     "remoteUser": "vscode"
 }

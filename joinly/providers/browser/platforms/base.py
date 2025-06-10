@@ -15,13 +15,16 @@ class BrowserPlatformController(Protocol):
 
     url_pattern: ClassVar[re.Pattern[str]]
 
-    async def join(self, page: Page, url: str, name: str) -> None:
+    async def join(
+        self, page: Page, url: str, name: str, passcode: str | None = None
+    ) -> None:
         """Join a meeting.
 
         Args:
             page: The Playwright Page object to interact with.
             url: The meeting URL to join.
             name: The name to use in the meeting.
+            passcode: The passcode for the meeting (if required).
         """
         ...
 
@@ -42,13 +45,35 @@ class BrowserPlatformController(Protocol):
         """
         ...
 
+    async def mute(self, page: Page) -> None:
+        """Mute yourself in the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+        """
+        ...
+
+    async def unmute(self, page: Page) -> None:
+        """Unmute yourself in the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+        """
+        ...
+
 
 class BaseBrowserPlatformController(BrowserPlatformController):
     """Base class for browser platform controllers for specific platforms."""
 
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(r"^$")
 
-    async def join(self, page: Page, url: str, name: str) -> None:  # noqa: ARG002
+    async def join(
+        self,
+        page: Page,  # noqa: ARG002
+        url: str,  # noqa: ARG002
+        name: str,  # noqa: ARG002
+        passcode: str | None = None,  # noqa: ARG002
+    ) -> None:
         """Join a meeting at the specified URL."""
         msg = "Provider does not support joining meetings."
         raise ProviderNotSupportedError(msg)
@@ -61,4 +86,14 @@ class BaseBrowserPlatformController(BrowserPlatformController):
     async def send_chat_message(self, page: Page, message: str) -> None:  # noqa: ARG002
         """Send a chat message in the meeting."""
         msg = "Provider does not support sending chat messages."
+        raise ProviderNotSupportedError(msg)
+
+    async def mute(self, page: Page) -> None:  # noqa: ARG002
+        """Mute yourself in the meeting."""
+        msg = "Provider does not support muting."
+        raise ProviderNotSupportedError(msg)
+
+    async def unmute(self, page: Page) -> None:  # noqa: ARG002
+        """Unmute yourself in the meeting."""
+        msg = "Provider does not support unmuting."
         raise ProviderNotSupportedError(msg)

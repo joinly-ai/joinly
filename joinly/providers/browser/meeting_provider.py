@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Self
 
 from joinly.core import AudioReader, AudioWriter
 from joinly.providers.base import BaseMeetingProvider
-from joinly.providers.browser.browser_agent import BrowserAgent
+from joinly.providers.browser.agents import BrowserAgent, PlaywrightMcpBrowserAgent
 from joinly.providers.browser.browser_session import BrowserSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
@@ -31,6 +31,10 @@ PLATFORMS: list[type[BrowserPlatformController]] = [
     ZoomBrowserPlatformController,
 ]
 
+AGENTS: dict[str, type[BrowserAgent]] = {
+    "playwright-mcp": PlaywrightMcpBrowserAgent,
+}
+
 
 class BrowserMeetingProvider(BaseMeetingProvider):
     """A meeting provider that uses a web browser to join meetings."""
@@ -39,26 +43,24 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         self,
         *,
         vnc_server: bool = False,
-        browser_agent: bool = False,
-        model_name: str = "gpt-4o",
-        model_provider: str | None = None,
+        browser_agent: str | None = None,
+        browser_agent_args: dict | None = None,
     ) -> None:
         """Initialize the browser meeting provider.
 
         Args:
             vnc_server (bool): Whether to start a VNC server for the virtual display.
-            browser_agent (bool): Whether to use a browser agent for the meeting
-                controller.
-            model_name (str): The name of the model to use for the browser agent.
-            model_provider (str | None): The provider of the model, otherwise it is
-                automatically determined.
+            browser_agent (str | None): The agent string to use for the browser
+                controller, e.g., "playwright-mcp". If None, no browser agent is used.
+            browser_agent_args (dict | None): Additional arguments for the browser
+                agent.
         """
-        env = os.environ.copy()
-        pulse_server = PulseServer(env=env)
-        virtual_display = VirtualDisplay(env=env, use_vnc_server=vnc_server)
-        self._virtual_speaker = VirtualSpeaker(env=env)
-        self._virtual_microphone = VirtualMicrophone(env=env)
-        self._browser_session = BrowserSession(env=env)
+        self._env = os.environ.copy()
+        pulse_server = PulseServer(env=self._env)
+        virtual_display = VirtualDisplay(env=self._env, use_vnc_server=vnc_server)
+        self._virtual_speaker = VirtualSpeaker(env=self._env)
+        self._virtual_microphone = VirtualMicrophone(env=self._env)
+        self._browser_session = BrowserSession(env=self._env)
         self._services = [
             pulse_server,
             virtual_display,
@@ -67,16 +69,12 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             self._browser_session,
         ]
 
-        self._browser_agent = (
-            BrowserAgent(env=env, model_name=model_name, model_provider=model_provider)
-            if browser_agent
-            else None
-        )
-        if self._browser_agent:
-            self._services.append(self._browser_agent)
+        self._browser_agent_name = browser_agent
+        self._browser_agent_args = browser_agent_args or {}
 
         self._page: Page | None = None
         self._platform_controller: BrowserPlatformController | None = None
+        self._browser_agent: BrowserAgent | None = None
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
 
@@ -95,6 +93,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         try:
             for service in self._services:
                 await self._stack.enter_async_context(service)
+            self._browser_agent = await self._get_browser_agent(
+                self._browser_agent_name, self._browser_agent_args
+            )
         except Exception:
             await self._stack.aclose()
             raise
@@ -103,7 +104,12 @@ class BrowserMeetingProvider(BaseMeetingProvider):
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the context."""
-        await self._stack.aclose()
+        try:
+            if self._browser_agent is not None:
+                await self._browser_agent.close()
+                self._browser_agent = None
+        finally:
+            await self._stack.aclose()
 
     async def _get_platform_controller(
         self, url: str
@@ -122,6 +128,34 @@ class BrowserMeetingProvider(BaseMeetingProvider):
 
         logger.info("No matching platform controller found for URL: %s", url)
         return None
+
+    async def _get_browser_agent(
+        self, agent_name: str | None = None, agent_args: dict | None = None
+    ) -> BrowserAgent | None:
+        """Get the browser agent based on the provided agent name.
+
+        Args:
+            agent_name: The name of the browser agent to use. If None, uses the default
+                agent.
+            agent_args: Additional arguments for the browser agent.
+
+        Returns:
+            The browser agent instance, or None if no agent is specified.
+        """
+        if agent_name is None:
+            return None
+
+        if agent_name not in AGENTS:
+            logger.error("Unsupported browser agent: %s", agent_name)
+            return None
+
+        if self._browser_session.cdp_url is None:
+            logger.error("Browser session is not connected. Cannot create agent.")
+            return None
+
+        agent = AGENTS[agent_name](**agent_args or {})
+        await agent.connect(self._browser_session.cdp_url)
+        return agent
 
     async def _invoke_action(
         self,
@@ -168,19 +202,33 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                         action,
                     )
                 else:
-                    logger.info("Action '%s' performed successfully.", action)
+                    logger.info(
+                        "Action '%s' performed successfully using platform controller.",
+                        action,
+                    )
                     return
 
             if self._browser_agent is not None:
                 try:
-                    await self._browser_agent.run(self._page, prompt)
+                    response = await self._browser_agent.run(prompt)
                 except Exception:
                     logger.exception(
                         "Failed to perform action '%s' using browser agent.", action
                     )
                 else:
-                    logger.info("Action '%s' performed successfully.", action)
-                    return
+                    if response.success:
+                        logger.info(
+                            "Action '%s' performed successfully using "
+                            "browser agent: %s",
+                            action,
+                            response.message,
+                        )
+                        return
+                    logger.error(
+                        "Action '%s' failed using browser agent: %s",
+                        action,
+                        response.message,
+                    )
 
         if self._platform_controller is None and self._browser_agent is None:
             logger.error(
@@ -192,13 +240,19 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         msg = f"Failed to perform action '{action}'."
         raise RuntimeError(msg)
 
-    async def join(self, url: str | None = None, name: str | None = None) -> None:
+    async def join(
+        self,
+        url: str | None = None,
+        name: str | None = None,
+        passcode: str | None = None,
+    ) -> None:
         """Join a meeting.
 
         Args:
             url: The URL of the meeting to join.
             name: The name of the participant. If None, uses the default name from
                 settings.
+            passcode: The password or passcode for the meeting (if required).
         """
         if url is None:
             msg = "Meeting URL is required to join a meeting."
@@ -217,7 +271,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             name = get_settings().name
 
         prompt = f"Join the meeting at {url} as {name}."
-        await self._invoke_action("join", prompt, url=url, name=name)
+        if passcode:
+            prompt += f" If asked, use the passcode: {passcode}."
+        await self._invoke_action("join", prompt, url=url, name=name, passcode=passcode)
 
     async def leave(self) -> None:
         """Leave the current meeting."""
@@ -236,3 +292,13 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         """
         prompt = f"Send the following message in the meeting chat: {message}"
         await self._invoke_action("send_chat_message", prompt, message=message)
+
+    async def mute(self) -> None:
+        """Mute yourself in the meeting."""
+        prompt = "Mute yourself."
+        await self._invoke_action("mute", prompt)
+
+    async def unmute(self) -> None:
+        """Unmute yourself in the meeting."""
+        prompt = "Unmute yourself."
+        await self._invoke_action("unmute", prompt)

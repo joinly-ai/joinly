@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import pathlib
+import re
 from collections.abc import AsyncIterator
 from typing import Self
 
@@ -11,6 +12,8 @@ from joinly.core import TTS
 from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
+
+_CHUNK_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 class KokoroTTS(TTS):
@@ -58,8 +61,11 @@ class KokoroTTS(TTS):
         Yields:
             bytes: The audio data for each text segment.
         """
-        audio_data = await self._tts(text)
-        yield audio_data
+        # further chunk down to speed up response time
+        chunks = _CHUNK_RE.split(text)
+        for chunk in chunks:
+            audio_data = await self._tts(chunk)
+            yield audio_data
 
     async def _tts(self, text: str) -> bytes:
         """Convert text to speech."""

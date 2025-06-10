@@ -775,6 +775,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "deepgram-sdk" },
     { name = "faster-whisper" },
     { name = "fastmcp" },
     { name = "kokoro-onnx" },
@@ -791,9 +792,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-deepgram = [
-    { name = "deepgram-sdk" },
-]
 silero = [
     { name = "silero-vad-lite" },
 ]
@@ -814,7 +812,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
-    { name = "deepgram-sdk", marker = "extra == 'deepgram'", specifier = ">=4.1.1" },
+    { name = "deepgram-sdk", specifier = ">=4.1.1" },
     { name = "faster-whisper", specifier = ">=1.1.1" },
     { name = "fastmcp", specifier = ">=2.3.3" },
     { name = "kokoro-onnx", specifier = ">=0.4.8" },
@@ -830,7 +828,7 @@ requires-dist = [
     { name = "silero-vad-lite", marker = "extra == 'silero'", specifier = ">=0.2.1" },
     { name = "webrtcvad-wheels", specifier = ">=2.0.14" },
 ]
-provides-extras = ["silero", "deepgram"]
+provides-extras = ["silero"]
 
 [package.metadata.requires-dev]
 dev = [

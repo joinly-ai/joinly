@@ -102,10 +102,17 @@ async def join_meeting(
         str | None,
         Field(default=None, description="Name of the participant to join as"),
     ],
+    passcode: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Password or passcode for the meeting (if required)",
+        ),
+    ] = None,
 ) -> str:
     """Join a meeting with the given URL and participant name."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.join_meeting(meeting_url, participant_name)
+    await ms.join_meeting(meeting_url, participant_name, passcode)
     return "Joined meeting."
 
 
@@ -148,6 +155,32 @@ async def send_chat_message(
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.send_chat_message(message)
     return "Sent message."
+
+
+@mcp.tool(
+    "mute_yourself",
+    description="Mute yourself in the meeting.",
+)
+async def mute_yourself(
+    ctx: Context,
+) -> str:
+    """Mute yourself in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.mute()
+    return "Muted yourself."
+
+
+@mcp.tool(
+    "unmute_yourself",
+    description="Unmute yourself in the meeting.",
+)
+async def unmute_yourself(
+    ctx: Context,
+) -> str:
+    """Unmute yourself in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.unmute()
+    return "Unmuted yourself."
 
 
 if __name__ == "__main__":
