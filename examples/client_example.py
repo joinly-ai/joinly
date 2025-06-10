@@ -193,9 +193,9 @@ if __name__ == "__main__":
 
     if len(sys.argv) not in (3, 4, 5):
         logger.error(
-            "Usage: uv run basic_langchain.py <mcp_url> <meeting_url> "
+            "Usage: uv run examples/client_example.py <mcp_url> <meeting_url> "
             "[model_name] [model_provider]\n"
-            "Example: uv run basic_langchain.py http://localhost:8000/mcp/ "
+            "Example: uv run examples/client_example.py http://localhost:8000/mcp/ "
             "https://join.meeting.url gpt-4o azure_openai"
         )
         sys.exit(1)
