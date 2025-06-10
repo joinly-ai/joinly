@@ -39,7 +39,7 @@ class KokoroTTS(TTS):
         logger.info("Loading TTS model from %s", cache_dir)
         self._model = await asyncio.to_thread(
             Kokoro,
-            model_path=str(cache_dir / "kokoro-v1.0.onnx"),
+            model_path=str(cache_dir / "kokoro-v1.0.fp16.onnx"),
             voices_path=str(cache_dir / "voices-v1.0.bin"),
         )
         logger.info("Loaded TTS model")

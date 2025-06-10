@@ -3,6 +3,7 @@ import logging
 import os
 import pathlib
 import subprocess
+import sys
 import urllib.request
 
 from faster_whisper import WhisperModel
@@ -34,18 +35,38 @@ def download_kokoro() -> None:
     """Download Kokoro model and voices."""
     logger.info("Downloading Kokoro model and voices")
     file_urls = [
-        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
+        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.fp16.onnx",
         "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
     ]
     cache_dir = (
         pathlib.Path(os.getenv("XDG_CACHE_HOME", "~/.cache")).expanduser() / "kokoro"
     )
     cache_dir.mkdir(parents=True, exist_ok=True)
+
+    bar_len = 40  # width of the textual bar
+
     for url in file_urls:
         fn = url.split("/")[-1]
         dst = cache_dir / fn
-        if not dst.exists():
-            urllib.request.urlretrieve(url, dst)  # noqa: S310
+        if dst.exists():
+            logger.info("[cached] %s", fn)
+            continue
+
+        # progress callback used by urlretrieve
+        def _reporthook(block_num: int, block_size: int, total_size: int) -> None:
+            if total_size <= 0:
+                return  # total size unknown, skip visual bar
+            downloaded = block_num * block_size
+            ratio = min(downloaded / total_size, 1.0)
+            filled = int(bar_len * ratio)
+            bar = "=" * filled + "-" * (bar_len - filled)
+            sys.stdout.write(f"\r{fn} [{bar}] {ratio * 100:6.2f}%")  # noqa: B023
+            sys.stdout.flush()
+            if downloaded >= total_size:  # ensure newline when done
+                sys.stdout.write("\n")
+
+        urllib.request.urlretrieve(url, dst, _reporthook)  # noqa: S310
+
     logger.info("Kokoro model and voices downloaded successfully")
 
 
