@@ -71,15 +71,15 @@ docker build -t joinly:latest .
 docker run --env-file .env joinly:latest -v --client <MeetingURL>
 ```
 
-# :technologist: Run an example client
-Run an example client with the joinly MCP server.
+# :technologist: Run an external client
+Run an own client outside the container and connect it to the joinly MCP server.
   - Prerequisites: [install uv](https://github.com/astral-sh/uv), create .env file, pull the image, and open two terminals
 
 Start the joinly server in the first terminal.
 ```bash  
 docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:main -v
 ```
-Start the client in the second terminal window.
+Start the example client in the second terminal window.
 
 ```bash  
 git clone https://github.com/joinly-ai/joinly
