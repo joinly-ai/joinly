@@ -188,6 +188,7 @@ async def run(
                     log_chunk(chunk)
 
         finally:
+            logger.info("Leaving meeting")
             with contextlib.suppress(Exception):
                 await joinly_client.call_tool("leave_meeting")
 
