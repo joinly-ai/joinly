@@ -40,14 +40,15 @@
 Any ideas what we should build next? :rocket:
 
 # :zap: Quickstart
-Run joinly via docker with a basic conversational agent client.
+Run joinly via Docker with a basic conversational agent client.
 - Prerequisites: [Docker installation](https://docs.docker.com/engine/install/)
-  
 
-Pull the docker image (~2.3GB since it packages browser and models):
+Clone this repository:
 ```bash
-docker pull ghcr.io/joinly-ai/joinly:main
+git clone https://github.com/joinly-ai/joinly
+cd joinly
 ```
+
 Create a new `.env` file in the project root with your API keys. See [.env.example](.env.example) for complete configuration options including Anthropic (Claude) and Ollama setups. Replace the placeholder values with your actual API keys and adjust the model name as needed.
 
 ```Dotenv
@@ -58,22 +59,19 @@ JOINLY_MODEL_PROVIDER=openai
 OPENAI_API_KEY=your-openai-api-key # USE YOUR API KEY
 ```
 
+Pull the Docker image (~2.3GB since it packages browser and models):
+```bash
+docker pull ghcr.io/joinly-ai/joinly:main
+```
+
 Launch your meeting in Zoom, Google Meet or Teams and let joinly join the meeting:
 ```bash  
 docker run --env-file .env ghcr.io/joinly-ai/joinly:main -v --client <MeetingURL>
 ```
 
-**Or:** Build the docker image from the source code and run it:
-```bash
-git clone https://github.com/joinly-ai/joinly
-cd joinly
-docker build -t joinly:latest .
-docker run --env-file .env joinly:latest -v --client <MeetingURL>
-```
-
 # :technologist: Run an external client
 Run an own client outside the container and connect it to the joinly MCP server.
-  - Prerequisites: [install uv](https://github.com/astral-sh/uv), create .env file, pull the image, and open two terminals
+  - Prerequisites: do the [Quickstart](#zap-quickstart), [install uv](https://github.com/astral-sh/uv), and open two terminals
 
 Start the joinly server in the first terminal.
 ```bash  
@@ -82,8 +80,6 @@ docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:main -v
 Start the example client in the second terminal window.
 
 ```bash  
-git clone https://github.com/joinly-ai/joinly
-cd joinly
 uv run examples/client_example.py --mcp-url http://127.0.0.1:8000/mcp/ <MeetingUrl>
 ```
 
