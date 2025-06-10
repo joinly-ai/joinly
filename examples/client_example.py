@@ -3,7 +3,9 @@
 # dependencies = [
 #     "fastmcp",
 #     "langchain",
+#     "langchain-anthropic",
 #     "langchain-mcp-adapters",
+#     "langchain-ollama",
 #     "langchain-openai",
 #     "langgraph",
 #     "py-dotenv",
