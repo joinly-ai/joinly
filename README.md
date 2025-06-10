@@ -169,7 +169,7 @@ The joinly MCP server provides following tools and resources:
 
 For development we recommend using the development container, which installs all necessary dependencies. To get started, install the DevContainer Extension for Visual Studio Code, open the repository and choose **Reopen in Container**.
 
-![Devcontainer](https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/reopen_in_container.png)
+<img src="https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/reopen_in_container.png" width="500" alt="Reopen in Devcontainer">
 
 The installation can take some time, since it downloads all packages as well as models for Whisper/Kokoro and the Chromium browser. At the end, it automatically invokes the [download_assets.py](scripts/download_assets.py) script. If you see errors like `Missing kokoro-v1.0.onnx`, run this script manually using:
 ```bash
