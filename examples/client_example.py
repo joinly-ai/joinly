@@ -16,6 +16,7 @@ import contextlib
 import datetime
 import json
 import logging
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -196,14 +197,20 @@ if __name__ == "__main__":
             "Usage: uv run examples/client_example.py <mcp_url> <meeting_url> "
             "[model_name] [model_provider]\n"
             "Example: uv run examples/client_example.py http://localhost:8000/mcp/ "
-            "https://join.meeting.url gpt-4o azure_openai"
+            "https://join.meeting.url gpt-4o openai"
         )
         sys.exit(1)
 
     mcp_url = sys.argv[1]
     meeting_url = sys.argv[2]
-    model_name = sys.argv[3] if len(sys.argv) == 4 else "gpt-4o"  # noqa: PLR2004
-    model_provider = sys.argv[4] if len(sys.argv) == 5 else None  # noqa: PLR2004
+    model_name = (
+        sys.argv[3] if len(sys.argv) >= 4 else os.getenv("JOINLY_MODEL_NAME", "gpt-4o")  # noqa: PLR2004
+    )
+    model_provider = (
+        sys.argv[4]
+        if len(sys.argv) >= 5  # noqa: PLR2004
+        else os.getenv("JOINLY_MODEL_PROVIDER", None)
+    )
 
     asyncio.run(
         run(
