@@ -38,7 +38,7 @@ def _parse_kv(
 @click.command()
 @click.option(
     "--server/--client",
-    help="Run the meeting agent as server or client.",
+    help="Run joinly as server or client.",
     default=True,
 )
 @click.option(
@@ -234,7 +234,7 @@ def cli(  # noqa: PLR0913
     logging_plain: bool,
     **cli_settings: dict[str, Any],
 ) -> None:
-    """Start the meeting session."""
+    """Start joinly MCP server or server + client to join meetings."""
     if cli_settings.get("meeting_provider") == "browser":
         if vnc_server:
             cli_settings["meeting_provider_args"] = cli_settings.get(
