@@ -109,6 +109,13 @@ def _parse_kv(
     show_default=True,
 )
 @click.option(
+    "--vnc-server-port",
+    type=int,
+    help="Port for the VNC server. Only applicable with --vnc-server.",
+    default=5900,
+    show_default=True,
+)
+@click.option(
     "--browser-agent",
     type=str,
     help="Browser agent to use for the meeting provider. "
@@ -218,6 +225,7 @@ def cli(  # noqa: PLR0913
     model_name: str,
     model_provider: str | None,
     vnc_server: bool,
+    vnc_server_port: int,
     browser_agent: str | None,
     name_trigger: bool,
     meeting_url: str | None,
@@ -233,6 +241,7 @@ def cli(  # noqa: PLR0913
                 "meeting_provider_args", {}
             )
             cli_settings["meeting_provider_args"]["vnc_server"] = True
+            cli_settings["meeting_provider_args"]["vnc_server_port"] = vnc_server_port
         if browser_agent:
             cli_settings["meeting_provider_args"]["browser_agent"] = browser_agent
         if not cli_settings.get("meeting_provider_args", {}).get("browser_agent_args"):

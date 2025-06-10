@@ -43,6 +43,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         self,
         *,
         vnc_server: bool = False,
+        vnc_server_port: int = 5900,
         browser_agent: str | None = None,
         browser_agent_args: dict | None = None,
     ) -> None:
@@ -50,6 +51,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
 
         Args:
             vnc_server (bool): Whether to start a VNC server for the virtual display.
+            vnc_server_port (int): The port to use for the VNC server.
             browser_agent (str | None): The agent string to use for the browser
                 controller, e.g., "playwright-mcp". If None, no browser agent is used.
             browser_agent_args (dict | None): Additional arguments for the browser
@@ -57,7 +59,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         """
         self._env = os.environ.copy()
         pulse_server = PulseServer(env=self._env)
-        virtual_display = VirtualDisplay(env=self._env, use_vnc_server=vnc_server)
+        virtual_display = VirtualDisplay(
+            env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
+        )
         self._virtual_speaker = VirtualSpeaker(env=self._env)
         self._virtual_microphone = VirtualMicrophone(env=self._env)
         self._browser_session = BrowserSession(env=self._env)
