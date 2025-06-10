@@ -82,7 +82,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 await self._vad_task
             self._vad_task = None
 
-        for task in self._stt_tasks:
+        for task in list(self._stt_tasks):
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
