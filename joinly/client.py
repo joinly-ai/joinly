@@ -135,11 +135,9 @@ async def run(
         "Provide concise, valuable contributions in the meeting. "
         "Give information, answer questions, and fullfill tasks as needed. "
         "You receive real-time transcripts from the ongoing meeting. "
-        "Respond interactively, but avoid unnecessary interruptions. "
-        "Use available tools to assist participants. "
+        "Respond interactively and use available tools to assist participants. "
         "Always finish your response with the 'finish' tool. "
-        "If nothing requires your input, use the 'finish' tool immediately. "
-        "If interrupted mid-response, gracefully conclude and use 'finish'."
+        "If interrupted mid-response, use 'finish'."
     )
 
     client = Client(mcp, message_handler=_message_handler)
