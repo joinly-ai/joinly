@@ -17,9 +17,7 @@ import datetime
 import json
 import logging
 import os
-import sys
 
-from dotenv import load_dotenv
 from fastmcp import Client
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
@@ -85,6 +83,7 @@ async def run(
     meeting_url: str,
     model_name: str,
     model_provider: str | None = None,
+    config: dict | None = None,
 ) -> None:
     """Simple conversational agent for a meeting.
 
@@ -93,6 +92,7 @@ async def run(
         meeting_url: The URL of the meeting to join.
         model_name: The model to use for the agent.
         model_provider: The provider for the model.
+        config: Optional configuration for additional MCP servers.
     """
     transcript_url = AnyUrl("transcript://live")
     transcript_event = asyncio.Event()
@@ -119,20 +119,32 @@ async def run(
         "If interrupted mid-response, gracefully conclude and use 'finish'."
     )
 
-    client = Client(mcp_url, message_handler=_message_handler)
+    # separate joinly client, since fastmcp does not support notifications
+    # in proxy server mode yet (v2.7.0)
+    joinly_client = Client(mcp_url, message_handler=_message_handler)
+    client = Client(config) if config and config.get("mcpServers") else None
 
-    logger.info("Connecting to MCP server at %s", mcp_url)
-    async with client:
-        logger.info("Connected to MCP server")
-        await client.session.subscribe_resource(transcript_url)
+    mcp_servers = list(config.get("mcpServers", {}).keys()) if config else None
+    logger.info(
+        "Connecting to joinly MCP server at %s and following other MCP servers: %s",
+        mcp_url,
+        mcp_servers,
+    )
+    async with joinly_client, client or contextlib.nullcontext():
+        logger.info("Connected to MCP server(s)")
+        await joinly_client.session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
         def finish() -> str:
             """Finish tool to end the turn."""
             return "Finished."
 
-        tools = await load_mcp_tools(client.session)
+        # load tools from joinly and other MCP servers
+        tools = await load_mcp_tools(joinly_client.session)
+        if client:
+            tools.extend(await load_mcp_tools(client.session))
         tools.append(finish)
+
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
         llm_binded = llm.bind_tools(tools, tool_choice="required")
 
@@ -143,7 +155,7 @@ async def run(
         last_time = -1.0
 
         logger.info("Joining meeting at %s", meeting_url)
-        await client.call_tool(
+        await joinly_client.call_tool(
             "join_meeting", {"meeting_url": meeting_url, "participant_name": "joinly"}
         )
         logger.info("Joined meeting successfully")
@@ -152,7 +164,7 @@ async def run(
             while True:
                 await transcript_event.wait()
                 transcript_full = Transcript.model_validate_json(
-                    (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+                    (await joinly_client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
                 )
                 transcript = transcript_after(transcript_full, after=last_time)
                 transcript_event.clear()
@@ -177,12 +189,17 @@ async def run(
 
         finally:
             with contextlib.suppress(Exception):
-                await client.call_tool("leave_meeting")
+                await joinly_client.call_tool("leave_meeting")
 
 
 if __name__ == "__main__":
-    load_dotenv()
+    import argparse
+    from pathlib import Path
+
+    from dotenv import load_dotenv
     from rich.logging import RichHandler
+
+    load_dotenv()
 
     logging.basicConfig(
         level=logging.WARNING,
@@ -192,31 +209,59 @@ if __name__ == "__main__":
     )
     logger.setLevel(logging.INFO)
 
-    if len(sys.argv) not in (3, 4, 5):
-        logger.error(
-            "Usage: uv run examples/client_example.py <mcp_url> <meeting_url> "
-            "[model_name] [model_provider]\n"
-            "Example: uv run examples/client_example.py http://localhost:8000/mcp/ "
-            "https://join.meeting.url gpt-4o openai"
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run a conversational agent for a meeting using joinly.ai. "
+            "Optionally, connect to different MCP servers."
         )
-        sys.exit(1)
-
-    mcp_url = sys.argv[1]
-    meeting_url = sys.argv[2]
-    model_name = (
-        sys.argv[3] if len(sys.argv) >= 4 else os.getenv("JOINLY_MODEL_NAME", "gpt-4o")  # noqa: PLR2004
     )
-    model_provider = (
-        sys.argv[4]
-        if len(sys.argv) >= 5  # noqa: PLR2004
-        else os.getenv("JOINLY_MODEL_PROVIDER", None)
+    parser.add_argument("meeting_url", help="The URL of the meeting to join")
+    parser.add_argument(
+        "--mcp-url",
+        dest="mcp_url",
+        default="http://localhost:8000/mcp/",
+        help="The URL of the joinly MCP server",
     )
+    parser.add_argument(
+        "--model-name",
+        dest="model_name",
+        default=os.getenv("JOINLY_MODEL_NAME", "gpt-4o"),
+        help="The model to use for the agent",
+    )
+    parser.add_argument(
+        "--model-provider",
+        dest="model_provider",
+        default=os.getenv("JOINLY_MODEL_PROVIDER"),
+        help="The provider for the model",
+    )
+    parser.add_argument(
+        "--config",
+        dest="config",
+        type=str,
+        default=None,
+        help=(
+            "Path to a JSON configuration file for additional MCP servers. "
+            "The file should contain configuration like: "
+            '\'{"mcpServers": {"remote": {"url": "https://example.com/mcp"}}}\'. '
+            "See https://gofastmcp.com/clients/client for more details."
+        ),
+    )
+    args = parser.parse_args()
+    config = None
+    if args.config:
+        try:
+            with Path(args.config).open("r") as f:
+                config = json.load(f)
+        except Exception:
+            logger.exception("Failed to load configuration file")
+            args.config = None
 
     asyncio.run(
         run(
-            mcp_url=mcp_url,
-            meeting_url=meeting_url,
-            model_name=model_name,
-            model_provider=model_provider,
+            mcp_url=args.mcp_url,
+            meeting_url=args.meeting_url,
+            model_name=args.model_name,
+            model_provider=args.model_provider,
+            config=config,
         )
     )
