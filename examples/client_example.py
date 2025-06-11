@@ -80,7 +80,7 @@ def log_chunk(chunk) -> None:  # noqa: ANN001
             logger.info("%s: %s", m.name, m.content)
 
 
-async def run(
+async def run(  # noqa: C901, PLR0915
     mcp_url: str,
     meeting_url: str,
     model_name: str,
@@ -136,7 +136,13 @@ async def run(
         mcp_servers,
     )
     async with joinly_client, client or contextlib.nullcontext():
-        logger.info("Connected to MCP server(s)")
+        if joinly_client.is_connected():
+            logger.info("Connected to joinly MCP server")
+        else:
+            logger.error("Failed to connect to joinly MCP server at %s", mcp_url)
+        if client and not client.is_connected():
+            logger.error("Failed to connect to additional MCP servers: %s", mcp_servers)
+
         await joinly_client.session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
