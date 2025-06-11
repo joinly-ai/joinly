@@ -65,21 +65,21 @@ Pull the Docker image (~2.3GB since it packages browser and models):
 docker pull ghcr.io/joinly-ai/joinly:main
 ```
 
-Launch your meeting in Zoom, Google Meet or Teams and let joinly join the meeting:
+Launch your meeting in Zoom, Google Meet or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`:
 ```bash  
 docker run --env-file .env ghcr.io/joinly-ai/joinly:main -v --client <MeetingURL>
 ```
 
 # :technologist: Run an external client
-In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container. Here, we run an external client that implements the agent logic and connect it to the joinly MCP server.
-  - Prerequisites: do the [Quickstart](#zap-quickstart), [install uv](https://github.com/astral-sh/uv), and open two terminals
+In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to control the entire logic of our agent. Here, we run an external client implementation and connect it to the joinly MCP server.
+  - Prerequisites: do the [Quickstart](#zap-quickstart) (except the last command), [install uv](https://github.com/astral-sh/uv), and open two terminals
 
 Start the joinly server in the first terminal (note, we are not using `--client` here and forward port `8000`):
 ```bash  
 docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:main -v
 ```
-While the server is running, start the example client in the second terminal window to connect to it and join a meeting:
 
+While the server is running, start the example client implementation in the second terminal window to connect to it and join a meeting:
 ```bash  
 uv run examples/client_example.py --mcp-url http://127.0.0.1:8000/mcp/ <MeetingUrl>
 ```
