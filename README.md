@@ -13,7 +13,7 @@
   </a>
 </p>
 
-![GitHub Repo stars](https://img.shields.io/github/stars/joinly-ai/joinly?style=flat&logo=github&logoColor=white&label=Stars&labelColor=black&color=7B2CBF) ![GitHub License](https://img.shields.io/github/license/joinly-ai/joinly?style=flat&labelColor=black&color=%237B2CBF) [![Discord](https://img.shields.io/discord/1377431745632145500?style=flat&logo=discord&logoColor=white&label=Discord&labelColor=black&color=7B2CBF)]((https://discord.com/invite/AN5NEBkS4d)) ![GitHub Discussions](https://img.shields.io/github/discussions/joinly-ai/joinly?style=flat&labelColor=black&label=Discussions&color=%237B2CBF)
+[![GitHub Repo stars](https://img.shields.io/github/stars/joinly-ai/joinly?style=flat&logo=github&logoColor=white&label=Stars&labelColor=black&color=7B2CBF)](https://github.com/joinly-ai/joinly) [![GitHub License](https://img.shields.io/github/license/joinly-ai/joinly?style=flat&labelColor=black&color=%237B2CBF)](LICENSE) [![Discord](https://img.shields.io/discord/1377431745632145500?style=flat&logo=discord&logoColor=white&label=Discord&labelColor=black&color=7B2CBF)](https://discord.com/invite/AN5NEBkS4d) [![GitHub Discussions](https://img.shields.io/github/discussions/joinly-ai/joinly?style=flat&labelColor=black&label=Discussions&color=%237B2CBF)](https://github.com/joinly-ai/joinly/discussions)
 
 <h1 align="center">Make your meetings accessible to AI Agents 🤖</h1>
 
