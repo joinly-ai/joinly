@@ -69,7 +69,7 @@ Launch your meeting in Zoom, Google Meet or Teams and let joinly join the meetin
 ```bash  
 docker run --env-file .env ghcr.io/joinly-ai/joinly:main -v --client <MeetingURL>
 ```
-> 🔴 Having trouble getting started? Let's figure it out together on our [discord](https://discord.com/invite/AN5NEBkS4d)! 
+> :red_circle: Having trouble getting started? Let's figure it out together on our [discord](https://discord.com/invite/AN5NEBkS4d)! 
 
 # :technologist: Run an external client
 In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to control the entire logic of our agent. Here, we run an external client implementation and connect it to the joinly MCP server.
