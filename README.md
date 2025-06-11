@@ -54,9 +54,10 @@ Create a new `.env` file in the project root with your API keys. See [.env.examp
 ```Dotenv
 # .env
 # for OpenAI LLM
-JOINLY_MODEL_NAME=gpt-4o # change to your desired model
+# change key and model to your desired one
+JOINLY_MODEL_NAME=gpt-4o
 JOINLY_MODEL_PROVIDER=openai
-OPENAI_API_KEY=your-openai-api-key # USE YOUR API KEY
+OPENAI_API_KEY=your-openai-api-key
 ```
 
 Pull the Docker image (~2.3GB since it packages browser and models):
