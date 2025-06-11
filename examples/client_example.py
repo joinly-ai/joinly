@@ -69,12 +69,12 @@ def log_chunk(chunk) -> None:  # noqa: ANN001
     """Log an update chunk from langgraph."""
     if "agent" in chunk:
         for m in chunk["agent"]["messages"]:
-            for t in m.additional_kwargs.get("tool_calls", []):
+            for t in m.tool_calls or []:
                 args_str = ", ".join(
                     f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                    for k, v in json.loads(t["function"]["arguments"]).items()
+                    for k, v in t.get("args", {}).items()
                 )
-                logger.info("%s: %s", t["function"]["name"], args_str)
+                logger.info("%s: %s", t["name"], args_str)
     if "tools" in chunk:
         for m in chunk["tools"]["messages"]:
             logger.info("%s: %s", m.name, m.content)
@@ -157,7 +157,7 @@ async def run(  # noqa: C901, PLR0915
         tools.append(finish)
 
         tool_node = ToolNode(tools, handle_tool_errors=lambda e: e)
-        llm_binded = llm.bind_tools(tools, tool_choice="required")
+        llm_binded = llm.bind_tools(tools, tool_choice="any")
 
         memory = MemorySaver()
         agent = create_react_agent(
