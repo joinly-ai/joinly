@@ -21,6 +21,7 @@ dependencies = [
     "langgraph>=0.4.1",
     "mcp>=1.7.1",
     "numpy>=2.2.4",
+    "onnxruntime>=1.21.1",
     "playwright>=1.51.0",
     "python-dotenv>=1.1.0",
     "semchunk>=3.2.1",
@@ -29,11 +30,6 @@ dependencies = [
 
 [project.scripts]
 joinly = "joinly.main:cli"
-
-[project.optional-dependencies]
-silero = [
-    "silero-vad-lite>=0.2.1",
-]
 
 [build-system]
 requires = ["hatchling"]

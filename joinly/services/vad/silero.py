@@ -1,8 +1,11 @@
 import asyncio
 import logging
+import os
+import pathlib
 from typing import Self
 
-from silero_vad_lite import SileroVAD as SileroVADModel
+import numpy as np
+import onnxruntime as ort
 
 from joinly.services.vad.base import BasePaddedVAD
 from joinly.types import AudioFormat
@@ -34,33 +37,48 @@ class SileroVAD(BasePaddedVAD):
 
         self._sample_rate = sample_rate
         self._speech_threshold = speech_threshold
-        self._model: SileroVADModel | None = None
+        self._session: ort.InferenceSession | None = None
+        self._state: np.ndarray | None = None
+        self._sr_tensor = np.array([self._sample_rate], dtype=np.int64)
+        self._window_size_samples: int = 512 if sample_rate == 16000 else 256  # noqa: PLR2004
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
 
     async def __aenter__(self) -> Self:
         """Initialize the VAD model and prepare for processing."""
-        logger.info("Loading VAD model")
-        self._model = await asyncio.to_thread(
-            SileroVADModel,
-            self._sample_rate,
+        cache_dir = (
+            pathlib.Path(os.getenv("XDG_CACHE_HOME", "~/.cache")).expanduser()
+            / "silero"
         )
+        if not cache_dir.exists():
+            msg = (
+                f"Silero VAD cache directory {cache_dir} does not exist. "
+                "Make sure to download the model first "
+                "(uv run scripts/download_assets.py)."
+            )
+            raise RuntimeError(msg)
+
+        logger.info("Loading ONNX Silero VAD model")
+        options = ort.SessionOptions()
+        self._session = ort.InferenceSession(
+            str(cache_dir / "silero_vad.onnx"),
+            sess_options=options,
+            providers=["CPUExecutionProvider"],
+        )
+        self._state = np.zeros((2, 1, 128), dtype=np.float32)
         logger.info("Loaded VAD model")
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Clean up resources."""
-        if self._model is not None:
-            del self._model
-            self._model = None
+        if self._session is not None:
+            del self._session
+            self._session = None
 
     @property
     def window_size_samples(self) -> int:
         """Expected window size in samples."""
-        if self._model is None:
-            msg = "VAD model is not initialized"
-            raise RuntimeError(msg)
-        return self._model.window_size_samples
+        return self._window_size_samples
 
     async def is_speech(self, window: bytes) -> bool:
         """Check if the given audio window contains speech.
@@ -71,10 +89,29 @@ class SileroVAD(BasePaddedVAD):
         Returns:
             bool: True if the window contains speech, False otherwise.
         """
-        if self._model is None:
+        if self._session is None or self._state is None:
             msg = "VAD model is not initialized"
             raise RuntimeError(msg)
 
-        speech_prob = self._model.process(window)
+        input_data = np.frombuffer(window, dtype=np.float32)
+        if input_data.shape[0] != self.window_size_samples:
+            msg = (
+                "Window size does not match expected size, expected "
+                f"{self.window_size_samples} samples, got {input_data.shape[0]}."
+            )
+            raise ValueError(msg)
+        input_data = input_data.reshape(1, -1)
+
+        outputs = await asyncio.to_thread(
+            self._session.run,
+            None,
+            {
+                "input": input_data,
+                "state": self._state,
+                "sr": self._sr_tensor,
+            },
+        )
+        speech_prob = float(outputs[0].flat[0])
+        self._state = outputs[1]
 
         return speech_prob > self._speech_threshold
