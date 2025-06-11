@@ -92,6 +92,7 @@ def download_silero_vad() -> None:
     """Download Silero VAD model."""
     file_urls = [
         "https://raw.githubusercontent.com/snakers4/silero-vad/v5.0/files/silero_vad.onnx",
+        "https://raw.githubusercontent.com/snakers4/silero-vad/master/LICENSE",
     ]
     download_assets("silero", file_urls, "Silero VAD v5 ONNX model")
 
@@ -101,6 +102,8 @@ def download_kokoro() -> None:
     file_urls = [
         "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
         "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+        "https://raw.githubusercontent.com/thewh1teagle/kokoro-onnx/main/LICENSE",
+        "https://www.apache.org/licenses/LICENSE-2.0.txt",
     ]
     download_assets("kokoro", file_urls, "Kokoro v1.0 ONNX model and voices")
 
