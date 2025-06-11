@@ -33,7 +33,11 @@ class KokoroTTS(TTS):
             / "kokoro"
         )
         if not cache_dir.exists():
-            msg = f"TTS cache directory {cache_dir} does not exist"
+            msg = (
+                f"Kokoro TTS cache directory {cache_dir} does not exist. "
+                "Make sure to download the model first "
+                "(uv run scripts/download_assets.py)."
+            )
             raise RuntimeError(msg)
 
         logger.info("Loading TTS model from %s", cache_dir)
