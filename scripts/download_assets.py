@@ -31,28 +31,39 @@ def download_whisper() -> None:
     logger.info("Whisper model downloaded successfully")
 
 
-def download_kokoro() -> None:
-    """Download Kokoro model and voices."""
-    logger.info("Downloading Kokoro model and voices")
-    file_urls = [
-        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
-        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
-    ]
+def download_assets(
+    cache_subdir: str,
+    file_urls: list[str],
+    description: str | None = None,
+) -> pathlib.Path:
+    """Download a set of assets into a cache directory.
+
+    Args:
+        cache_subdir: subdirectory under XDG_CACHE_HOME (default ~/.cache) to store
+            assets.
+        file_urls: list of URLs pointing to the files to download.
+        description: optional description for logging (e.g., "Kokoro model and voices").
+
+    Returns:
+        Path to the cache directory containing the downloaded assets.
+    """
+    if description:
+        logger.info("Downloading %s", description)
     cache_dir = (
-        pathlib.Path(os.getenv("XDG_CACHE_HOME", "~/.cache")).expanduser() / "kokoro"
+        pathlib.Path(os.getenv("XDG_CACHE_HOME", "~/.cache")).expanduser()
+        / cache_subdir
     )
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    bar_len = 40  # width of the textual bar
+    bar_len = 40  # width of the textual progress bar
 
     for url in file_urls:
-        fn = url.split("/")[-1]
-        dst = cache_dir / fn
-        if dst.exists():
-            logger.info("[cached] %s", fn)
+        filename = url.rsplit("/", 1)[-1]
+        dest = cache_dir / filename
+        if dest.exists():
+            logger.info("[cached] %s", filename)
             continue
 
-        # progress callback used by urlretrieve
         def _reporthook(block_num: int, block_size: int, total_size: int) -> None:
             if total_size <= 0 or not sys.stdout.isatty():
                 return
@@ -60,14 +71,38 @@ def download_kokoro() -> None:
             ratio = min(downloaded / total_size, 1.0)
             filled = int(bar_len * ratio)
             bar = "=" * filled + "-" * (bar_len - filled)
-            sys.stdout.write(f"\r{fn} [{bar}] {ratio * 100:6.2f}%")  # noqa: B023
+            sys.stdout.write(f"\r{filename} [{bar}] {ratio * 100:6.2f}%")  # noqa: B023
             sys.stdout.flush()
-            if downloaded >= total_size:  # ensure newline when done
+            if downloaded >= total_size:
                 sys.stdout.write("\n")
 
-        urllib.request.urlretrieve(url, dst, _reporthook)  # noqa: S310
+        logger.info("Downloading %s", filename)
+        if not url.startswith(("http:", "https:")):
+            msg = f"URL must start with 'http:' or 'https:'. Got: {url}"
+            raise ValueError(msg)
+        urllib.request.urlretrieve(url, dest, _reporthook)  # noqa: S310
+        logger.info("Saved %s to %s", filename, dest)
 
-    logger.info("Kokoro model and voices downloaded successfully")
+    if description:
+        logger.info("%s downloaded successfully", description)
+    return cache_dir
+
+
+def download_silero_vad() -> None:
+    """Download Silero VAD model."""
+    file_urls = [
+        "https://raw.githubusercontent.com/snakers4/silero-vad/v5.0/files/silero_vad.onnx",
+    ]
+    download_assets("silero", file_urls, "Silero VAD v5 ONNX model")
+
+
+def download_kokoro() -> None:
+    """Download Kokoro model and voices."""
+    file_urls = [
+        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
+        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+    ]
+    download_assets("kokoro", file_urls, "Kokoro v1.0 ONNX model and voices")
 
 
 def parse_args() -> argparse.Namespace:
@@ -76,7 +111,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--assets",
         nargs="*",
-        choices=["playwright", "whisper", "kokoro", "all"],
+        choices=["playwright", "whisper", "kokoro", "silero", "all"],
         default=["all"],
         help="Specify which assets to download (default: all)",
     )
@@ -93,6 +128,7 @@ def main() -> None:
     if "all" in assets:
         download_playwright()
         download_whisper()
+        download_silero_vad()
         download_kokoro()
     else:
         # Download only the specified assets
@@ -100,6 +136,8 @@ def main() -> None:
             download_playwright()
         if "whisper" in assets:
             download_whisper()
+        if "silero" in assets:
+            download_silero_vad()
         if "kokoro" in assets:
             download_kokoro()
 
