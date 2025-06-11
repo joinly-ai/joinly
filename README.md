@@ -71,7 +71,7 @@ docker run --env-file .env ghcr.io/joinly-ai/joinly:main -v --client <MeetingURL
 ```
 
 # :technologist: Run an external client
-In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container. Here, we run an own client that implements the agent logic and connect it to the joinly MCP server.
+In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container. Here, we run an external client that implements the agent logic and connect it to the joinly MCP server.
   - Prerequisites: do the [Quickstart](#zap-quickstart), [install uv](https://github.com/astral-sh/uv), and open two terminals
 
 Start the joinly server in the first terminal (note, we are not using `--client` here and forward port `8000`):
@@ -85,7 +85,7 @@ uv run examples/client_example.py --mcp-url http://127.0.0.1:8000/mcp/ <MeetingU
 ```
 
 ## Add MCP servers to the client
-Add the tools of any MCP server to the example client by providing a JSON configuration. In [config_tavily.json](examples/config_tavily.json), we add the Tavily MCP server for web search functionality (requires `TAVILY_API_KEY`):
+Add the tools of any MCP server to the example client by providing a JSON configuration. In [config_tavily.json](examples/config_tavily.json), we add the Tavily MCP server for web search functionality (requires `TAVILY_API_KEY` in `.env`):
 
 ```json
 {
