@@ -63,11 +63,11 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 USER app
 WORKDIR /app
 
-# Run bootstrap assets script if needed (adjust as required)
+# Run download assets script to package all required assets
 # Note: this makes the image size very large, but has all assets on startup
 RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.py \
     PATH="/app/.venv/bin:${PATH}" \
-    /app/.venv/bin/python download_assets.py --assets playwright whisper kokoro
+    /app/.venv/bin/python download_assets.py --assets playwright whisper silero kokoro
 
 # Set entrypoint
 ENTRYPOINT ["/app/.venv/bin/joinly"]
