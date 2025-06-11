@@ -33,11 +33,13 @@
 
 # :video_camera: Demos
 ### Websearch
-[![Tavily Demo](https://img.youtube.com/vi/MbIDuf7a-_8/0.jpg)](https://www.youtube.com/watch?v=MbIDuf7a-_8)
+[![Tavily Demo](https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/tavily-demo.png)](https://www.youtube.com/watch?v=MbIDuf7a-_8)
+> In this demo video, you can see joinly anwsering simple questions by accessing the latest news from the web.
 ### Notion
-[![Notion Demo](https://img.youtube.com/vi/pvYqZi2KeI0/0.jpg)](https://www.youtube.com/watch?v=pvYqZi2KeI0)
+[![Notion Demo](https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/notion-demo.png)](https://www.youtube.com/watch?v=pvYqZi2KeI0)
+> In this demo video, we connect joinly to our notion via MCP and let it edit the content of a page content live in the meeting. 
 
-Any ideas what we should build next? :rocket:
+Any ideas what we should build next? [Write us!](https://discord.com/invite/AN5NEBkS4d) :rocket:
 
 # :zap: Quickstart
 Run joinly via Docker with a basic conversational agent client.
@@ -173,6 +175,8 @@ The installation can take some time, since it downloads all packages as well as 
 ```bash
 uv run scripts/download_assets.py
 ```
+
+We'd love to see what you are using it for or building with it. Showcase your work on our [discord](https://discord.com/invite/AN5NEBkS4d)
 # :pencil2: Roadmap
 
 **Meeting**
