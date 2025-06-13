@@ -20,14 +20,10 @@ def download_playwright() -> None:
     logger.info("Playwright browser downloaded successfully")
 
 
-def download_whisper() -> None:
+def download_whisper(model_name: str = "tiny.en") -> None:
     """Download Whisper model."""
     logger.info("Downloading Whisper model")
-    _ = WhisperModel(
-        "tiny.en",
-        device="cpu",
-        compute_type="int8",
-    )
+    _ = WhisperModel(model_name)
     logger.info("Whisper model downloaded successfully")
 
 
@@ -118,6 +114,12 @@ def parse_args() -> argparse.Namespace:
         default=["all"],
         help="Specify which assets to download (default: all)",
     )
+    parser.add_argument(
+        "--whisper-model",
+        type=str,
+        default="tiny.en",
+        help="Whisper model to download (default: tiny.en)",
+    )
     return parser.parse_args()
 
 
@@ -127,22 +129,14 @@ def main() -> None:
 
     assets = args.assets
 
-    # If "all" is specified, download all assets
-    if "all" in assets:
+    if "playwright" in assets or "all" in assets:
         download_playwright()
-        download_whisper()
+    if "whisper" in assets or "all" in assets:
+        download_whisper(model_name=args.whisper_model)
+    if "silero" in assets or "all" in assets:
         download_silero_vad()
+    if "kokoro" in assets or "all" in assets:
         download_kokoro()
-    else:
-        # Download only the specified assets
-        if "playwright" in assets:
-            download_playwright()
-        if "whisper" in assets:
-            download_whisper()
-        if "silero" in assets:
-            download_silero_vad()
-        if "kokoro" in assets:
-            download_kokoro()
 
 
 if __name__ == "__main__":
