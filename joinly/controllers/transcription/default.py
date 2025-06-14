@@ -71,7 +71,7 @@ class DefaultTranscriptionController(TranscriptionController):
             msg = "Transcription controller already started"
             raise RuntimeError(msg)
 
-        self._no_speech_event.clear()
+        self._no_speech_event.set()
         self._vad_task = asyncio.create_task(self._vad_worker())
 
     async def stop(self) -> None:
@@ -82,6 +82,8 @@ class DefaultTranscriptionController(TranscriptionController):
                 await self._vad_task
             self._vad_task = None
 
+        self._no_speech_event.clear()
+
         for task in list(self._stt_tasks):
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -89,7 +91,6 @@ class DefaultTranscriptionController(TranscriptionController):
         self._stt_tasks.clear()
 
         self._window_queue = None
-        self._no_speech_event.clear()
 
     def add_listener(
         self, listener: Callable[[str], Coroutine[None, None, None]]
