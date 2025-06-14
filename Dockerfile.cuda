@@ -1,8 +1,15 @@
 # Stage 1: Build environment
-FROM python:3.12-slim AS builder
+FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04 AS builder
 
 ENV UV_LINK_MODE="copy" \
     UV_COMPILE_BYTECODE=1
+
+# Install a Python 3.12 environment
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-venv \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv (fast Python package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -13,26 +20,29 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev --no-editable
+    uv sync --locked --no-install-project --no-dev --no-editable --extra cuda
 
 # Copy app source code
 COPY . /app
 
 # Install application into .venv (non-editable mode)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable --extra cuda
 
 # Stage 2: Runtime image
-FROM python:3.12-slim
+FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
 
 ENV PYTHONUNBUFFERED=1 \
     JOINLY_SERVER_HOST="0.0.0.0" \
-    JOINLY_SERVER_PORT=8000
+    JOINLY_SERVER_PORT=8000 \
+    JOINLY_DEVICE="cuda"
 
 EXPOSE 8000
 
 # Install system dependencies (for audio, video, browser, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-venv \
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -40,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcomposite1 \
     libxrandr2 \
     libgbm1 \
-    libasound2 \
+    libasound2t64 \
     libpangocairo-1.0-0 \
     libxdamage1 \
     libxfixes3 \
@@ -69,7 +79,7 @@ RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.p
     PATH="/app/.venv/bin:${PATH}" \
     /app/.venv/bin/python download_assets.py \
     --assets playwright whisper silero kokoro \
-    --whisper-model tiny.en
+    --whisper-model distil-large-v3
 
 # Set entrypoint
 ENTRYPOINT ["/app/.venv/bin/joinly"]
