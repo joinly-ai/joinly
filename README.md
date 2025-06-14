@@ -150,15 +150,15 @@ uv run joinly --help
 
 We provide a Docker image with CUDA GPU support for running the transcription and TTS models on a GPU. To use it, you need to have the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed and `CUDA >= 12.6`. Then pull the CUDA-enabled image:
 ```bash
-docker pull ghcr.io/joinly-ai/joinly-cuda:main
+docker pull ghcr.io/joinly-ai/joinly-cuda:latest
 ```
 
 Run as client or server with the same commands as above, but use the `joinly-cuda` image and set `--gpus all`:
 ```bash
 # Run as server
-docker run --gpus all --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly-cuda:main -v
+docker run --gpus all --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly-cuda:latest -v
 # Run as client
-docker run --gpus all --env-file .env ghcr.io/joinly-ai/joinly-cuda:main -v --client <MeetingURL>
+docker run --gpus all --env-file .env ghcr.io/joinly-ai/joinly-cuda:latest -v --client <MeetingURL>
 ```
 
 By default, the `joinly` image uses the Whisper model `tiny.en` for transcription, since it still runs reasonably fast on CPU. For `joinly-cuda`, it automatically defaults to `distil-large-v3` for significantly better transcription quality. You can change the model by setting `--stt-arg model_name=<model_name>` (e.g., `--stt-arg model_name=large-v3`). However, only the respective default models are packaged in the docker image, so it will start to download the model weights on container start.
