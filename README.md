@@ -64,12 +64,12 @@ OPENAI_API_KEY=your-openai-api-key
 
 Pull the Docker image (~2.3GB since it packages browser and models):
 ```bash
-docker pull ghcr.io/joinly-ai/joinly:main
+docker pull ghcr.io/joinly-ai/joinly:latest
 ```
 
 Launch your meeting in Zoom, Google Meet or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`:
 ```bash  
-docker run --env-file .env ghcr.io/joinly-ai/joinly:main -v --client <MeetingURL>
+docker run --env-file .env ghcr.io/joinly-ai/joinly:latest -v --client <MeetingURL>
 ```
 > :red_circle: Having trouble getting started? Let's figure it out together on our [discord](https://discord.com/invite/AN5NEBkS4d)! 
 
@@ -79,7 +79,7 @@ In Quickstart, we ran the Docker Container directly as a client using `--client`
 
 Start the joinly server in the first terminal (note, we are not using `--client` here and forward port `8000`):
 ```bash  
-docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:main -v
+docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:latest -v
 ```
 
 While the server is running, start the example client implementation in the second terminal window to connect to it and join a meeting:
