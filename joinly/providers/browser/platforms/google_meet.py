@@ -1,3 +1,4 @@
+import contextlib
 import re
 from typing import ClassVar
 
@@ -45,6 +46,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         Args:
             page: The Playwright page instance.
         """
+        await self._dismiss_dialog(page)
+
         leave_btn = page.get_by_role(
             "button", name=re.compile(r"^leave", re.IGNORECASE)
         )
@@ -57,6 +60,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         Args:
             page: The Playwright page instance.
         """
+        await self._dismiss_dialog(page)
+
         mute_btn = page.get_by_role(
             "button", name=re.compile(r"^turn off mic", re.IGNORECASE)
         )
@@ -69,6 +74,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         Args:
             page: The Playwright page instance.
         """
+        await self._dismiss_dialog(page)
+
         unmute_btn = page.get_by_role(
             "button", name=re.compile(r"^turn on mic", re.IGNORECASE)
         )
@@ -82,6 +89,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
             message: The message to send.
         """
+        await self._dismiss_dialog(page)
+
         chat_input = page.locator("textarea[placeholder*='Send a message']")
         is_chat_visible = await chat_input.is_visible(timeout=1000)
 
@@ -97,3 +106,10 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await chat_input.fill(message)
         await page.wait_for_timeout(500)
         await page.keyboard.press("Enter")
+
+    async def _dismiss_dialog(self, page: Page) -> None:
+        """Dismiss any popups that may appear."""
+        action_btn = page.locator("div[role='dialog'] [data-mdc-dialog-action]")
+        with contextlib.suppress(Exception):
+            if await action_btn.first.is_visible(timeout=100):
+                await action_btn.first.click()
