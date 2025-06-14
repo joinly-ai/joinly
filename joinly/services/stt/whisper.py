@@ -25,7 +25,7 @@ class WhisperSTT(STT):
     def __init__(
         self,
         *,
-        model_name: str = "tiny.en",
+        model_name: str | None = None,
         min_audio: float = 0.4,
         min_silence: float = 0.2,
         hotwords: list[str] | None = None,
@@ -33,13 +33,15 @@ class WhisperSTT(STT):
         """Initialize the WhisperSTT.
 
         Args:
-            model_name: The Whisper model to use (default is "tiny.en").
+            model_name: The Whisper model to use (default is None,
+                where the local "tiny.en" is used).
             min_audio: Minimum audio length (in seconds) to consider for transcription.
             min_silence: Minimum silence length (in seconds) to consider before ending
                 a segment.
             hotwords: A list of hotwords to improve transcription accuracy.
         """
-        self.model_name = model_name
+        self.model_name = model_name or "tiny.en"
+        self._set_model_name = model_name is not None
         self.min_audio = min_audio
         self.min_silence = min_silence
         hotwords_arr = (hotwords or []) + [get_settings().name]
@@ -57,6 +59,7 @@ class WhisperSTT(STT):
             self.model_name,
             device="cpu",
             compute_type="int8",
+            local_files_only=not self._set_model_name,
         )
 
         logger.info("Initialized Whisper model")

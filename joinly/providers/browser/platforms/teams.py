@@ -89,6 +89,28 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         await page.wait_for_timeout(500)
         await page.keyboard.press("Enter")
 
+    async def mute(self, page: Page) -> None:
+        """Mute the participant in the Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        mute_btn = page.get_by_role("button", name=re.compile(r"^mute", re.IGNORECASE))
+        if await mute_btn.is_visible(timeout=2000):
+            await mute_btn.click(timeout=2000)
+
+    async def unmute(self, page: Page) -> None:
+        """Unmute the participant in the Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        unmute_btn = page.get_by_role(
+            "button", name=re.compile(r"^unmute", re.IGNORECASE)
+        )
+        if await unmute_btn.is_visible(timeout=2000):
+            await unmute_btn.click(timeout=2000)
+
     async def start_screen_sharing(self, page: Page) -> None:
         """Start screen sharing in the Teams meeting.
 

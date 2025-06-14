@@ -54,6 +54,30 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await leave_btn.click(timeout=1000)
         await page.wait_for_timeout(500)
 
+    async def mute(self, page: Page) -> None:
+        """Mute the participant in the Google Meet meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        mute_btn = page.get_by_role(
+            "button", name=re.compile(r"^turn off mic", re.IGNORECASE)
+        )
+        if await mute_btn.is_visible(timeout=2000):
+            await mute_btn.click(timeout=2000)
+
+    async def unmute(self, page: Page) -> None:
+        """Unmute the participant in the Google Meet meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        unmute_btn = page.get_by_role(
+            "button", name=re.compile(r"^turn on mic", re.IGNORECASE)
+        )
+        if await unmute_btn.is_visible(timeout=2000):
+            await unmute_btn.click(timeout=2000)
+
     async def send_chat_message(self, page: Page, message: str) -> None:
         """Send a chat message in the Google Meet meeting.
 
