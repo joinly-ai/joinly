@@ -22,7 +22,7 @@ def download_playwright() -> None:
 
 def download_whisper(model_name: str = "tiny.en") -> None:
     """Download Whisper model."""
-    logger.info("Downloading Whisper model")
+    logger.info("Downloading Whisper model %s", model_name)
     _ = WhisperModel(model_name)
     logger.info("Whisper model downloaded successfully")
 
