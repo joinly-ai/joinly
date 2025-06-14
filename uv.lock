@@ -813,7 +813,7 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-gpu = [
+cuda = [
     { name = "onnxruntime-gpu" },
 ]
 
@@ -846,13 +846,13 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.7.1" },
     { name = "numpy", specifier = ">=2.2.4" },
     { name = "onnxruntime", specifier = ">=1.21.1" },
-    { name = "onnxruntime-gpu", marker = "extra == 'gpu'", specifier = ">=1.22.0" },
+    { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.22.0" },
     { name = "playwright", specifier = ">=1.51.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "semchunk", specifier = ">=3.2.1" },
     { name = "webrtcvad-wheels", specifier = ">=2.0.14" },
 ]
-provides-extras = ["gpu"]
+provides-extras = ["cuda"]
 
 [package.metadata.requires-dev]
 dev = [

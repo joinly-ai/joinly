@@ -25,7 +25,8 @@ class WhisperSTT(STT):
     def __init__(
         self,
         *,
-        model_name: str = "tiny.en",
+        model_name: str | None = None,
+        compute_type: str = "auto",
         min_audio: float = 0.4,
         min_silence: float = 0.2,
         hotwords: list[str] | None = None,
@@ -33,13 +34,18 @@ class WhisperSTT(STT):
         """Initialize the WhisperSTT.
 
         Args:
-            model_name: The Whisper model to use (default is "tiny.en").
+            model_name: The Whisper model to use (default is None, where for cpu it
+                uses "tiny.en" and for cuda "large-v3").
+            compute_type: The compute type for the model (default is "auto").
             min_audio: Minimum audio length (in seconds) to consider for transcription.
             min_silence: Minimum silence length (in seconds) to consider before ending
                 a segment.
             hotwords: A list of hotwords to improve transcription accuracy.
         """
-        self.model_name = model_name
+        self.model_name = model_name or (
+            "tiny.en" if get_settings().device == "cpu" else "large-v3"
+        )
+        self.compute_type = compute_type
         self.min_audio = min_audio
         self.min_silence = min_silence
         hotwords_arr = (hotwords or []) + [get_settings().name]
@@ -50,13 +56,18 @@ class WhisperSTT(STT):
 
     async def __aenter__(self) -> Self:
         """Initialize the Whisper model."""
-        logger.info("Initializing Whisper model")
+        logger.info(
+            "Initializing Whisper model: %s, device: %s, compute type: %s",
+            self.model_name,
+            get_settings().device,
+            self.compute_type,
+        )
 
         self._model = await asyncio.to_thread(
             WhisperModel,
             self.model_name,
-            device="cpu",
-            compute_type="int8",
+            device=get_settings().device,
+            compute_type=self.compute_type,
         )
 
         logger.info("Initialized Whisper model")

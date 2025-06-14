@@ -32,7 +32,7 @@ dependencies = [
 joinly = "joinly.main:cli"
 
 [project.optional-dependencies]
-gpu = [
+cuda = [
     "onnxruntime-gpu>=1.22.0",
 ]
 
