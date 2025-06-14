@@ -60,6 +60,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         Args:
             page: The Playwright page instance.
         """
+        await self._dismiss_dialog(page)
+
         mute_btn = page.get_by_role(
             "button", name=re.compile(r"^turn off mic", re.IGNORECASE)
         )
@@ -72,6 +74,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         Args:
             page: The Playwright page instance.
         """
+        await self._dismiss_dialog(page)
+
         unmute_btn = page.get_by_role(
             "button", name=re.compile(r"^turn on mic", re.IGNORECASE)
         )
