@@ -165,7 +165,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
     async def _invoke_action(
         self,
         action: str,
-        prompt: str,
+        prompt: str | None = None,
         *args: object,
         **kwargs: object,
     ) -> None:
@@ -177,7 +177,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
 
         Args:
             action: The action to invoke.
-            prompt: The prompt for the action.
+            prompt: The prompt for the action. If None, no browser agent is used.
             *args: Positional arguments for the action.
             **kwargs: Keyword arguments for the action.
 
@@ -213,7 +213,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     )
                     return
 
-            if self._browser_agent is not None:
+            if self._browser_agent is not None and prompt is not None:
                 try:
                     response = await self._browser_agent.run(prompt)
                 except Exception:
