@@ -2,11 +2,15 @@ import asyncio
 import logging
 import os
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, overload
 
 from joinly.core import AudioReader, AudioWriter
 from joinly.providers.base import BaseMeetingProvider
-from joinly.providers.browser.agents import BrowserAgent, PlaywrightMcpBrowserAgent
+from joinly.providers.browser.agents import (
+    BrowserAgent,
+    PlaywrightMcpBrowserAgent,
+    TOutputModel,
+)
 from joinly.providers.browser.browser_session import BrowserSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
@@ -161,13 +165,23 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         await agent.connect(self._browser_session.cdp_url)
         return agent
 
+    @overload
     async def _invoke_action(
+        self, action: str, prompt: str, output_type: type[TOutputModel], **args: object
+    ) -> TOutputModel: ...
+
+    @overload
+    async def _invoke_action(
+        self, action: str, prompt: str, output_type: None = None, **args: object
+    ) -> None: ...
+
+    async def _invoke_action(  # noqa: C901
         self,
         action: str,
         prompt: str,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
+        output_type: type[TOutputModel] | None = None,
+        **args: object,
+    ) -> TOutputModel | None:
         """Invoke an action using the platform controller or browser agent.
 
         This method is used to perform actions in the browser. First tries to use the
@@ -177,12 +191,17 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         Args:
             action: The action to invoke.
             prompt: The prompt for the action.
-            *args: Positional arguments for the action.
-            **kwargs: Keyword arguments for the action.
+            output_type: The expected output type of the action. If None, no output is
+                expected.
+            **args: Keyword arguments for the action.
 
         Raises:
             RuntimeError: If neither the platform controller nor the browser agent is
                 initialized, or if the action fails.
+
+        Returns:
+            TOutputModel | None: The output of the action if successful and output_type
+                is not None, otherwise None.
         """
         if self._page is None or self._page.is_closed():
             msg = "Meeting not joined or already left."
@@ -190,6 +209,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             raise RuntimeError(msg)
 
         async with self._lock:
+            # try using platform controller first (if available)
             if self._platform_controller is not None:
                 logger.info(
                     "Using platform controller %s to perform action '%s'.",
@@ -197,9 +217,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     action,
                 )
                 try:
-                    await getattr(self._platform_controller, action)(
-                        self._page, *args, **kwargs
-                    )
+                    output: TOutputModel = await getattr(
+                        self._platform_controller, action
+                    )(self._page, **args)
                 except Exception:
                     logger.exception(
                         "Failed to perform action '%s' using platform controller.",
@@ -210,11 +230,12 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                         "Action '%s' performed successfully using platform controller.",
                         action,
                     )
-                    return
+                    return output
 
+            # fallback to browser agent
             if self._browser_agent is not None:
                 try:
-                    response = await self._browser_agent.run(prompt)
+                    response = await self._browser_agent.run(prompt, output_type)
                 except Exception:
                     logger.exception(
                         "Failed to perform action '%s' using browser agent.", action
@@ -227,16 +248,25 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                             action,
                             response.message,
                         )
-                        return
-                    logger.error(
-                        "Action '%s' failed using browser agent: %s",
-                        action,
-                        response.message,
-                    )
+                        if output_type is not None and response.output is None:
+                            logger.error(
+                                "Action '%s' succeeded using browser agent but did not "
+                                "return expected output type %s.",
+                                action,
+                                output_type.__name__,
+                            )
+                        else:
+                            return response.output
+                    else:
+                        logger.error(
+                            "Action '%s' failed using browser agent: %s",
+                            action,
+                            response.message,
+                        )
 
         if self._platform_controller is None and self._browser_agent is None:
             logger.error(
-                "Neither platform controller nor browser agent is available. "
+                "Neither platform controller nor browser agent is available/succeeded. "
                 "Cannot perform action: %s.",
                 action,
             )
