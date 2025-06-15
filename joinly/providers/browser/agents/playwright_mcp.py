@@ -12,7 +12,7 @@ from langgraph.prebuilt import create_react_agent
 from joinly.providers.browser.agents.base import (
     BrowserAgent,
     BrowserAgentTaskResponse,
-    T,
+    TOutputModel,
 )
 
 if TYPE_CHECKING:
@@ -80,8 +80,8 @@ class PlaywrightMcpBrowserAgent(BrowserAgent):
         self._agent = None
 
     async def run(
-        self, task: str, output_type: T | None = None
-    ) -> BrowserAgentTaskResponse[T]:
+        self, task: str, output_type: type[TOutputModel] | None = None
+    ) -> BrowserAgentTaskResponse[TOutputModel]:
         """Run the agent with the given task.
 
         Args:
@@ -101,15 +101,15 @@ class PlaywrightMcpBrowserAgent(BrowserAgent):
             self._llm,
             self._tools,
             prompt=PROMPT,
-            response_format=BrowserAgentTaskResponse[T],
+            response_format=BrowserAgentTaskResponse[TOutputModel],
         )
 
         task_prompt = f"Task: {task}"
         output = await agent.ainvoke({"messages": task_prompt})
-        response: BrowserAgentTaskResponse[T] = output["structured_response"]
+        response: BrowserAgentTaskResponse[TOutputModel] = output["structured_response"]
 
         if response.output is None and output_type is not None and response.success:
-            response = BrowserAgentTaskResponse[T](
+            response = BrowserAgentTaskResponse[TOutputModel](
                 success=False,
                 message="No output provided, but output type was expected.",
             )
