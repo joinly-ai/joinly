@@ -2,11 +2,13 @@ import asyncio
 import contextlib
 import logging
 import re
+from datetime import datetime
 from typing import ClassVar
 
 from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
+from joinly.types import MeetingChatHistory, MeetingChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,38 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         await chat_input.fill(message)
         await page.wait_for_timeout(500)
         await page.keyboard.press("Enter")
+
+    async def get_chat_history(self, page: Page) -> MeetingChatHistory:
+        """Get the chat history from the Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
+        """
+        await self._open_chat(page)
+
+        messages: list[MeetingChatMessage] = []
+
+        chat_items = await page.locator('[data-tid="chat-pane-item"]').all()
+        for el in chat_items:
+            content_el = el.locator('[data-tid="chat-pane-message"]')
+            if not await content_el.count():
+                continue
+            text = (await content_el.first.inner_text()).strip()
+            dt_attr = await el.locator("time[datetime]").first.get_attribute("datetime")
+            ts = (
+                datetime.fromisoformat(dt_attr.rstrip("Z")).timestamp()
+                if dt_attr
+                else None
+            )
+            author_locator = el.locator('[data-tid="message-author-name"]').first
+            sender_text = await author_locator.text_content() or ""
+            sender = sender_text.strip() or None
+            messages.append(MeetingChatMessage(text=text, timestamp=ts, sender=sender))
+
+        return MeetingChatHistory(messages=messages)
 
     async def mute(self, page: Page) -> None:
         """Mute the participant in the Teams meeting.
