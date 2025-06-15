@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from joinly.core import AudioReader, AudioWriter
 from joinly.providers.base import BaseMeetingProvider
@@ -168,7 +168,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         prompt: str | None = None,
         *args: object,
         **kwargs: object,
-    ) -> None:
+    ) -> Any:  # noqa: ANN401
         """Invoke an action using the platform controller or browser agent.
 
         This method is used to perform actions in the browser. First tries to use the
@@ -198,7 +198,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     action,
                 )
                 try:
-                    await getattr(self._platform_controller, action)(
+                    result = await getattr(self._platform_controller, action)(
                         self._page, *args, **kwargs
                     )
                 except Exception:
@@ -211,7 +211,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                         "Action '%s' performed successfully using platform controller.",
                         action,
                     )
-                    return
+                    return result
 
             if self._browser_agent is not None and prompt is not None:
                 try:
@@ -228,7 +228,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                             action,
                             response.message,
                         )
-                        return
+                        return None
                     logger.error(
                         "Action '%s' failed using browser agent: %s",
                         action,
@@ -304,8 +304,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         Returns:
             MeetingChatHistory: The chat history of the meeting.
         """
-        prompt = "Get the chat history from the meeting."
-        return await self._invoke_action("get_chat_history", prompt, MeetingChatHistory)
+        return await self._invoke_action("get_chat_history")
 
     async def mute(self) -> None:
         """Mute yourself in the meeting."""
