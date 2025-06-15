@@ -6,7 +6,7 @@ from joinly.core import (
     SpeechController,
     TranscriptionController,
 )
-from joinly.types import Transcript
+from joinly.types import MeetingChatHistory, Transcript
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,14 @@ class MeetingSession:
             message (str): The message to be sent.
         """
         await self._meeting_provider.send_chat_message(message)
+
+    async def get_chat_history(self) -> MeetingChatHistory:
+        """Get the chat history from the meeting.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
+        """
+        return await self._meeting_provider.get_chat_history()
 
     async def mute(self) -> None:
         """Mute yourself in the meeting."""

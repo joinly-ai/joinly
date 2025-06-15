@@ -19,6 +19,7 @@ from joinly.providers.browser.platforms import (
     ZoomBrowserPlatformController,
 )
 from joinly.settings import get_settings
+from joinly.types import MeetingChatHistory
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
@@ -296,6 +297,15 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         """
         prompt = f"Send the following message in the meeting chat: {message}"
         await self._invoke_action("send_chat_message", prompt, message=message)
+
+    async def get_chat_history(self) -> MeetingChatHistory:
+        """Get the chat history from the meeting.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
+        """
+        prompt = "Get the chat history from the meeting."
+        return await self._invoke_action("get_chat_history", prompt, MeetingChatHistory)
 
     async def mute(self) -> None:
         """Mute yourself in the meeting."""

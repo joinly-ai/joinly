@@ -10,7 +10,7 @@ from pydantic import AnyUrl, Field
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
-from joinly.types import Transcript
+from joinly.types import MeetingChatHistory, Transcript
 
 if TYPE_CHECKING:
     from mcp import ServerSession
@@ -155,6 +155,18 @@ async def send_chat_message(
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.send_chat_message(message)
     return "Sent message."
+
+
+@mcp.tool(
+    "get_chat_history",
+    description="Get the chat history from the meeting.",
+)
+async def get_chat_history(
+    ctx: Context,
+) -> MeetingChatHistory:
+    """Get the chat history from the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    return await ms.get_chat_history()
 
 
 @mcp.tool(
