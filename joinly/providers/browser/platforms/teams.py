@@ -73,17 +73,9 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
             message: The message to send.
         """
+        await self._open_chat(page)
+
         chat_input = page.locator("div[contenteditable='true']")
-        is_chat_visible = await chat_input.is_visible(timeout=1000)
-
-        if not is_chat_visible:
-            chat_button = page.get_by_role(
-                "button", name=re.compile(r"^chat", re.IGNORECASE)
-            )
-            await chat_button.wait_for(timeout=2000)
-            await chat_button.click()
-            await page.wait_for_timeout(1000)
-
         await chat_input.wait_for(timeout=2000)
         await chat_input.fill(message)
         await page.wait_for_timeout(500)
@@ -129,3 +121,16 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         )
         await screen_share_btn.wait_for(timeout=2000)
         await screen_share_btn.click(timeout=2000)
+
+    async def _open_chat(self, page: Page) -> None:
+        """Open the chat in the Teams meeting."""
+        chat_input = page.locator("div[contenteditable='true']")
+        is_chat_visible = await chat_input.is_visible(timeout=1000)
+
+        if not is_chat_visible:
+            chat_button = page.get_by_role(
+                "button", name=re.compile(r"^chat", re.IGNORECASE)
+            )
+            await chat_button.wait_for(timeout=2000)
+            await chat_button.click()
+            await page.wait_for_timeout(1000)
