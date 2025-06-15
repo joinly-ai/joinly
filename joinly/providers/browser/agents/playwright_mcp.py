@@ -47,6 +47,7 @@ class PlaywrightMcpBrowserAgent(BrowserAgent):
         self._model_name: str = model_name
         self._model_provider: str | None = model_provider
 
+        self._client: Client | None = None
         self._llm: BaseChatModel | None = None
         self._tools: list[BaseTool] | None = None
         self._stack: AsyncExitStack = AsyncExitStack()
@@ -62,14 +63,18 @@ class PlaywrightMcpBrowserAgent(BrowserAgent):
             raise RuntimeError(msg)
 
         logger.info("Starting playwright-mcp with CDP URL: %s", cdp_url)
-        args = ["--caps", "core,wait", "--cdp-endpoint", cdp_url]
-        client = Client(NpxStdioTransport("@playwright/mcp", args=args))
-        await self._stack.enter_async_context(client)
+        args = ["--caps", "core,wait,tabs", "--cdp-endpoint", cdp_url]
+        self._client = Client(NpxStdioTransport("@playwright/mcp", args=args))
+        await self._stack.enter_async_context(self._client)
 
         self._llm = init_chat_model(
             self._model_name, model_provider=self._model_provider, temperature=0.0
         )
-        self._tools = await load_mcp_tools(client.session)
+        self._tools = [
+            tool
+            for tool in await load_mcp_tools(self._client.session)
+            if "tab" not in tool.name
+        ]
 
         logger.info("Playwright-mcp agent initialized successfully.")
 
@@ -77,25 +82,30 @@ class PlaywrightMcpBrowserAgent(BrowserAgent):
         """Exit the MCP client."""
         with contextlib.suppress(Exception):
             await self._stack.aclose()
-        self._agent = None
+        self._client = None
+        self._llm = None
+        self._tools = None
 
     async def run(
-        self, task: str, output_type: type[TOutputModel] | None = None
+        self, task: str, output_type: type[TOutputModel]
     ) -> BrowserAgentTaskResponse[TOutputModel]:
         """Run the agent with the given task.
 
         Args:
             task (str): The task to run the agent with.
-            output_type (BaseModel | None): An optional output model to validate the
+            output_type (BaseModel): An output model to validate the
                 task result against.
 
         Returns:
             BrowserAgentTaskResponse: A response indicating the success or failure of
                 the task and potential output.
         """
-        if self._llm is None or self._tools is None:
+        if self._client is None or self._llm is None or self._tools is None:
             msg = "Agent is not initialized"
             raise RuntimeError(msg)
+
+        await self._client.call_tool("browser_tab_list")
+        await self._client.call_tool("browser_tab_select", {"index": 2})
 
         agent = create_react_agent(
             self._llm,
