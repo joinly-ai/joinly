@@ -1,9 +1,11 @@
-from typing import Protocol
+from typing import Generic, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 
+T = TypeVar("T", bound=BaseModel)
 
-class BrowserAgentTaskResponse(BaseModel):
+
+class BrowserAgentTaskResponse(BaseModel, Generic[T]):
     """A response model for browser agent tasks."""
 
     success: bool = Field(description="Indicates if the task was successful")
@@ -11,6 +13,10 @@ class BrowserAgentTaskResponse(BaseModel):
         default=None,
         description="An optional message providing additional information about the "
         "task result",
+    )
+    output: T | None = Field(
+        default=None,
+        description="The structured output of the task, validated as type T",
     )
 
 
@@ -29,14 +35,18 @@ class BrowserAgent(Protocol):
         """Close the browser connection."""
         ...
 
-    async def run(self, task: str) -> BrowserAgentTaskResponse:
+    async def run(
+        self, task: str, output_type: T | None = None
+    ) -> BrowserAgentTaskResponse[T]:
         """Run a task in the browser.
 
         Args:
             task (str): The task to run in the browser.
+            output_type (BaseModel | None): An optional output model to validate the
+                task result against.
 
         Returns:
             BrowserAgentTaskResponse: A response indicating the success or failure of
-                the task.
+                the task and potential output.
         """
         ...
