@@ -3,7 +3,7 @@ from typing import ClassVar, Protocol
 
 from playwright.async_api import Page
 
-from joinly.types import ProviderNotSupportedError
+from joinly.types import MeetingChatHistory, ProviderNotSupportedError
 
 
 class BrowserPlatformController(Protocol):
@@ -42,6 +42,17 @@ class BrowserPlatformController(Protocol):
         Args:
             page: The Playwright Page object to interact with.
             message: The message to send.
+        """
+        ...
+
+    async def get_chat_history(self, page: Page) -> MeetingChatHistory:
+        """Get the chat message history from the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
         """
         ...
 
@@ -86,6 +97,11 @@ class BaseBrowserPlatformController(BrowserPlatformController):
     async def send_chat_message(self, page: Page, message: str) -> None:  # noqa: ARG002
         """Send a chat message in the meeting."""
         msg = "Provider does not support sending chat messages."
+        raise ProviderNotSupportedError(msg)
+
+    async def get_chat_history(self, page: Page) -> MeetingChatHistory:  # noqa: ARG002
+        """Get the chat history from the meeting."""
+        msg = "Provider does not support retrieving chat history."
         raise ProviderNotSupportedError(msg)
 
     async def mute(self, page: Page) -> None:  # noqa: ARG002

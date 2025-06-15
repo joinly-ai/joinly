@@ -4,6 +4,7 @@ from typing import Protocol
 
 from joinly.types import (
     AudioFormat,
+    MeetingChatHistory,
     SpeechWindow,
     Transcript,
     TranscriptSegment,
@@ -178,6 +179,14 @@ class MeetingProvider(Protocol):
 
         Args:
             message: The message to send.
+        """
+        ...
+
+    async def get_chat_history(self) -> MeetingChatHistory:
+        """Get the chat message history from the meeting.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
         """
         ...
 
