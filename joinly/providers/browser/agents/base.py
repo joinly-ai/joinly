@@ -1,6 +1,6 @@
 from typing import Generic, Protocol, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 TOutputModel = TypeVar("TOutputModel", bound=BaseModel)
 
@@ -9,14 +9,16 @@ class BrowserAgentTaskResponse(BaseModel, Generic[TOutputModel]):
     """A response model for browser agent tasks."""
 
     success: bool = Field(description="Indicates if the task was successful")
+    output: TOutputModel | None = Field(description="The structured output of the task")
     message: str | None = Field(
         default=None,
         description="An optional message providing additional information about the "
         "task result",
     )
-    output: TOutputModel | None = Field(
-        default=None,
-        description="The structured output of the task, validated as type T",
+
+    model_config = ConfigDict(
+        title="BrowserAgentTaskResponse",
+        json_schema_extra={"name": "BrowserAgentTaskResponse"},
     )
 
 
@@ -36,13 +38,13 @@ class BrowserAgent(Protocol):
         ...
 
     async def run(
-        self, task: str, output_type: type[TOutputModel] | None = None
+        self, task: str, output_type: type[TOutputModel]
     ) -> BrowserAgentTaskResponse[TOutputModel]:
         """Run a task in the browser.
 
         Args:
             task (str): The task to run in the browser.
-            output_type (BaseModel | None): An optional output model to validate the
+            output_type (BaseModel): An output model to validate the
                 task result against.
 
         Returns:

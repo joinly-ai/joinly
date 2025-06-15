@@ -101,17 +101,10 @@ class PlaywrightMcpBrowserAgent(BrowserAgent):
             self._llm,
             self._tools,
             prompt=PROMPT,
-            response_format=BrowserAgentTaskResponse[TOutputModel],
+            response_format=BrowserAgentTaskResponse[output_type],
         )
 
         task_prompt = f"Task: {task}"
         output = await agent.ainvoke({"messages": task_prompt})
-        response: BrowserAgentTaskResponse[TOutputModel] = output["structured_response"]
 
-        if response.output is None and output_type is not None and response.success:
-            response = BrowserAgentTaskResponse[TOutputModel](
-                success=False,
-                message="No output provided, but output type was expected.",
-            )
-
-        return response
+        return output["structured_response"]

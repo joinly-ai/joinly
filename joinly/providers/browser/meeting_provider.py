@@ -2,7 +2,9 @@ import asyncio
 import logging
 import os
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Self, overload
+from typing import TYPE_CHECKING, Self
+
+from pydantic import BaseModel
 
 from joinly.core import AudioReader, AudioWriter
 from joinly.providers.base import BaseMeetingProvider
@@ -38,6 +40,10 @@ PLATFORMS: list[type[BrowserPlatformController]] = [
 AGENTS: dict[str, type[BrowserAgent]] = {
     "playwright-mcp": PlaywrightMcpBrowserAgent,
 }
+
+
+class NoOutput(BaseModel):
+    """A model representing no output from an action."""
 
 
 class BrowserMeetingProvider(BaseMeetingProvider):
@@ -165,21 +171,11 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         await agent.connect(self._browser_session.cdp_url)
         return agent
 
-    @overload
     async def _invoke_action(
-        self, action: str, prompt: str, output_type: type[TOutputModel], **args: object
-    ) -> TOutputModel: ...
-
-    @overload
-    async def _invoke_action(
-        self, action: str, prompt: str, output_type: None = None, **args: object
-    ) -> None: ...
-
-    async def _invoke_action(  # noqa: C901
         self,
         action: str,
         prompt: str,
-        output_type: type[TOutputModel] | None = None,
+        output_type: type[TOutputModel] = NoOutput,
         **args: object,
     ) -> TOutputModel | None:
         """Invoke an action using the platform controller or browser agent.
@@ -191,8 +187,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         Args:
             action: The action to invoke.
             prompt: The prompt for the action.
-            output_type: The expected output type of the action. If None, no output is
-                expected.
+            output_type: The expected output type of the action.
             **args: Keyword arguments for the action.
 
         Raises:
@@ -200,8 +195,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                 initialized, or if the action fails.
 
         Returns:
-            TOutputModel | None: The output of the action if successful and output_type
-                is not None, otherwise None.
+            TOutputModel: The output of the action.
         """
         if self._page is None or self._page.is_closed():
             msg = "Meeting not joined or already left."
@@ -217,9 +211,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     action,
                 )
                 try:
-                    output: TOutputModel = await getattr(
-                        self._platform_controller, action
-                    )(self._page, **args)
+                    output = await getattr(self._platform_controller, action)(
+                        self._page, **args
+                    )
                 except Exception:
                     logger.exception(
                         "Failed to perform action '%s' using platform controller.",
@@ -241,32 +235,25 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                         "Failed to perform action '%s' using browser agent.", action
                     )
                 else:
-                    if response.success:
+                    if response.success and not (
+                        response.output is None and output_type is not NoOutput
+                    ):
                         logger.info(
                             "Action '%s' performed successfully using "
                             "browser agent: %s",
                             action,
                             response.message,
                         )
-                        if output_type is not None and response.output is None:
-                            logger.error(
-                                "Action '%s' succeeded using browser agent but did not "
-                                "return expected output type %s.",
-                                action,
-                                output_type.__name__,
-                            )
-                        else:
-                            return response.output
-                    else:
-                        logger.error(
-                            "Action '%s' failed using browser agent: %s",
-                            action,
-                            response.message,
-                        )
+                        return response.output if output_type is not NoOutput else None
+                    logger.error(
+                        "Action '%s' failed using browser agent: %s",
+                        action,
+                        response.message,
+                    )
 
         if self._platform_controller is None and self._browser_agent is None:
             logger.error(
-                "Neither platform controller nor browser agent is available/succeeded. "
+                "Neither platform controller nor browser agent is available. "
                 "Cannot perform action: %s.",
                 action,
             )
@@ -311,7 +298,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
 
     async def leave(self) -> None:
         """Leave the current meeting."""
-        prompt = "Leave the meeting."
+        prompt = "Leave the currently opened meeting."
         await self._invoke_action("leave", prompt)
         self._platform_controller = None
         if self._page is not None and not self._page.is_closed():
@@ -324,15 +311,18 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         Args:
             message: The message to send.
         """
-        prompt = f"Send the following message in the meeting chat: {message}"
+        prompt = (
+            "Send the following message in the meeting chat of the "
+            f"currently opened meeting: {message}"
+        )
         await self._invoke_action("send_chat_message", prompt, message=message)
 
     async def mute(self) -> None:
         """Mute yourself in the meeting."""
-        prompt = "Mute yourself."
+        prompt = "Mute yourself in the currently opened meeting."
         await self._invoke_action("mute", prompt)
 
     async def unmute(self) -> None:
         """Unmute yourself in the meeting."""
-        prompt = "Unmute yourself."
+        prompt = "Unmute yourself in the currently opened meeting."
         await self._invoke_action("unmute", prompt)
