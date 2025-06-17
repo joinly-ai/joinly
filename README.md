@@ -174,7 +174,7 @@ docker run --gpus all --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly-cuda
 docker run --gpus all --env-file .env ghcr.io/joinly-ai/joinly-cuda:latest -v --client <MeetingURL>
 ```
 
-By default, the `joinly` image uses the Whisper model `tiny.en` for transcription, since it still runs reasonably fast on CPU. For `joinly-cuda`, it automatically defaults to `distil-large-v3` for significantly better transcription quality. You can change the model by setting `--stt-arg model_name=<model_name>` (e.g., `--stt-arg model_name=large-v3`). However, only the respective default models are packaged in the docker image, so it will start to download the model weights on container start.
+By default, the `joinly` image uses the Whisper model `base.en` for transcription, since it still runs reasonably fast on CPU. For `joinly-cuda`, it automatically defaults to `distil-large-v3` for significantly better transcription quality. You can change the model by setting `--stt-arg model_name=<model_name>` (e.g., `--stt-arg model_name=large-v3`). However, only the respective default models are packaged in the docker image, so it will start to download the model weights on container start.
 
 # :test_tube: Create your own client
 
