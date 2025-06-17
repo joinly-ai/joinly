@@ -13,7 +13,11 @@
   </a>
 </p>
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/joinly-ai/joinly?style=flat&logo=github&logoColor=white&label=Stars&labelColor=black&color=7B2CBF)](https://github.com/joinly-ai/joinly) [![GitHub License](https://img.shields.io/github/license/joinly-ai/joinly?style=flat&labelColor=black&color=%237B2CBF)](LICENSE) [![Discord](https://img.shields.io/discord/1377431745632145500?style=flat&logo=discord&logoColor=white&label=Discord&labelColor=black&color=7B2CBF)](https://discord.com/invite/AN5NEBkS4d) [![GitHub Discussions](https://img.shields.io/github/discussions/joinly-ai/joinly?style=flat&labelColor=black&label=Discussions&color=%237B2CBF)](https://github.com/joinly-ai/joinly/discussions)
+[![GitHub Release](https://img.shields.io/github/v/release/joinly-ai/joinly?sytle=flat&label=Release&labelColor=black&color=%237B2CBF)](https://github.com/joinly-ai/joinly/releases)
+[![GitHub License](https://img.shields.io/github/license/joinly-ai/joinly?style=flat&label=License&labelColor=black&color=%237B2CBF)](LICENSE) 
+[![GitHub Repo stars](https://img.shields.io/github/stars/joinly-ai/joinly?style=flat&logo=github&logoColor=white&label=Stars&labelColor=black&color=7B2CBF)](https://github.com/joinly-ai/joinly) 
+[![Discord](https://img.shields.io/discord/1377431745632145500?style=flat&logo=discord&logoColor=white&label=Discord&labelColor=black&color=7B2CBF)](https://discord.com/invite/AN5NEBkS4d) 
+[![GitHub Discussions](https://img.shields.io/github/discussions/joinly-ai/joinly?style=flat&labelColor=black&label=Discussions&color=%237B2CBF)](https://github.com/joinly-ai/joinly/discussions)
 
 <h1 align="center">Make your meetings accessible to AI Agents 🤖</h1>
 
@@ -43,7 +47,9 @@ Any ideas what we should build next? [Write us!](https://discord.com/invite/AN5N
 
 # :zap: Quickstart
 Run joinly via Docker with a basic conversational agent client.
-- Prerequisites: [Docker installation](https://docs.docker.com/engine/install/)
+
+> [!IMPORTANT]
+> **Prerequisites**: [Docker installation](https://docs.docker.com/engine/install/)
 
 Clone this repository:
 ```bash
@@ -53,6 +59,9 @@ cd joinly
 
 Create a new `.env` file in the project root with your API keys. See [.env.example](.env.example) for complete configuration options including Anthropic (Claude) and Ollama setups. Replace the placeholder values with your actual API keys and adjust the model name as needed.
 
+> [!NOTE]
+> Remember not to copy the [.env.example](.env.example) exactly. Instead, delete the placeholder values of the providers you don't use.
+
 ```Dotenv
 # .env
 # for OpenAI LLM
@@ -61,13 +70,15 @@ JOINLY_MODEL_NAME=gpt-4o
 JOINLY_MODEL_PROVIDER=openai
 OPENAI_API_KEY=your-openai-api-key
 ```
+> [!TIP]
+> You can find the OpenAI API key [here](https://platform.openai.com/api-keys)
 
 Pull the Docker image (~2.3GB since it packages browser and models):
 ```bash
 docker pull ghcr.io/joinly-ai/joinly:latest
 ```
 
-Launch your meeting in Zoom, Google Meet or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`:
+Launch your meeting in [Zoom](https://www.zoom.com), [Google Meet](https://meet.google.com) or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`:
 ```bash  
 docker run --env-file .env ghcr.io/joinly-ai/joinly:latest -v --client <MeetingURL>
 ```
@@ -75,7 +86,9 @@ docker run --env-file .env ghcr.io/joinly-ai/joinly:latest -v --client <MeetingU
 
 # :technologist: Run an external client
 In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to control the entire logic of our agent. Here, we run an external client implementation and connect it to the joinly MCP server.
-  - Prerequisites: do the [Quickstart](#zap-quickstart) (except the last command), [install uv](https://github.com/astral-sh/uv), and open two terminals
+
+> [!IMPORTANT]
+> **Prerequisites**: do the [Quickstart](#zap-quickstart) (except the last command), [install uv](https://github.com/astral-sh/uv), and open two terminals
 
 Start the joinly server in the first terminal (note, we are not using `--client` here and forward port `8000`):
 ```bash  

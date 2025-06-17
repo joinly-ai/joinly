@@ -45,6 +45,7 @@ class WhisperSTT(STT):
         self.model_name = model_name or (
             "distil-large-v3" if get_settings().device == "cuda" else "tiny.en"
         )
+        self._set_model_name = model_name is not None
         self.compute_type = compute_type
         self.min_audio = min_audio
         self.min_silence = min_silence
@@ -68,6 +69,7 @@ class WhisperSTT(STT):
             self.model_name,
             device=get_settings().device,
             compute_type=self.compute_type,
+            local_files_only=not self._set_model_name,
         )
 
         logger.info("Initialized Whisper model")

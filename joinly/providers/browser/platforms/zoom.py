@@ -78,22 +78,14 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
     async def leave(self, page: Page) -> None:
         """Leave the Zoom meeting using the icon-based button."""
-        # Click at the center of the screen to activate interface elements
-        await page.mouse.click(640, 360)
-
-        # Step 1: Hover over the footer to reveal the Leave button
-        await page.hover("footer, div[class*='footer']")
+        await self._activate_controls(page)
 
         # Step 2: Click the Leave button based on its label
-        await page.click(
-            "button:has(span.footer-button-base__button-label:has-text('Leave'))"
-        )
+        await page.click("button:has-text('Leave')")
 
         # Attempt a second click if the button is still visible
         try:
-            leave_button = page.locator(
-                "button:has(span.footer-button-base__button-label:has-text('Leave'))"
-            )
+            leave_button = page.locator("button:has-text('Leave')")
             if await leave_button.is_visible(timeout=2000):
                 logger.debug("Leave button still present, clicking again.")
                 await leave_button.click(timeout=5000)
@@ -102,7 +94,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
         # Confirm leaving the meeting
         await page.click(
-            "button.leave-meeting-options__btn--danger:has-text('Leave meeting')",
+            "button:has-text('Leave meeting')",
             timeout=5000,
         )
 
@@ -112,12 +104,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         is_chat_visible = await chat_input.is_visible(timeout=1000)
 
         if not is_chat_visible:
-            # Click in the center to activate UI
-            await page.mouse.click(640, 360)
-
-            # Hover over the footer to show the chat button
-            await page.hover("footer, div[class*='footer']")
-
+            await self._activate_controls(page)
             await page.wait_for_selector(
                 "button[aria-label='open the chat panel']", timeout=2000
             )
@@ -139,6 +126,8 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
     async def mute(self, page: Page) -> None:
         """Mute the microphone in Zoom."""
+        await self._activate_controls(page)
+
         try:
             mic_button = page.locator(
                 "button:has-text('Mute'):not(:has-text('Unmute'))"
@@ -153,11 +142,16 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
     async def unmute(self, page: Page) -> None:
         """Unmute the microphone in Zoom."""
+        await self._activate_controls(page)
+
         try:
             mic_button = page.locator("button:has-text('Unmute')")
             if await mic_button.is_visible(timeout=500):
                 logger.debug("Unmute button found, clicking it.")
                 await mic_button.click(timeout=500)
+                if await mic_button.is_visible(timeout=500):
+                    logger.debug("Unmute button still present, clicking again.")
+                    await mic_button.click(timeout=500)
             else:
                 logger.debug("Unmute button not found or not visible.")
         except Exception:  # noqa: BLE001
@@ -165,6 +159,8 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
     async def start_screen_sharing(self, page: Page) -> None:
         """Start screen sharing in Zoom."""
+        await self._activate_controls(page)
+
         # Click the Share Screen button
         share_btn = page.get_by_role(
             "button", name=re.compile(r"Share Screen", re.IGNORECASE)
@@ -178,3 +174,8 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         )
         await screen_option.click(timeout=2000)
         await page.wait_for_timeout(500)
+
+    async def _activate_controls(self, page: Page) -> None:
+        """Activate control bar."""
+        await page.mouse.click(640, 360)
+        await page.wait_for_timeout(100)
