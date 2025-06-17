@@ -10,7 +10,7 @@ from pydantic import AnyUrl, Field
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
-from joinly.types import Transcript
+from joinly.types import SpeechInterruptedError, Transcript
 
 if TYPE_CHECKING:
     from mcp import ServerSession
@@ -139,7 +139,10 @@ async def speak_text(
 ) -> str:
     """Speak the given text in the meeting using TTS."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.speak_text(text)
+    try:
+        await ms.speak_text(text)
+    except SpeechInterruptedError as e:
+        return str(e)
     return "Finished speaking."
 
 
