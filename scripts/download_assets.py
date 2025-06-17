@@ -117,8 +117,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--whisper-model",
         type=str,
-        default="tiny.en",
-        help="Whisper model to download (default: tiny.en)",
+        default="base.en",
+        help="Whisper model to download (default: base.en)",
     )
     return parser.parse_args()
 
