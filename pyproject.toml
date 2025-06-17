@@ -31,6 +31,11 @@ dependencies = [
 [project.scripts]
 joinly = "joinly.main:cli"
 
+[project.optional-dependencies]
+cuda = [
+    "onnxruntime-gpu>=1.22.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

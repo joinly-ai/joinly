@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     """Settings for the meeting agent."""
 
     name: str = Field(default="joinly")
+    device: str = Field(default="cpu")
 
     meeting_provider: str | type[MeetingProvider] = Field(default="browser")
     vad: str | type[VAD] = Field(default="silero")

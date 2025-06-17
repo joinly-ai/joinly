@@ -51,6 +51,16 @@ def _parse_kv(
     envvar="JOINLY_NAME",
 )
 @click.option(
+    "--device",
+    type=str,
+    help="The device to use for the model. "
+    "Defaults to 'cpu', but can be set to 'cuda' for GPU acceleration. "
+    "Note that 'cuda' requires the extra cuda dependencies to be installed.",
+    default="cpu",
+    show_default=True,
+    envvar="JOINLY_DEVICE",
+)
+@click.option(
     "-h",
     "--host",
     type=str,
