@@ -1,7 +1,8 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 
 class ProviderNotSupportedError(Exception):
@@ -127,3 +128,33 @@ class Transcript(BaseModel):
         return {
             segment.speaker for segment in self.segments if segment.speaker is not None
         }
+
+
+class MeetingChatMessage(BaseModel):
+    """A class to represent a chat message in a meeting.
+
+    Attributes:
+        text (str): The content of the chat message.
+        timestamp (float): The timestamp of when the message was sent.
+        sender (str | None): The sender of the message, if available.
+    """
+
+    text: str
+    timestamp: float | None = Field(..., exclude=True)
+    sender: str | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+    @computed_field(alias="timestamp")
+    @property
+    def timestamp_readable(self) -> str | None:
+        """Expose ISO-formatted timestamp in JSON instead of the float."""
+        if self.timestamp:
+            return datetime.fromtimestamp(self.timestamp, tz=UTC).isoformat()
+        return None
+
+
+class MeetingChatHistory(BaseModel):
+    """A class to represent the chat history of a meeting."""
+
+    messages: list[MeetingChatMessage] = Field(default_factory=list)

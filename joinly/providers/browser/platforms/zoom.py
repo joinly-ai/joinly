@@ -1,12 +1,16 @@
 import logging
 import re
+from datetime import UTC, datetime
 from typing import ClassVar
 
 from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
+from joinly.types import MeetingChatHistory, MeetingChatMessage
 
 logger = logging.getLogger(__name__)
+
+_TIME_RX = re.compile(r"^\d{1,2}:\d{2}(?:\s*[AP]M)?$", re.IGNORECASE)
 
 
 class ZoomBrowserPlatformController(BaseBrowserPlatformController):
@@ -100,18 +104,8 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
     async def send_chat_message(self, page: Page, message: str) -> None:
         """Send a chat message in Zoom."""
+        await self._open_chat(page)
         chat_input = page.locator("div[contenteditable='true']")
-        is_chat_visible = await chat_input.is_visible(timeout=1000)
-
-        if not is_chat_visible:
-            await self._activate_controls(page)
-            await page.wait_for_selector(
-                "button[aria-label='open the chat panel']", timeout=2000
-            )
-
-            # Click the chat panel button twice (some UIs require this)
-            await page.click("button[aria-label='open the chat panel']")
-            await page.click("button[aria-label='open the chat panel']")
 
         # Focus the chat input (important for ProseMirror-based editors)
         await chat_input.click()
@@ -123,6 +117,63 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
         # Send the message
         await page.keyboard.press("Enter")
+
+    async def get_chat_history(self, page: Page) -> MeetingChatHistory:
+        """Return a Zoom in-meeting chat history.
+
+        Args:
+            page: The Playwright page instance.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
+        """
+        await self._open_chat(page)
+
+        messages: list[MeetingChatMessage] = []
+
+        panel = page.locator('div[role="application"][aria-label="Chat Message List"]')
+        rows = await panel.locator('[role="row"][aria-label]').all()
+
+        for row in rows:
+            aria = await row.get_attribute("aria-label") or ""
+            parts = [p.strip() for p in aria.split(",")]
+
+            sender: str | None = None
+            ts: float | None = None
+
+            if parts:
+                first = parts[0]
+                sender = (
+                    (first.split(" to ")[0].strip() or None)
+                    if " to " in first
+                    else (first or None)
+                )
+
+            if len(parts) >= 2:  # noqa: PLR2004
+                raw_time = re.sub(r"[\u00A0\u202F]", "", parts[1]).strip()
+                if _TIME_RX.fullmatch(raw_time):
+                    if raw_time[-2:].upper() in {"AM", "PM"}:
+                        fmt = "%I:%M %p" if " " in raw_time else "%I:%M%p"
+                    else:
+                        fmt = "%H:%M"
+                    clean_time = raw_time.upper().strip()
+                    t = datetime.strptime(clean_time, fmt).replace(tzinfo=UTC)
+                    today = datetime.now(UTC).date()
+                    t = t.replace(year=today.year, month=today.month, day=today.day)
+                    ts = t.timestamp()
+
+            text_el = row.locator(":scope p").first
+            if await text_el.count():
+                text = (await text_el.inner_text()).strip()
+            else:
+                text = ",".join(parts[2:]).strip() if len(parts) >= 3 else ""  # noqa: PLR2004
+
+            if text:
+                messages.append(
+                    MeetingChatMessage(text=text, timestamp=ts, sender=sender)
+                )
+
+        return MeetingChatHistory(messages=messages)
 
     async def mute(self, page: Page) -> None:
         """Mute the microphone in Zoom."""
@@ -179,3 +230,17 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         """Activate control bar."""
         await page.mouse.click(640, 360)
         await page.wait_for_timeout(100)
+
+    async def _open_chat(self, page: Page) -> None:
+        """Open the chat in the Zoom meeting."""
+        chat_input = page.locator("div[contenteditable='true']")
+        is_chat_visible = await chat_input.is_visible(timeout=1000)
+
+        if not is_chat_visible:
+            await self._activate_controls(page)
+            await page.wait_for_selector(
+                "button[aria-label='open the chat panel']", timeout=2000
+            )
+            await page.click("button[aria-label='open the chat panel']")
+            await page.click("button[aria-label='open the chat panel']")
+            await page.wait_for_timeout(1000)

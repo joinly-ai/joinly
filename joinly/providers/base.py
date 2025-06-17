@@ -1,5 +1,5 @@
 from joinly.core import MeetingProvider
-from joinly.types import ProviderNotSupportedError
+from joinly.types import MeetingChatHistory, ProviderNotSupportedError
 
 
 class BaseMeetingProvider(MeetingProvider):
@@ -23,6 +23,11 @@ class BaseMeetingProvider(MeetingProvider):
     async def send_chat_message(self, message: str) -> None:  # noqa: ARG002
         """Send a chat message in the meeting."""
         msg = "Provider does not support sending chat messages."
+        raise ProviderNotSupportedError(msg)
+
+    async def get_chat_history(self) -> MeetingChatHistory:
+        """Get the chat message history from the meeting."""
+        msg = "Provider does not support retrieving chat history."
         raise ProviderNotSupportedError(msg)
 
     async def mute(self) -> None:

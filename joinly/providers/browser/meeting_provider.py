@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from joinly.core import AudioReader, AudioWriter
 from joinly.providers.base import BaseMeetingProvider
@@ -19,6 +19,7 @@ from joinly.providers.browser.platforms import (
     ZoomBrowserPlatformController,
 )
 from joinly.settings import get_settings
+from joinly.types import MeetingChatHistory
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
@@ -164,10 +165,10 @@ class BrowserMeetingProvider(BaseMeetingProvider):
     async def _invoke_action(
         self,
         action: str,
-        prompt: str,
+        prompt: str | None = None,
         *args: object,
         **kwargs: object,
-    ) -> None:
+    ) -> Any:  # noqa: ANN401
         """Invoke an action using the platform controller or browser agent.
 
         This method is used to perform actions in the browser. First tries to use the
@@ -176,7 +177,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
 
         Args:
             action: The action to invoke.
-            prompt: The prompt for the action.
+            prompt: The prompt for the action. If None, no browser agent is used.
             *args: Positional arguments for the action.
             **kwargs: Keyword arguments for the action.
 
@@ -197,7 +198,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     action,
                 )
                 try:
-                    await getattr(self._platform_controller, action)(
+                    result = await getattr(self._platform_controller, action)(
                         self._page, *args, **kwargs
                     )
                 except Exception:
@@ -210,9 +211,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                         "Action '%s' performed successfully using platform controller.",
                         action,
                     )
-                    return
+                    return result
 
-            if self._browser_agent is not None:
+            if self._browser_agent is not None and prompt is not None:
                 try:
                     response = await self._browser_agent.run(prompt)
                 except Exception:
@@ -227,7 +228,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                             action,
                             response.message,
                         )
-                        return
+                        return None
                     logger.error(
                         "Action '%s' failed using browser agent: %s",
                         action,
@@ -296,6 +297,14 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         """
         prompt = f"Send the following message in the meeting chat: {message}"
         await self._invoke_action("send_chat_message", prompt, message=message)
+
+    async def get_chat_history(self) -> MeetingChatHistory:
+        """Get the chat history from the meeting.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
+        """
+        return await self._invoke_action("get_chat_history")
 
     async def mute(self) -> None:
         """Mute yourself in the meeting."""
