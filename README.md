@@ -159,7 +159,7 @@ uv run joinly -v  # or -vv, -vvv
 uv run joinly --help
 ```
 
-## GPU Support
+## GPU Support (Coming in v0.2.0)
 
 We provide a Docker image with CUDA GPU support for running the transcription and TTS models on a GPU. To use it, you need to have the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed and `CUDA >= 12.6`. Then pull the CUDA-enabled image:
 ```bash
