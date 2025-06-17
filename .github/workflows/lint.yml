@@ -16,3 +16,13 @@ jobs:
         with:
           enable-cache: true
       - run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  pyright:
+    name: Pyright type checking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv run pyright
