@@ -4,7 +4,8 @@
     "venv": ".venv",
     "typeCheckingMode": "standard",
     "include": [
-        "meeting_agent"
+        "joinly",
+        "tests"
     ],
     "exclude": [
         "**/__pycache__",
