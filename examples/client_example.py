@@ -22,7 +22,7 @@ import os
 
 from fastmcp import Client
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.checkpoint.memory import MemorySaver
@@ -196,18 +196,7 @@ async def run(  # noqa: C901, PLR0915
                     config={"configurable": {"thread_id": "1"}},
                     stream_mode="updates",
                 ):
-                    logger.info(chunk)
                     log_chunk(chunk)
-                    msg = chunk.get("tools", {}).get("messages", [])
-                    msg = msg[-1] if msg else None
-                    if (
-                        isinstance(msg, ToolMessage)
-                        and msg.status == "error"
-                        and "Interrupted by detected speech" in msg.content
-                    ):
-                        break
-                        # wip: seems to work in general but not for multiple
-                        # tool calls in one message
 
         finally:
             logger.info("Leaving meeting")
