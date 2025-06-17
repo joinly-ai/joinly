@@ -111,7 +111,7 @@ class SileroVAD(BasePaddedVAD):
                 "sr": self._sr_tensor,
             },
         )
-        speech_prob = float(outputs[0].flat[0])
-        self._state = outputs[1]
+        speech_prob = float(outputs[0].flat[0])  # type: ignore[attr-defined]
+        self._state = np.array(outputs[1], dtype=np.float32)
 
         return speech_prob > self._speech_threshold
