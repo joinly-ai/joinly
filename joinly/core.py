@@ -224,6 +224,15 @@ class TranscriptionController(Protocol):
         ...
 
     @property
+    def transcript_seconds(self) -> float:
+        """Get the current duration of transcription in seconds.
+
+        Returns:
+            float: The total duration of the transcript.
+        """
+        ...
+
+    @property
     def no_speech_event(self) -> asyncio.Event:
         """Get the event indicating no speech detected.
 
