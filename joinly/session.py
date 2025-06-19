@@ -38,6 +38,11 @@ class MeetingSession:
         """Return the current transcript of the meeting."""
         return self._transcription_controller.transcript
 
+    @property
+    def meeting_seconds(self) -> float:
+        """Return the current meeting duration in seconds."""
+        return self._transcription_controller.transcript_seconds
+
     def add_transcription_listener(
         self, listener: Callable[[str], Coroutine[None, None, None]]
     ) -> Callable[[], None]:

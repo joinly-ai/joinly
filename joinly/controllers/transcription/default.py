@@ -46,11 +46,17 @@ class DefaultTranscriptionController(TranscriptionController):
         self._stt_tasks: set[asyncio.Task] = set()
         self._no_speech_event = asyncio.Event()
         self._listeners: set[Callable[[str], Coroutine[None, None, None]]] = set()
+        self._transcript_seconds: float = 0.0
 
     @property
     def transcript(self) -> Transcript:
         """Get the current transcript."""
         return self._transcript
+
+    @property
+    def transcript_seconds(self) -> float:
+        """Get the current transcript duration in seconds."""
+        return self._transcript_seconds
 
     @property
     def no_speech_event(self) -> asyncio.Event:
@@ -72,6 +78,7 @@ class DefaultTranscriptionController(TranscriptionController):
             raise RuntimeError(msg)
 
         self._no_speech_event.set()
+        self._transcript_seconds = 0.0
         self._vad_task = asyncio.create_task(self._vad_worker())
 
     async def stop(self) -> None:
@@ -126,6 +133,7 @@ class DefaultTranscriptionController(TranscriptionController):
 
         vad_stream = self.vad.stream(_frame_iterator())
         async for frame in vad_stream:
+            self._transcript_seconds = frame.start
             if frame.is_speech:
                 last_speech = frame.start
 
