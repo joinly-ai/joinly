@@ -173,6 +173,16 @@ async def get_chat_history(
 
 
 @mcp.tool(
+    "get_transcript",
+    description="Get the full transcript of the meeting.",
+)
+async def get_transcript_tool(ctx: Context) -> Transcript:
+    """Get the full transcript of the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    return ms.transcript
+
+
+@mcp.tool(
     "mute_yourself",
     description="Mute yourself in the meeting.",
 )
