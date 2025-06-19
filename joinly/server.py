@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastmcp import Context, FastMCP
 from mcp.server import NotificationOptions
@@ -174,11 +174,37 @@ async def get_chat_history(
 
 @mcp.tool(
     "get_transcript",
-    description="Get the full transcript of the meeting.",
+    description=(
+        "Get the transcript of the meeting. By default, returns the full transcript. "
+        "To get a slice, set mode to 'first' or 'latest' and provide a positive "
+        "minutes value."
+    ),
 )
-async def get_transcript_tool(ctx: Context) -> Transcript:
-    """Get the full transcript of the meeting."""
+async def get_transcript_tool(
+    ctx: Context,
+    mode: Annotated[
+        Literal["full", "first", "latest"],
+        Field(
+            default="full",
+            description="Mode to get the transcript: 'full' for the entire transcript, "
+            "'first' for the first N minutes, 'latest' for the last N minutes.",
+        ),
+    ] = "full",
+    minutes: Annotated[
+        int,
+        Field(
+            default=0,
+            description="Number of minutes to slice the transcript. "
+            "Only used if mode is 'first' or 'latest'.",
+        ),
+    ] = 0,
+) -> Transcript:
+    """Get the transcript of the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    if mode == "first":
+        return ms.transcript.before(minutes * 60)
+    if mode == "latest":
+        return ms.transcript.after(ms.meeting_seconds - minutes * 60)
     return ms.transcript
 
 
