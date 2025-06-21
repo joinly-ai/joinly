@@ -194,10 +194,13 @@ class DefaultTranscriptionController(TranscriptionController):
                 if window is None:
                     end_ts = time.monotonic()
                     break
-                window.data = convert_audio_format(
-                    window.data, self.vad.audio_format, self.stt.audio_format
+                yield SpeechWindow(
+                    data=convert_audio_format(
+                        window.data, self.vad.audio_format, self.stt.audio_format
+                    ),
+                    start=window.start,
+                    is_speech=window.is_speech,
                 )
-                yield window
 
         seg_count = 0
         stt_stream = self.stt.stream(_window_iterator())
