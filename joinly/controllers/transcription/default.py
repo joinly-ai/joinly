@@ -219,6 +219,6 @@ class DefaultTranscriptionController(TranscriptionController):
         if seg_count > 0:
             if end_ts is not None:
                 latency = time.monotonic() - end_ts
-                log_level = logging.WARNING if latency > 1 else logging.INFO
+                log_level = logging.WARNING if latency > 0.5 else logging.INFO  # noqa: PLR2004
                 logger.log(log_level, "STT utterance latency: %.3fs", latency)
             self._notify("utterance")
