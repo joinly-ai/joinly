@@ -20,6 +20,7 @@ from joinly.types import (
     SpeechWindow,
     TranscriptSegment,
 )
+from joinly.utils.audio import calculate_audio_duration
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +138,10 @@ class DeepgramSTT(STT):
             nonlocal start, end
             async for window in windows:
                 if start is None:
-                    start = window.start
-                end = window.start
+                    start = window.time_ns / 1e9
+                end = window.time_ns / 1e9 + calculate_audio_duration(
+                    len(window.data), self.audio_format
+                )
                 await self._client.send(window.data)
             await self._client.finalize()
 

@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Self
 
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
-from joinly.types import SpeechWindow, Transcript
+from joinly.types import AudioChunk, SpeechWindow, Transcript
 from joinly.utils.audio import convert_audio_format
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class DefaultTranscriptionController(TranscriptionController):
         self._stt_tasks: set[asyncio.Task] = set()
         self._no_speech_event = asyncio.Event()
         self._listeners: set[Callable[[str], Coroutine[None, None, None]]] = set()
-        self._transcript_seconds: float = 0.0
+        self._time_ns: int = 0
 
     @property
     def transcript(self) -> Transcript:
@@ -56,7 +56,7 @@ class DefaultTranscriptionController(TranscriptionController):
     @property
     def transcript_seconds(self) -> float:
         """Get the current transcript duration in seconds."""
-        return self._transcript_seconds
+        return self._time_ns / 1e9
 
     @property
     def no_speech_event(self) -> asyncio.Event:
@@ -78,7 +78,7 @@ class DefaultTranscriptionController(TranscriptionController):
             raise RuntimeError(msg)
 
         self._no_speech_event.set()
-        self._transcript_seconds = 0.0
+        self._time_ns = 0
         self._vad_task = asyncio.create_task(self._vad_worker())
 
     async def stop(self) -> None:
@@ -120,25 +120,33 @@ class DefaultTranscriptionController(TranscriptionController):
     async def _vad_worker(self) -> None:  # noqa: C901
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
-        last_speech: float = float("inf")
+        last_speech: int | None = None
         dropped_windows: int = 0
 
-        async def _chunk_iterator() -> AsyncIterator[bytes]:
+        async def _chunk_iterator() -> AsyncIterator[AudioChunk]:
             """Yield audio chunks from the reader."""
+            offset: int | None = None
             while True:
                 chunk = await self.reader.read()
-                yield convert_audio_format(
-                    chunk, self.reader.audio_format, self.vad.audio_format
+                if offset is None:
+                    offset = chunk.time_ns
+                self._time_ns = chunk.time_ns - offset
+                yield AudioChunk(
+                    data=convert_audio_format(
+                        chunk.data, self.reader.audio_format, self.vad.audio_format
+                    ),
+                    time_ns=self._time_ns,
+                    speaker=chunk.speaker,
                 )
 
         vad_stream = self.vad.stream(_chunk_iterator())
         async for window in vad_stream:
             if window.is_speech:
-                last_speech = window.start
+                last_speech = window.time_ns
 
             if window.is_speech and self._window_queue is None:
                 # utterance start
-                logger.info("Utterance start: %.2fs", window.start)
+                logger.info("Utterance start: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.clear()
                 if len(self._stt_tasks) >= self.max_stt_tasks:
                     logger.warning(
@@ -156,12 +164,13 @@ class DefaultTranscriptionController(TranscriptionController):
 
             if (
                 not window.is_speech
-                and window.start - last_speech >= self.utterance_tail_seconds
+                and last_speech is not None
+                and (window.time_ns - last_speech) / 1e9 >= self.utterance_tail_seconds
             ):
                 # utterance end
-                logger.info("Utterance end: %.2fs", window.start)
+                logger.info("Utterance end: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.set()
-                last_speech = float("inf")
+                last_speech = None
                 if self._window_queue is not None:
                     try:
                         self._window_queue.put_nowait(None)
@@ -206,7 +215,7 @@ class DefaultTranscriptionController(TranscriptionController):
                     data=convert_audio_format(
                         window.data, self.vad.audio_format, self.stt.audio_format
                     ),
-                    start=window.start,
+                    time_ns=window.time_ns,
                     is_speech=window.is_speech,
                 )
 
