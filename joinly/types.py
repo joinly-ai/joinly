@@ -171,6 +171,40 @@ class Transcript(BaseModel):
         filtered = [s for s in self.segments if s.role == role]
         return Transcript(segments=filtered)
 
+    def compact(self, max_gap: float = 0.5) -> "Transcript":
+        """Return a compacted copy of the transcript.
+
+        Segments with the same speaker and role that are within the specified gap
+        are merged into a single segment.
+
+        Args:
+            max_gap (float): The maximum gap in seconds between segments to be merged.
+
+        Returns:
+            Transcript: A new Transcript object with compacted segments.
+        """
+        compacted: list[TranscriptSegment] = []
+
+        for segment in self.segments:
+            if (
+                compacted
+                and compacted[-1].speaker == segment.speaker
+                and compacted[-1].role == segment.role
+                and segment.start - compacted[-1].end <= max_gap
+            ):
+                last_segment = compacted[-1]
+                compacted[-1] = TranscriptSegment(
+                    text=last_segment.text + " " + segment.text,
+                    start=last_segment.start,
+                    end=segment.end,
+                    speaker=last_segment.speaker,
+                    role=last_segment.role,
+                )
+            else:
+                compacted.append(segment)
+
+        return Transcript(segments=compacted)
+
 
 class MeetingChatMessage(BaseModel):
     """A class to represent a chat message in a meeting.
