@@ -268,8 +268,13 @@ class SpeechController(Protocol):
     tts: TTS
     no_speech_event: asyncio.Event
 
-    async def start(self) -> None:
-        """Start the speech output process."""
+    async def start(self, clock: Clock, transcript: Transcript) -> None:
+        """Start the speech output process.
+
+        Args:
+            clock: The clock to use for timing.
+            transcript: The transcript object to which the speech will be added.
+        """
         ...
 
     async def stop(self) -> None:

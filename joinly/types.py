@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
@@ -58,6 +59,18 @@ class SpeechWindow:
     is_speech: bool
 
 
+class SpeakerRole(str, Enum):
+    """An enumeration of speaker roles in a meeting.
+
+    Attributes:
+        participant (str): Represents a (normal) participant in the meeting.
+        assistant (str): Represents this assistant in the meeting.
+    """
+
+    participant = "participant"
+    assistant = "assistant"
+
+
 class TranscriptSegment(BaseModel):
     """A class to represent a segment of a transcript.
 
@@ -72,6 +85,7 @@ class TranscriptSegment(BaseModel):
     start: float
     end: float
     speaker: str | None = None
+    role: SpeakerRole = Field(default=SpeakerRole.participant, exclude=True)
 
     model_config = ConfigDict(frozen=True)
 
@@ -143,13 +157,18 @@ class Transcript(BaseModel):
         }
 
     def after(self, seconds: float) -> "Transcript":
-        """Return a transcript containing the segments after the given seconds."""
+        """Return a transcript copy containing the segments after the given seconds."""
         filtered = [s for s in self.segments if s.start > seconds]
         return Transcript(segments=filtered)
 
     def before(self, seconds: float) -> "Transcript":
-        """Return a transcript containing the segments before the given seconds."""
+        """Return a transcript copy containing the segments before the given seconds."""
         filtered = [s for s in self.segments if s.end < seconds]
+        return Transcript(segments=filtered)
+
+    def with_role(self, role: SpeakerRole) -> "Transcript":
+        """Return a transcript copy containing segments with the specified role."""
+        filtered = [s for s in self.segments if s.role == role]
         return Transcript(segments=filtered)
 
 

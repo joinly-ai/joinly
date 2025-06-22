@@ -85,7 +85,7 @@ class MeetingSession:
         self._transcript = Transcript()
         await self._meeting_provider.join(meeting_url, participant_name, passcode)
         await self._transcription_controller.start(self._clock, self._transcript)
-        await self._speech_controller.start()
+        await self._speech_controller.start(self._clock, self._transcript)
 
     async def leave_meeting(self, *, force: bool = False) -> None:
         """Leave the current meeting.
