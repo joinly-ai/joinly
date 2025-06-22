@@ -157,13 +157,18 @@ class Transcript(BaseModel):
         }
 
     def after(self, seconds: float) -> "Transcript":
-        """Return a transcript containing the segments after the given seconds."""
+        """Return a transcript copy containing the segments after the given seconds."""
         filtered = [s for s in self.segments if s.start > seconds]
         return Transcript(segments=filtered)
 
     def before(self, seconds: float) -> "Transcript":
-        """Return a transcript containing the segments before the given seconds."""
+        """Return a transcript copy containing the segments before the given seconds."""
         filtered = [s for s in self.segments if s.end < seconds]
+        return Transcript(segments=filtered)
+
+    def with_role(self, role: SpeakerRole) -> "Transcript":
+        """Return a transcript copy containing segments with the specified role."""
+        filtered = [s for s in self.segments if s.role == role]
         return Transcript(segments=filtered)
 
 

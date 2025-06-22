@@ -10,7 +10,12 @@ from pydantic import AnyUrl, Field
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
-from joinly.types import MeetingChatHistory, SpeechInterruptedError, Transcript
+from joinly.types import (
+    MeetingChatHistory,
+    SpeakerRole,
+    SpeechInterruptedError,
+    Transcript,
+)
 
 if TYPE_CHECKING:
     from mcp import ServerSession
@@ -86,7 +91,7 @@ mcp = FastMCP(
 async def get_transcript(ctx: Context) -> Transcript:
     """Get the live transcript of the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    return ms.transcript
+    return ms.transcript.with_role(SpeakerRole.participant)
 
 
 @mcp.tool(
