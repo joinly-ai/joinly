@@ -11,7 +11,7 @@ from joinly.core import AudioReader
 from joinly.providers.browser.devices.pulse_module_manager import (
     PulseModuleManager,
 )
-from joinly.types import AudioFormat
+from joinly.types import AudioChunk, AudioFormat
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
         self._reader: asyncio.StreamReader | None = None
+        self._time_ns: int = 0
+        self._chunk_ns: int = frames_per_chunk * 1_000_000_000 // sample_rate
 
     async def __aenter__(self) -> Self:
         """Create the virtual audio sink and start capturing.
@@ -107,6 +109,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         self._reader = reader
 
         self._env[_ENV_VAR] = self.sink_name
+        self._time_ns = 0
 
         logger.info(
             "Virtual speaker is ready (sink: %s, id: %s, fifo: %s, rate: %s)",
@@ -159,17 +162,19 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         else:
             logger.warning("No FIFO file to remove")
 
-    async def read(self) -> bytes:
+    async def read(self) -> AudioChunk:
         """Return the next audio chunk from the stream.
 
         Returns:
-            bytes: Audio data in f32le format with specified sample rate and chunk size.
+            AudioChunk: Audio data in f32le format with specified sample rate.
         """
         if self._reader is None:
             msg = "Audio reader not started"
             raise RuntimeError(msg)
 
-        try:
-            return await self._reader.readexactly(self.chunk_size)
-        except asyncio.IncompleteReadError as exc:
-            raise StopAsyncIteration from exc
+        chunk = AudioChunk(
+            data=await self._reader.readexactly(self.chunk_size),
+            time_ns=self._time_ns,
+        )
+        self._time_ns += self._chunk_ns
+        return chunk
