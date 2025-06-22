@@ -177,6 +177,9 @@ async def run(
                 )
                 transcript = transcript_after(transcript_full, after=last_time)
                 transcript_event.clear()
+                if not transcript.segments:
+                    logger.warning("No new segments in the transcript after update")
+                    continue
 
                 if name_trigger and not name_in_transcript(transcript, settings.name):
                     continue
