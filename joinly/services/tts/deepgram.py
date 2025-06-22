@@ -95,6 +95,10 @@ class DeepgramTTS(TTS):
             raise RuntimeError(msg)
 
         async with self._lock:
+            # drain the queue to ensure no old data is left
+            while not self._queue.empty():
+                _ = self._queue.get_nowait()
+
             try:
                 await self._client.send_text(text)
                 await self._client.flush()
@@ -103,8 +107,3 @@ class DeepgramTTS(TTS):
                     yield chunk
             finally:
                 await self._client.clear()
-                try:
-                    while True:
-                        self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
