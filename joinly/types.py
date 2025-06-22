@@ -142,6 +142,16 @@ class Transcript(BaseModel):
             segment.speaker for segment in self.segments if segment.speaker is not None
         }
 
+    def after(self, seconds: float) -> "Transcript":
+        """Return a transcript containing the segments after the given seconds."""
+        filtered = [s for s in self.segments if s.start > seconds]
+        return Transcript(segments=filtered)
+
+    def before(self, seconds: float) -> "Transcript":
+        """Return a transcript containing the segments before the given seconds."""
+        filtered = [s for s in self.segments if s.end < seconds]
+        return Transcript(segments=filtered)
+
 
 class MeetingChatMessage(BaseModel):
     """A class to represent a chat message in a meeting.
