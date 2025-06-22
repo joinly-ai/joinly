@@ -8,6 +8,7 @@ from typing import Self
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
 from joinly.types import AudioChunk, SpeechWindow, Transcript
 from joinly.utils.audio import convert_audio_format
+from joinly.utils.clock import Clock
 
 logger = logging.getLogger(__name__)
 
@@ -40,23 +41,13 @@ class DefaultTranscriptionController(TranscriptionController):
         self.utterance_tail_seconds = utterance_tail_seconds
         self.max_stt_tasks = max_stt_tasks
         self.window_queue_size = window_queue_size
-        self._transcript = Transcript()
         self._vad_task: asyncio.Task | None = None
         self._window_queue: asyncio.Queue[SpeechWindow | None] | None = None
         self._stt_tasks: set[asyncio.Task] = set()
         self._no_speech_event = asyncio.Event()
         self._listeners: set[Callable[[str], Coroutine[None, None, None]]] = set()
-        self._time_ns: int = 0
-
-    @property
-    def transcript(self) -> Transcript:
-        """Get the current transcript."""
-        return self._transcript
-
-    @property
-    def transcript_seconds(self) -> float:
-        """Get the current transcript duration in seconds."""
-        return self._time_ns / 1e9
+        self._clock: Clock | None = None
+        self._transcript: Transcript | None = None
 
     @property
     def no_speech_event(self) -> asyncio.Event:
@@ -71,14 +62,20 @@ class DefaultTranscriptionController(TranscriptionController):
         """Clean up the transcription controller."""
         await self.stop()
 
-    async def start(self) -> None:
-        """Start the transcription controller with the given reader, vad, and stt."""
+    async def start(self, clock: Clock, transcript: Transcript) -> None:
+        """Start the transcription controller with the given reader, vad, and stt.
+
+        Args:
+            clock (Clock): The clock to use for timing.
+            transcript (Transcript): The transcript to use for storing segments.
+        """
         if self._vad_task is not None:
             msg = "Transcription controller already started"
             raise RuntimeError(msg)
 
         self._no_speech_event.set()
-        self._time_ns = 0
+        self._clock = clock
+        self._transcript = transcript
         self._vad_task = asyncio.create_task(self._vad_worker())
 
     async def stop(self) -> None:
@@ -97,6 +94,8 @@ class DefaultTranscriptionController(TranscriptionController):
                 await task
         self._stt_tasks.clear()
 
+        self._clock = None
+        self._transcript = None
         self._window_queue = None
 
     def add_listener(
@@ -117,7 +116,7 @@ class DefaultTranscriptionController(TranscriptionController):
         for listener in self._listeners:
             asyncio.create_task(listener(event))  # noqa: RUF006
 
-    async def _vad_worker(self) -> None:  # noqa: C901
+    async def _vad_worker(self) -> None:  # noqa: C901, PLR0915
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
         last_speech: int | None = None
@@ -130,12 +129,14 @@ class DefaultTranscriptionController(TranscriptionController):
                 chunk = await self.reader.read()
                 if offset is None:
                     offset = chunk.time_ns
-                self._time_ns = chunk.time_ns - offset
+                now_ns = chunk.time_ns - offset
+                if self._clock is not None:
+                    self._clock.update(chunk.time_ns - offset)
                 yield AudioChunk(
                     data=convert_audio_format(
                         chunk.data, self.reader.audio_format, self.vad.audio_format
                     ),
-                    time_ns=self._time_ns,
+                    time_ns=now_ns,
                 )
 
         vad_stream = self.vad.stream(_chunk_iterator())
@@ -200,6 +201,9 @@ class DefaultTranscriptionController(TranscriptionController):
 
     async def _stt_utterance(self, queue: asyncio.Queue[SpeechWindow | None]) -> None:
         """Process speech windows for transcription."""
+        if self._transcript is None:
+            msg = "Transcription controller not active"
+            raise RuntimeError(msg)
         end_ts: float | None = None
 
         async def _window_iterator() -> AsyncIterator[SpeechWindow]:
