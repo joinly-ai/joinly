@@ -121,28 +121,28 @@ class DefaultTranscriptionController(TranscriptionController):
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
         last_speech: float = float("inf")
-        dropped_frames: int = 0
+        dropped_windows: int = 0
 
-        async def _frame_iterator() -> AsyncIterator[bytes]:
-            """Yield audio frames from the reader."""
+        async def _chunk_iterator() -> AsyncIterator[bytes]:
+            """Yield audio chunks from the reader."""
             while True:
-                frame = await self.reader.read()
+                chunk = await self.reader.read()
                 yield convert_audio_format(
-                    frame, self.reader.audio_format, self.vad.audio_format
+                    chunk, self.reader.audio_format, self.vad.audio_format
                 )
 
-        vad_stream = self.vad.stream(_frame_iterator())
-        async for frame in vad_stream:
-            if frame.is_speech:
-                last_speech = frame.start
+        vad_stream = self.vad.stream(_chunk_iterator())
+        async for window in vad_stream:
+            if window.is_speech:
+                last_speech = window.start
 
-            if frame.is_speech and self._window_queue is None:
+            if window.is_speech and self._window_queue is None:
                 # utterance start
-                logger.info("Utterance start: %.2fs", frame.start)
+                logger.info("Utterance start: %.2fs", window.start)
                 self._no_speech_event.clear()
                 if len(self._stt_tasks) >= self.max_stt_tasks:
                     logger.warning(
-                        "Maximum number of STT tasks reached (%d), dropping frame",
+                        "Maximum number of STT tasks reached (%d), dropping window",
                         self.max_stt_tasks,
                     )
                     continue
@@ -155,11 +155,11 @@ class DefaultTranscriptionController(TranscriptionController):
                 self._stt_tasks.add(task)
 
             if (
-                not frame.is_speech
-                and frame.start - last_speech >= self.utterance_tail_seconds
+                not window.is_speech
+                and window.start - last_speech >= self.utterance_tail_seconds
             ):
                 # utterance end
-                logger.info("Utterance end: %.2fs", frame.start)
+                logger.info("Utterance end: %.2fs", window.start)
                 self._no_speech_event.set()
                 last_speech = float("inf")
                 if self._window_queue is not None:
@@ -177,17 +177,18 @@ class DefaultTranscriptionController(TranscriptionController):
             if self._window_queue is not None:
                 # in utterance
                 try:
-                    self._window_queue.put_nowait(frame)
+                    self._window_queue.put_nowait(window)
                 except asyncio.QueueFull:
-                    dropped_frames += 1
-                    if dropped_frames == 1:
-                        logger.info("Frame queue is full, dropping frames")
+                    dropped_windows += 1
+                    if dropped_windows == 1:
+                        logger.info("Window queue is full, dropping audio windows")
                 else:
-                    if dropped_frames > 0:
+                    if dropped_windows > 0:
                         logger.warning(
-                            "Dropped %d frames due to full queue", dropped_frames
+                            "Dropped %d audio windows due to full queue",
+                            dropped_windows,
                         )
-                    dropped_frames = 0
+                    dropped_windows = 0
 
     async def _stt_utterance(self, queue: asyncio.Queue[SpeechWindow | None]) -> None:
         """Process speech windows for transcription."""
@@ -201,10 +202,13 @@ class DefaultTranscriptionController(TranscriptionController):
                 if window is None:
                     end_ts = time.monotonic()
                     break
-                window.data = convert_audio_format(
-                    window.data, self.vad.audio_format, self.stt.audio_format
+                yield SpeechWindow(
+                    data=convert_audio_format(
+                        window.data, self.vad.audio_format, self.stt.audio_format
+                    ),
+                    start=window.start,
+                    is_speech=window.is_speech,
                 )
-                yield window
 
         seg_count = 0
         stt_stream = self.stt.stream(_window_iterator())
@@ -222,6 +226,6 @@ class DefaultTranscriptionController(TranscriptionController):
         if seg_count > 0:
             if end_ts is not None:
                 latency = time.monotonic() - end_ts
-                log_level = logging.WARNING if latency > 1 else logging.INFO
+                log_level = logging.WARNING if latency > 0.5 else logging.INFO  # noqa: PLR2004
                 logger.log(log_level, "STT utterance latency: %.3fs", latency)
             self._notify("utterance")
