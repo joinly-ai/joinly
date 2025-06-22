@@ -137,6 +137,7 @@ class DefaultTranscriptionController(TranscriptionController):
                         chunk.data, self.reader.audio_format, self.vad.audio_format
                     ),
                     time_ns=now_ns,
+                    speaker=chunk.speaker,
                 )
 
         vad_stream = self.vad.stream(_chunk_iterator())
@@ -220,6 +221,7 @@ class DefaultTranscriptionController(TranscriptionController):
                     ),
                     time_ns=window.time_ns,
                     is_speech=window.is_speech,
+                    speaker=window.speaker,
                 )
 
         seg_count = 0
@@ -227,7 +229,8 @@ class DefaultTranscriptionController(TranscriptionController):
         async for segment in stt_stream:
             self._transcript.add_segment(segment)
             logger.info(
-                "Transcription segment: %s (%.2fs-%.2fs)",
+                "%s: %s (%.2fs-%.2fs)",
+                segment.speaker if segment.speaker else "Unknown",
                 segment.text,
                 segment.start,
                 segment.end,
