@@ -17,7 +17,7 @@ class SpeechInterruptedError(Exception):
     """Raised when speech is interrupted by detected speech."""
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AudioFormat:
     """Properties of pcm audio.
 
@@ -30,7 +30,7 @@ class AudioFormat:
     byte_depth: int
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class SpeechWindow:
     """A class to represent an audio window with voice activity detection.
 
