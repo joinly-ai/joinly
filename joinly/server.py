@@ -10,7 +10,12 @@ from pydantic import AnyUrl, Field
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
-from joinly.types import MeetingChatHistory, SpeechInterruptedError, Transcript
+from joinly.types import (
+    MeetingChatHistory,
+    MeetingParticipant,
+    SpeechInterruptedError,
+    Transcript,
+)
 
 if TYPE_CHECKING:
     from mcp import ServerSession
@@ -206,6 +211,18 @@ async def get_transcript_tool(
     if mode == "latest":
         return ms.transcript.after(ms.meeting_seconds - minutes * 60)
     return ms.transcript
+
+
+@mcp.tool(
+    "get_participants",
+    description="Get the list of participants in the meeting.",
+)
+async def get_participants(
+    ctx: Context,
+) -> list[MeetingParticipant]:
+    """Get the list of participants in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    return await ms.get_participants()
 
 
 @mcp.tool(
