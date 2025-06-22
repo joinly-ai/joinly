@@ -57,6 +57,21 @@ def convert_audio_format(
     raise IncompatibleAudioFormatError(msg)
 
 
+def calculate_audio_duration_ns(byte_size: int, audio_format: AudioFormat) -> int:
+    """Calculate the duration of audio data in nanoseconds.
+
+    Args:
+        byte_size: The size of the audio data in bytes.
+        audio_format: An AudioFormat object containing sample rate and byte depth.
+
+    Returns:
+        int: The duration of the audio data in nanoseconds.
+    """
+    return (
+        byte_size // audio_format.byte_depth * 1_000_000_000 // audio_format.sample_rate
+    )
+
+
 def calculate_audio_duration(byte_size: int, audio_format: AudioFormat) -> float:
     """Calculate the duration of audio data in seconds.
 

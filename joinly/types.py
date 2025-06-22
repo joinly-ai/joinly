@@ -31,17 +31,30 @@ class AudioFormat:
 
 
 @dataclass(frozen=True, slots=True)
+class AudioChunk:
+    """A class to represent a chunk of audio data.
+
+    Attributes:
+        data (bytes): The raw PCM audio data.
+        time_ns (int): The timestamp of the audio chunk in nanoseconds.
+    """
+
+    data: bytes
+    time_ns: int
+
+
+@dataclass(frozen=True, slots=True)
 class SpeechWindow:
     """A class to represent an audio window with voice activity detection.
 
     Attributes:
         data (bytes): The raw PCM audio data for the window.
-        start (float): The start time of the window in seconds.
+        time_ns (int): The timestamp of the audio window in nanoseconds.
         is_speech (bool): Whether the window contains speech.
     """
 
     data: bytes
-    start: float
+    time_ns: int
     is_speech: bool
 
 

@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Protocol
 
 from joinly.types import (
+    AudioChunk,
     AudioFormat,
     MeetingChatHistory,
     SpeechWindow,
@@ -22,11 +23,11 @@ class AudioReader(Protocol):
 
     audio_format: AudioFormat
 
-    async def read(self) -> bytes:
+    async def read(self) -> AudioChunk:
         """Read a chunk of audio data.
 
         Returns:
-            bytes: A chunk of raw PCM audio data.
+            AudioChunk: A chunk of audio data.
         """
         ...
 
@@ -65,11 +66,11 @@ class VAD(Protocol):
 
     audio_format: AudioFormat
 
-    def stream(self, data: AsyncIterator[bytes]) -> AsyncIterator[SpeechWindow]:
+    def stream(self, chunks: AsyncIterator[AudioChunk]) -> AsyncIterator[SpeechWindow]:
         """Stream voice activity detection results on audio windows.
 
         Args:
-            data: An asynchronous iterator providing raw PCM audio data.
+            chunks: An asynchronous iterator providing audio chunks.
 
         Returns:
             AsyncIterator[SpeechWindow]: Stream of audio windows containing speech
@@ -220,6 +221,15 @@ class TranscriptionController(Protocol):
 
         Returns:
             Transcript: The current transcript of the audio processed.
+        """
+        ...
+
+    @property
+    def transcript_seconds(self) -> float:
+        """Get the current duration of transcription in seconds.
+
+        Returns:
+            float: The total duration of the transcript.
         """
         ...
 

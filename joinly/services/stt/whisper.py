@@ -123,16 +123,19 @@ class WhisperSTT(STT):
             queue: The queue to put buffered audio chunks into.
         """
         buffer = bytearray()
-        start: float = -1
+        start: float | None = None
         silence_bytes: int = 0
-        min_bytes: int = int(16000 * 4 * self.min_audio)
-        min_silence_bytes: int = int(16000 * 4 * self.min_silence)
+        byte_per_second: int = (
+            self.audio_format.sample_rate * self.audio_format.byte_depth
+        )
+        min_bytes: int = int(byte_per_second * self.min_audio)
+        min_silence_bytes: int = int(byte_per_second * self.min_silence)
 
         async for window in windows:
-            if window.is_speech and start < 0:
-                start = window.start
+            if window.is_speech and start is None:
+                start = window.time_ns / 1e9
 
-            if start >= 0:
+            if start is not None:
                 buffer.extend(window.data)
                 if window.is_speech:
                     silence_bytes = 0
@@ -140,19 +143,14 @@ class WhisperSTT(STT):
                     silence_bytes += len(window.data)
 
                 if len(buffer) >= min_bytes and silence_bytes >= min_silence_bytes:
-                    logger.debug(
-                        "Buffering audio chunk of size: %d (%.2fs)",
-                        len(buffer),
-                        len(buffer) / (16000 * 4),
-                    )
-                    end = window.start + int(len(window.data) / (16000 * 4))
+                    end = start + int(len(buffer) / byte_per_second)
                     await queue.put((bytes(buffer), start, end))
                     buffer.clear()
-                    start = -1
+                    start = None
                     silence_bytes = 0
 
-        if start >= 0 and buffer:
-            end = start + int(len(buffer) / (16000 * 4))
+        if start is not None and buffer:
+            end = start + int(len(buffer) / byte_per_second)
             await queue.put((bytes(buffer), start, end))
         await queue.put(None)
 
