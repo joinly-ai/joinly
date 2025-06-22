@@ -136,7 +136,6 @@ class DefaultTranscriptionController(TranscriptionController):
                         chunk.data, self.reader.audio_format, self.vad.audio_format
                     ),
                     time_ns=self._time_ns,
-                    speaker=chunk.speaker,
                 )
 
         vad_stream = self.vad.stream(_chunk_iterator())
