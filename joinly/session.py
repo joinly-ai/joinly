@@ -7,6 +7,7 @@ from joinly.core import (
     TranscriptionController,
 )
 from joinly.types import MeetingChatHistory, Transcript
+from joinly.utils.clock import Clock
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +33,24 @@ class MeetingSession:
         self._meeting_provider = meeting_provider
         self._transcription_controller = transcription_controller
         self._speech_controller = speech_controller
+        self._clock: Clock | None = None
+        self._transcript: Transcript | None = None
 
     @property
     def transcript(self) -> Transcript:
         """Return the current transcript of the meeting."""
-        return self._transcription_controller.transcript
+        if self._transcript is None:
+            msg = "Not joined any meeting, cannot access transcript."
+            raise RuntimeError(msg)
+        return self._transcript
 
     @property
     def meeting_seconds(self) -> float:
         """Return the current meeting duration in seconds."""
-        return self._transcription_controller.transcript_seconds
+        if self._clock is None:
+            msg = "Not joined any meeting, cannot access meeting duration."
+            raise RuntimeError(msg)
+        return self._clock.now_s
 
     def add_transcription_listener(
         self, listener: Callable[[str], Coroutine[None, None, None]]
@@ -72,8 +81,10 @@ class MeetingSession:
             passcode (str | None): The password or passcode for the meeting
                 (if required).
         """
+        self._clock = Clock()
+        self._transcript = Transcript()
         await self._meeting_provider.join(meeting_url, participant_name, passcode)
-        await self._transcription_controller.start()
+        await self._transcription_controller.start(self._clock, self._transcript)
         await self._speech_controller.start()
 
     async def leave_meeting(self, *, force: bool = False) -> None:
