@@ -59,7 +59,6 @@ class DefaultSpeechController(SpeechController):
         self.non_interruptable = non_interruptable
         self._job_queue: asyncio.Queue[SpeakJob] | None = None
         self._worker_task: asyncio.Task | None = None
-        self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
 
@@ -172,7 +171,11 @@ class DefaultSpeechController(SpeechController):
         Returns:
             list[str]: A list of text chunks.
         """
-        chunks: list[str] = await asyncio.to_thread(self._chunker, text)  # type: ignore[operator]
+        chunker = chunkerify(
+            lambda s: len(s.split()),
+            chunk_size=max(15, min(50, int(0.2 * len(text.split())))),
+        )
+        chunks: list[str] = await asyncio.to_thread(chunker, text)  # type: ignore[operator]
         return chunks
 
     async def _speech_producer(
