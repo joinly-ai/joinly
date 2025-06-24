@@ -233,6 +233,7 @@ class DefaultSpeechController(SpeechController):
         chunk_idx: int = 0
         byte_size: int = 0
         chunk_byte_size: int = 0
+        start: float | None = None
 
         producer = asyncio.create_task(self._speech_producer(chunks, audio_queue))
         buffer = bytearray()
@@ -250,8 +251,25 @@ class DefaultSpeechController(SpeechController):
                         )
                     segment = await audio_queue.get()
 
+                # await active speech to not interrupt it
+                if not interrupt and chunk_idx == 0:
+                    await self.no_speech_event.wait()
+
+                if start is None:
+                    start = self._clock.now_s
+
                 # end of text chunk
                 if segment is _CHUNK_END:
+                    self._transcript.add_segment(
+                        TranscriptSegment(
+                            text=chunks[chunk_idx],
+                            start=start,
+                            end=self._clock.now_s,
+                            speaker=get_settings().name,
+                            role=SpeakerRole.assistant,
+                        )
+                    )
+                    start = None
                     chunk_idx += 1
                     chunk_byte_size = 0
                     continue
@@ -272,11 +290,6 @@ class DefaultSpeechController(SpeechController):
                     )
                 )
 
-                # await active speech to not interrupt it
-                if not interrupt and chunk_idx == 0:
-                    await self.no_speech_event.wait()
-
-                start = self._clock.now_s
                 while len(buffer) >= self.writer.chunk_size:
                     # check for speech interruption
                     if (
@@ -313,16 +326,6 @@ class DefaultSpeechController(SpeechController):
                     byte_size += self.writer.chunk_size
                     chunk_byte_size += self.writer.chunk_size
                     del buffer[: self.writer.chunk_size]
-
-                self._transcript.add_segment(
-                    TranscriptSegment(
-                        text=chunks[chunk_idx],
-                        start=start,
-                        end=self._clock.now_s,
-                        speaker=get_settings().name,
-                        role=SpeakerRole.assistant,
-                    )
-                )
 
         except SpeechInterruptedError as e:
             logger.info("%s", e)
