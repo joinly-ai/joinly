@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from typing import Self
 
@@ -91,8 +92,8 @@ class DeepgramSTT(STT):
                 if transcript:
                     segment = TranscriptSegment(
                         text=transcript,
-                        start=0,
-                        end=result.duration,
+                        start=result.start,
+                        end=result.start + result.duration,
                     )
                     await self._queue.put(segment)  # type: ignore[attr-defined]
                 if result.from_finalize:
@@ -111,7 +112,7 @@ class DeepgramSTT(STT):
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the context."""
-        logger.info("Closing Deepgram TTS service connection")
+        logger.info("Closing Deepgram STT service connection")
         await self._client.finish()
         self._queue = None
 
@@ -130,24 +131,26 @@ class DeepgramSTT(STT):
             msg = "STT service is not started."
             raise RuntimeError(msg)
 
-        start: float | None = None
-        end: float | None = None
+        stream_start: float | None = None
+        speaker_windows: list[tuple[float, float, str | None]] = []
 
         async def _producer() -> None:
             """Producer coroutine to send audio data."""
-            nonlocal start, end
+            nonlocal stream_start
             async for window in windows:
-                if start is None:
-                    start = window.time_ns / 1e9
-                end = window.time_ns / 1e9 + calculate_audio_duration(
-                    len(window.data), self.audio_format
-                )
+                if stream_start is None:
+                    stream_start = window.time_ns / 1e9
+                start = window.time_ns / 1e9 - stream_start
+                dur = calculate_audio_duration(len(window.data), self.audio_format)
+                speaker_windows.append((start, start + dur, window.speaker))
                 await self._client.send(window.data)
             await self._client.finalize()
 
-        producer = asyncio.create_task(_producer())
-
         async with self._lock:
+            while not self._queue.empty():
+                _ = self._queue.get_nowait()
+            producer = asyncio.create_task(_producer())
+
             try:
                 while True:
                     cm = (
@@ -168,16 +171,18 @@ class DeepgramSTT(STT):
                     if segment is None:
                         break
 
+                    speakers: defaultdict[str | None, float] = defaultdict(float)
+                    for start, end, speaker in speaker_windows:
+                        speakers[speaker] += max(
+                            0.0, min(end, segment.end) - max(start, segment.start)
+                        )
+                    speaker = max(speakers.items(), key=lambda item: item[1])[0]
+
                     yield TranscriptSegment(
                         text=segment.text,
-                        start=start or 0,
-                        end=min(end or float("inf"), (start or 0) + segment.end),
+                        start=segment.start + (stream_start or 0),
+                        end=segment.end + (stream_start or 0),
+                        speaker=speaker,
                     )
-                    start = (start or 0) + segment.end
             finally:
                 producer.cancel()
-                try:
-                    while True:
-                        self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
