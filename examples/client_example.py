@@ -19,6 +19,7 @@ import datetime
 import json
 import logging
 import os
+import re
 
 from fastmcp import Client
 from langchain.chat_models import init_chat_model
@@ -50,10 +51,17 @@ class Transcript(BaseModel):
 
 def transcript_to_messages(transcript: Transcript) -> list[HumanMessage]:
     """Convert a transcript to a list of HumanMessage."""
+
+    def _normalize_speaker(speaker: str | None) -> str:
+        if speaker is None:
+            return "Unknown"
+        speaker = re.sub(r"\s+", "_", speaker.strip())
+        return re.sub(r"[<>\|\\\/]+", "", speaker)
+
     return [
         HumanMessage(
             content=s.text,
-            name=s.speaker if s.speaker is not None else "Unknown",
+            name=_normalize_speaker(s.speaker),
         )
         for s in transcript.segments
     ]
