@@ -118,7 +118,7 @@ class DeepgramSTT(STT):
         await self._client.finish()
         self._queue = None
 
-    async def stream(
+    async def stream(  # noqa: C901
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
         """Stream audio windows and yield transcribed segments.
@@ -134,17 +134,22 @@ class DeepgramSTT(STT):
             raise RuntimeError(msg)
 
         stream_start: float | None = None
-        speaker_windows: list[tuple[float, float, str | None]] = []
+        stream_end: float | None = None
+        speaker_windows: list[tuple[float, float, str]] = []
 
         async def _producer() -> None:
             """Producer coroutine to send audio data."""
-            nonlocal stream_start
+            nonlocal stream_start, stream_end
             async for window in windows:
                 if stream_start is None:
                     stream_start = window.time_ns / 1e9
-                start = window.time_ns / 1e9 - stream_start
+                cur = window.time_ns / 1e9
                 dur = calculate_audio_duration(len(window.data), self.audio_format)
-                speaker_windows.append((start, start + dur, window.speaker))
+                stream_end = cur + dur
+                if window.speaker is not None:
+                    speaker_windows.append(
+                        (cur - stream_start, cur - stream_start + dur, window.speaker)
+                    )
                 await self._client.send(window.data)
             await self._client.finalize()
 
@@ -173,12 +178,18 @@ class DeepgramSTT(STT):
                     if segment is None:
                         break
 
-                    speakers: defaultdict[str | None, float] = defaultdict(float)
+                    speakers: defaultdict[str, float] = defaultdict(float)
                     for start, end, speaker in speaker_windows:
                         speakers[speaker] += max(
                             0.0, min(end, segment.end) - max(start, segment.start)
                         )
-                    speaker = max(speakers.items(), key=lambda item: item[1])[0]
+                    speaker, speaker_time = max(
+                        speakers.items(),
+                        key=lambda x: x[1],
+                        default=(None, 0),
+                    )
+                    if speaker_time < 0.2 * (segment.end - segment.start):
+                        speaker = None
 
                     yield TranscriptSegment(
                         text=segment.text,
@@ -188,8 +199,4 @@ class DeepgramSTT(STT):
                     )
             finally:
                 producer.cancel()
-                self._sent_seconds += (
-                    speaker_windows[-1][1] - speaker_windows[0][0]
-                    if speaker_windows
-                    else 0.0
-                )
+                self._sent_seconds += (stream_end or 0) - (stream_start or 0)

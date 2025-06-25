@@ -125,7 +125,7 @@ class WhisperSTT(STT):
         """
         buffer = bytearray()
         start: float | None = None
-        speakers: defaultdict[str | None, int] = defaultdict(int)
+        speakers: defaultdict[str, float] = defaultdict(int)
         silence_bytes: int = 0
         byte_per_second: int = (
             self.audio_format.sample_rate * self.audio_format.byte_depth
@@ -141,13 +141,22 @@ class WhisperSTT(STT):
                 buffer.extend(window.data)
                 if window.is_speech:
                     silence_bytes = 0
-                    speakers[window.speaker] += len(window.data)
+                    if window.speaker is not None:
+                        speakers[window.speaker] += calculate_audio_duration(
+                            len(window.data), self.audio_format
+                        )
                 else:
                     silence_bytes += len(window.data)
 
                 if len(buffer) >= min_bytes and silence_bytes >= min_silence_bytes:
                     end = start + int(len(buffer) / byte_per_second)
-                    speaker = max(speakers.items(), key=lambda item: item[1])[0]
+                    speaker, speaker_time = max(
+                        speakers.items(),
+                        key=lambda x: x[1],
+                        default=(None, 0),
+                    )
+                    if speaker_time < 0.2 * (end - start):
+                        speaker = None
                     await queue.put((bytes(buffer), start, end, speaker))
                     buffer.clear()
                     start = None
