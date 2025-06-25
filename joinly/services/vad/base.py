@@ -57,6 +57,7 @@ class BasePaddedVAD(VAD, abc.ABC):
                         data=window_bytes,
                         time_ns=time_ns,
                         is_speech=False,
+                        speaker=chunk.speaker,
                     )
                 else:
                     if pending:
@@ -64,6 +65,7 @@ class BasePaddedVAD(VAD, abc.ABC):
                             data=pending.data,
                             time_ns=pending.time_ns,
                             is_speech=True,
+                            speaker=pending.speaker,
                         )
                     pending = None
 
@@ -71,6 +73,7 @@ class BasePaddedVAD(VAD, abc.ABC):
                         data=window_bytes,
                         time_ns=time_ns,
                         is_speech=True,
+                        speaker=chunk.speaker,
                     )
 
                 del buffer[:window_size]

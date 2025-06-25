@@ -3,11 +3,12 @@ import contextlib
 import logging
 import re
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
+from joinly.settings import get_settings
 from joinly.types import MeetingChatHistory, MeetingChatMessage
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,15 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(
         r"^(?:https?://)?(?:[a-z0-9-]+\.)?teams\.microsoft\.com/"
     )
+
+    def __init__(self) -> None:
+        """Initialize the Teams browser platform controller."""
+        self._state: dict[str, Any] = {}
+
+    @property
+    def active_speaker(self) -> str | None:
+        """Get the name of the active speaker in the Teams meeting."""
+        return self._state.get("active_speaker")
 
     async def join(
         self,
@@ -55,6 +65,8 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             dismiss_audio_missing.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await dismiss_audio_missing
+
+        await self._setup_active_speaker_observer(page)
 
     async def leave(self, page: Page) -> None:
         """Leave the Teams meeting.
@@ -168,3 +180,50 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             await chat_button.wait_for(timeout=2000)
             await chat_button.click()
             await page.wait_for_timeout(1000)
+
+    async def _setup_active_speaker_observer(self, page: Page) -> None:
+        """Setup the active speaker observer for Teams."""
+        await page.expose_binding(
+            "report",
+            lambda _, name: self._state.update({"active_speaker": name}),
+        )
+        await page.evaluate(
+            """
+            (nameArg) => {
+                const emit = n => window.report(n);
+                const find = () => {
+                    for (
+                        const t of document.querySelectorAll(
+                            'div[data-tid="stage-layout"] div[role="menuitem"]'
+                        )
+                    ) {
+                        if (!!t.querySelector(
+                            'div[data-tid="voice-level-stream-outline"].vdi-frame-occlusion'
+                        )) {
+                            const el = t.querySelector('div:not(:has(*)):not(:empty)');
+                            const name = el?.textContent.trim();
+                            if (name && name.length > 0 && name !== nameArg)
+                                return name;
+                        }
+                    }
+                    return null;
+                };
+
+                let last = null, cur;
+                new MutationObserver(() => {
+                    cur = find();
+                    if (cur !== last) { last = cur; emit(cur); }
+                }).observe(
+                    document,
+                    {
+                        subtree: true,
+                        childList: true,
+                        attributes: true,
+                        attributeFilter: ['class']
+                    }
+                );
+                emit(find());
+            }
+            """,
+            get_settings().name,
+        )

@@ -6,8 +6,8 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Self
 
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
-from joinly.types import AudioChunk, SpeechWindow, Transcript
-from joinly.utils.audio import convert_audio_format
+from joinly.types import AudioChunk, SpeechWindow, Transcript, TranscriptSegment
+from joinly.utils.audio import calculate_audio_duration, convert_audio_format
 from joinly.utils.clock import Clock
 
 logger = logging.getLogger(__name__)
@@ -137,6 +137,7 @@ class DefaultTranscriptionController(TranscriptionController):
                         chunk.data, self.reader.audio_format, self.vad.audio_format
                     ),
                     time_ns=now_ns,
+                    speaker=chunk.speaker,
                 )
 
         vad_stream = self.vad.stream(_chunk_iterator())
@@ -204,30 +205,45 @@ class DefaultTranscriptionController(TranscriptionController):
         if self._transcript is None:
             msg = "Transcription controller not active"
             raise RuntimeError(msg)
+        start: float | None = None
+        end: float | None = None
         end_ts: float | None = None
 
         async def _window_iterator() -> AsyncIterator[SpeechWindow]:
             """Yield windows from the window queue."""
-            nonlocal end_ts
+            nonlocal start, end, end_ts
             while True:
                 window = await queue.get()
                 if window is None:
                     end_ts = time.monotonic()
                     break
+                if start is None:
+                    start = window.time_ns / 1e9
+                end = window.time_ns / 1e9 + calculate_audio_duration(
+                    len(window.data), self.vad.audio_format
+                )
                 yield SpeechWindow(
                     data=convert_audio_format(
                         window.data, self.vad.audio_format, self.stt.audio_format
                     ),
                     time_ns=window.time_ns,
                     is_speech=window.is_speech,
+                    speaker=window.speaker,
                 )
 
         seg_count = 0
         stt_stream = self.stt.stream(_window_iterator())
-        async for segment in stt_stream:
+        async for s in stt_stream:
+            segment = TranscriptSegment(
+                text=s.text,
+                start=max(s.start, start or float("-inf")),
+                end=min(s.end, end or float("inf")),
+                speaker=s.speaker,
+            )
             self._transcript.add_segment(segment)
             logger.info(
-                "Transcription segment: %s (%.2fs-%.2fs)",
+                "%s: %s (%.2fs-%.2fs)",
+                segment.speaker if segment.speaker else "Unknown",
                 segment.text,
                 segment.start,
                 segment.end,

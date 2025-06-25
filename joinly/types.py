@@ -38,10 +38,12 @@ class AudioChunk:
     Attributes:
         data (bytes): The raw PCM audio data.
         time_ns (int): The timestamp of the audio chunk in nanoseconds.
+        speaker (str | None): The (main) speaker of the audio chunk, if available.
     """
 
     data: bytes
     time_ns: int
+    speaker: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,11 +54,13 @@ class SpeechWindow:
         data (bytes): The raw PCM audio data for the window.
         time_ns (int): The timestamp of the audio window in nanoseconds.
         is_speech (bool): Whether the window contains speech.
+        speaker (str | None): The speaker of the audio window, if available.
     """
 
     data: bytes
     time_ns: int
     is_speech: bool
+    speaker: str | None = None
 
 
 class SpeakerRole(str, Enum):

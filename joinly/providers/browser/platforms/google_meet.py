@@ -1,11 +1,12 @@
 import contextlib
 import re
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
+from joinly.settings import get_settings
 from joinly.types import MeetingChatHistory, MeetingChatMessage
 
 _TIME_RX = re.compile(r"^\d{1,2}:\d{2}(?:[AP]M)?$", re.IGNORECASE)
@@ -17,6 +18,15 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(
         r"^(?:https?://)?(?:www\.)?meet\.google\.com/"
     )
+
+    def __init__(self) -> None:
+        """Initialize the Google Meet browser platform controller."""
+        self._state: dict[str, Any] = {}
+
+    @property
+    def active_speaker(self) -> str | None:
+        """Get the name of the active speaker in the Google Meet meeting."""
+        return self._state.get("active_speaker")
 
     async def join(
         self,
@@ -43,6 +53,8 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await page.locator(
             "button:has-text('Join now'), button:has-text('Ask to join')"
         ).click()
+
+        await self._setup_active_speaker_observer(page)
 
     async def leave(self, page: Page) -> None:
         """Leave the Google Meet meeting.
@@ -161,3 +173,51 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             await chat_button.wait_for(timeout=2000)
             await chat_button.click()
             await page.wait_for_timeout(1000)
+
+    async def _setup_active_speaker_observer(self, page: Page) -> None:
+        """Setup the active speaker observer for Google Meet."""
+        await page.expose_binding(
+            "report",
+            lambda _, name: self._state.update({"active_speaker": name}),
+        )
+        await page.evaluate(
+            """
+            (nameArg) => {
+                const emit = n => window.report(n);
+                const find = () => {
+                    for (
+                        const t of document.querySelectorAll('div[data-participant-id]')
+                    ) {
+                        if (![...t.querySelectorAll('div')].some(d =>
+                                !d.children.length &&
+                                getComputedStyle(d).display === 'none' &&
+                                parseFloat(getComputedStyle(d).borderTopWidth) > 3
+                            ))
+                        {
+                            const el = t.querySelector('span.notranslate')
+                            const name = el?.textContent.trim();
+                            if (name && name.length > 0 && name !== nameArg)
+                                return name;
+                        }
+                    }
+                    return null;
+                };
+
+                let last = null, cur;
+                new MutationObserver(() => {
+                    cur = find();
+                    if (cur !== last) { last = cur; emit(cur); }
+                }).observe(
+                    document,
+                    {
+                        subtree: true,
+                        childList: true,
+                        attributes: true,
+                        attributeFilter: ['style', 'class']
+                    }
+                );
+                emit(find());
+            }
+            """,
+            get_settings().name,
+        )

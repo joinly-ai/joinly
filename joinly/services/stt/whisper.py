@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from functools import partial
 from typing import Self
@@ -97,7 +98,7 @@ class WhisperSTT(STT):
             msg = "Model not initialized"
             raise RuntimeError(msg)
 
-        queue = asyncio.Queue[tuple[bytes, float, float] | None](maxsize=10)
+        queue = asyncio.Queue[tuple[bytes, float, float, str | None] | None](maxsize=10)
         buffer_task = asyncio.create_task(self._buffer_windows(windows, queue))
 
         try:
@@ -105,8 +106,8 @@ class WhisperSTT(STT):
                 item = await queue.get()
                 if item is None:
                     break
-                data, start, end = item
-                async for segment in self._transcribe(data, start, end):
+                data, start, end, speaker = item
+                async for segment in self._transcribe(data, start, end, speaker):
                     yield segment
         finally:
             buffer_task.cancel()
@@ -114,7 +115,7 @@ class WhisperSTT(STT):
     async def _buffer_windows(
         self,
         windows: AsyncIterator[SpeechWindow],
-        queue: asyncio.Queue[tuple[bytes, float, float] | None],
+        queue: asyncio.Queue[tuple[bytes, float, float, str | None] | None],
     ) -> None:
         """Buffer audio windows into the queue.
 
@@ -124,6 +125,7 @@ class WhisperSTT(STT):
         """
         buffer = bytearray()
         start: float | None = None
+        speakers: defaultdict[str, float] = defaultdict(int)
         silence_bytes: int = 0
         byte_per_second: int = (
             self.audio_format.sample_rate * self.audio_format.byte_depth
@@ -139,23 +141,40 @@ class WhisperSTT(STT):
                 buffer.extend(window.data)
                 if window.is_speech:
                     silence_bytes = 0
+                    if window.speaker is not None:
+                        speakers[window.speaker] += calculate_audio_duration(
+                            len(window.data), self.audio_format
+                        )
                 else:
                     silence_bytes += len(window.data)
 
                 if len(buffer) >= min_bytes and silence_bytes >= min_silence_bytes:
                     end = start + int(len(buffer) / byte_per_second)
-                    await queue.put((bytes(buffer), start, end))
+                    speaker, speaker_time = max(
+                        speakers.items(),
+                        key=lambda x: x[1],
+                        default=(None, 0),
+                    )
+                    if speaker_time < 0.2 * (end - start):
+                        speaker = None
+                    await queue.put((bytes(buffer), start, end, speaker))
                     buffer.clear()
                     start = None
+                    speakers.clear()
                     silence_bytes = 0
 
         if start is not None and buffer:
             end = start + int(len(buffer) / byte_per_second)
-            await queue.put((bytes(buffer), start, end))
+            speaker = max(speakers.items(), key=lambda item: item[1])[0]
+            await queue.put((bytes(buffer), start, end, speaker))
         await queue.put(None)
 
     async def _transcribe(
-        self, data: bytes, start: float, end: float | None = None
+        self,
+        data: bytes,
+        start: float,
+        end: float | None = None,
+        speaker: str | None = None,
     ) -> AsyncIterator[TranscriptSegment]:
         """Process the input audio chunk and yield transcriptions.
 
@@ -163,6 +182,7 @@ class WhisperSTT(STT):
             data: Audio data in bytes format.
             start: The start time of the audio segment.
             end: The end time of the audio segment.
+            speaker: The speaker identifier.
 
         Yields:
             TranscriptSegment: The transcribed segment.
@@ -200,4 +220,5 @@ class WhisperSTT(STT):
                         text=text,
                         start=min(start + seg.start, end or float("inf")),
                         end=min(start + seg.end, end or float("inf")),
+                        speaker=speaker,
                     )
