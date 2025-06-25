@@ -1,7 +1,7 @@
 [project]
 name = "joinly"
 version = "0.2.0"
-description = "Add your description here"
+description = "Make your meetings accessible to AI Agents"
 readme = "README.md"
 authors = [
     { name = "dbrockmann", email = "dominik@joinly.ai" }
