@@ -19,6 +19,15 @@ class BrowserPlatformController(Protocol):
 
     url_pattern: ClassVar[re.Pattern[str]]
 
+    @property
+    def active_speaker(self) -> str | None:
+        """Get the name of the active speaker in the meeting.
+
+        Returns:
+            str | None: The name of the active speaker, or None if not available.
+        """
+        ...
+
     async def join(
         self, page: Page, url: str, name: str, passcode: str | None = None
     ) -> None:
@@ -92,6 +101,11 @@ class BaseBrowserPlatformController(BrowserPlatformController):
     """Base class for browser platform controllers for specific platforms."""
 
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(r"^$")
+
+    @property
+    def active_speaker(self) -> str | None:
+        """Get the name of the active speaker in the meeting."""
+        return None
 
     async def join(
         self,

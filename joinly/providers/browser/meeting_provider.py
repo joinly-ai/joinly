@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from collections.abc import Callable
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, Self
 
@@ -19,7 +20,7 @@ from joinly.providers.browser.platforms import (
     ZoomBrowserPlatformController,
 )
 from joinly.settings import get_settings
-from joinly.types import MeetingChatHistory, MeetingParticipant
+from joinly.types import AudioChunk, MeetingChatHistory, MeetingParticipant
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
@@ -35,6 +36,27 @@ PLATFORMS: list[type[BrowserPlatformController]] = [
 AGENTS: dict[str, type[BrowserAgent]] = {
     "playwright-mcp": PlaywrightMcpBrowserAgent,
 }
+
+
+class _SpeakerInjectedAudioReader(AudioReader):
+    """Audio reader that injects audio into the virtual speaker."""
+
+    def __init__(
+        self, reader: AudioReader, get_reader: Callable[[], str | None]
+    ) -> None:
+        """Initialize the audio reader with the virtual speaker."""
+        self._reader = reader
+        self._get_reader = get_reader
+        self.audio_format = reader.audio_format
+
+    async def read(self) -> AudioChunk:
+        """Read audio data and inject it into the virtual speaker."""
+        chunk = await self._reader.read()
+        return AudioChunk(
+            data=chunk.data,
+            time_ns=chunk.time_ns,
+            speaker=self._get_reader(),
+        )
 
 
 class BrowserMeetingProvider(BaseMeetingProvider):
@@ -63,13 +85,13 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         virtual_display = VirtualDisplay(
             env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
         )
-        self._virtual_speaker = VirtualSpeaker(env=self._env)
+        virtual_speaker = VirtualSpeaker(env=self._env)
         self._virtual_microphone = VirtualMicrophone(env=self._env)
         self._browser_session = BrowserSession(env=self._env)
         self._services = [
             pulse_server,
             virtual_display,
-            self._virtual_speaker,
+            virtual_speaker,
             self._virtual_microphone,
             self._browser_session,
         ]
@@ -83,10 +105,19 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
 
+        self._audio_reader = _SpeakerInjectedAudioReader(
+            virtual_speaker,
+            lambda: (
+                self._platform_controller.active_speaker
+                if self._platform_controller
+                else None
+            ),
+        )
+
     @property
     def audio_reader(self) -> AudioReader:
         """Get the audio reader."""
-        return self._virtual_speaker
+        return self._audio_reader
 
     @property
     def audio_writer(self) -> AudioWriter:

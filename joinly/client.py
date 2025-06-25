@@ -31,10 +31,17 @@ def transcript_to_messages(transcript: Transcript) -> list[HumanMessage]:
     Returns:
         A list of HumanMessage objects representing the transcript segments.
     """
+
+    def _normalize_speaker(speaker: str | None) -> str:
+        if speaker is None:
+            return "Unknown"
+        speaker = re.sub(r"\s+", "_", speaker.strip())
+        return re.sub(r"[<>\|\\\/]+", "", speaker)
+
     return [
         HumanMessage(
             content=s.text,
-            name=s.speaker if s.speaker is not None else "Unknown",
+            name=_normalize_speaker(s.speaker),
         )
         for s in transcript.segments
     ]

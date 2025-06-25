@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from typing import Self
 
@@ -67,6 +68,7 @@ class DeepgramSTT(STT):
             ),
         )
         self._stream_idle_timeout = stream_idle_timeout
+        self._sent_seconds = 0.0
         self._queue: asyncio.Queue[TranscriptSegment | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
@@ -77,6 +79,7 @@ class DeepgramSTT(STT):
             msg = "Already started the audio stream."
             raise RuntimeError(msg)
 
+        self._sent_seconds = 0.0
         self._queue = asyncio.Queue[TranscriptSegment | None]()
 
         async def on_result(
@@ -91,8 +94,8 @@ class DeepgramSTT(STT):
                 if transcript:
                     segment = TranscriptSegment(
                         text=transcript,
-                        start=0,
-                        end=result.duration,
+                        start=result.start - self._sent_seconds,
+                        end=result.start - self._sent_seconds + result.duration,
                     )
                     await self._queue.put(segment)  # type: ignore[attr-defined]
                 if result.from_finalize:
@@ -111,11 +114,11 @@ class DeepgramSTT(STT):
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the context."""
-        logger.info("Closing Deepgram TTS service connection")
+        logger.info("Closing Deepgram STT service connection")
         await self._client.finish()
         self._queue = None
 
-    async def stream(
+    async def stream(  # noqa: C901
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
         """Stream audio windows and yield transcribed segments.
@@ -130,24 +133,31 @@ class DeepgramSTT(STT):
             msg = "STT service is not started."
             raise RuntimeError(msg)
 
-        start: float | None = None
-        end: float | None = None
+        stream_start: float | None = None
+        stream_end: float | None = None
+        speaker_windows: list[tuple[float, float, str]] = []
 
         async def _producer() -> None:
             """Producer coroutine to send audio data."""
-            nonlocal start, end
+            nonlocal stream_start, stream_end
             async for window in windows:
-                if start is None:
-                    start = window.time_ns / 1e9
-                end = window.time_ns / 1e9 + calculate_audio_duration(
-                    len(window.data), self.audio_format
-                )
+                if stream_start is None:
+                    stream_start = window.time_ns / 1e9
+                cur = window.time_ns / 1e9
+                dur = calculate_audio_duration(len(window.data), self.audio_format)
+                stream_end = cur + dur
+                if window.speaker is not None:
+                    speaker_windows.append(
+                        (cur - stream_start, cur - stream_start + dur, window.speaker)
+                    )
                 await self._client.send(window.data)
             await self._client.finalize()
 
-        producer = asyncio.create_task(_producer())
-
         async with self._lock:
+            while not self._queue.empty():
+                _ = self._queue.get_nowait()
+            producer = asyncio.create_task(_producer())
+
             try:
                 while True:
                     cm = (
@@ -168,16 +178,25 @@ class DeepgramSTT(STT):
                     if segment is None:
                         break
 
+                    speakers: defaultdict[str, float] = defaultdict(float)
+                    for start, end, speaker in speaker_windows:
+                        speakers[speaker] += max(
+                            0.0, min(end, segment.end) - max(start, segment.start)
+                        )
+                    speaker, speaker_time = max(
+                        speakers.items(),
+                        key=lambda x: x[1],
+                        default=(None, 0),
+                    )
+                    if speaker_time < 0.2 * (segment.end - segment.start):
+                        speaker = None
+
                     yield TranscriptSegment(
                         text=segment.text,
-                        start=start or 0,
-                        end=min(end or float("inf"), (start or 0) + segment.end),
+                        start=segment.start + (stream_start or 0),
+                        end=segment.end + (stream_start or 0),
+                        speaker=speaker,
                     )
-                    start = (start or 0) + segment.end
             finally:
                 producer.cancel()
-                try:
-                    while True:
-                        self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
+                self._sent_seconds += (stream_end or 0) - (stream_start or 0)

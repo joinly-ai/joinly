@@ -11,6 +11,7 @@ from joinly.types import (
     Transcript,
     TranscriptSegment,
 )
+from joinly.utils.clock import Clock
 
 
 class AudioReader(Protocol):
@@ -225,24 +226,6 @@ class TranscriptionController(Protocol):
     stt: STT
 
     @property
-    def transcript(self) -> Transcript:
-        """Get the current transcript.
-
-        Returns:
-            Transcript: The current transcript of the audio processed.
-        """
-        ...
-
-    @property
-    def transcript_seconds(self) -> float:
-        """Get the current duration of transcription in seconds.
-
-        Returns:
-            float: The total duration of the transcript.
-        """
-        ...
-
-    @property
     def no_speech_event(self) -> asyncio.Event:
         """Get the event indicating no speech detected.
 
@@ -251,8 +234,13 @@ class TranscriptionController(Protocol):
         """
         ...
 
-    async def start(self) -> None:
-        """Start the transcription process."""
+    async def start(self, clock: Clock, transcript: Transcript) -> None:
+        """Start the transcription process.
+
+        Args:
+            clock: The clock to use for timing.
+            transcript: The transcript object to which the transcription will be added.
+        """
         ...
 
     async def stop(self) -> None:
@@ -289,8 +277,13 @@ class SpeechController(Protocol):
     tts: TTS
     no_speech_event: asyncio.Event
 
-    async def start(self) -> None:
-        """Start the speech output process."""
+    async def start(self, clock: Clock, transcript: Transcript) -> None:
+        """Start the speech output process.
+
+        Args:
+            clock: The clock to use for timing.
+            transcript: The transcript object to which the speech will be added.
+        """
         ...
 
     async def stop(self) -> None:

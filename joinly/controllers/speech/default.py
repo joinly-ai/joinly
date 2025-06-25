@@ -7,8 +7,16 @@ from typing import Any, Self, cast
 from semchunk.semchunk import chunkerify
 
 from joinly.core import TTS, AudioWriter, SpeechController
-from joinly.types import AudioFormat, SpeechInterruptedError
+from joinly.settings import get_settings
+from joinly.types import (
+    AudioFormat,
+    SpeakerRole,
+    SpeechInterruptedError,
+    Transcript,
+    TranscriptSegment,
+)
 from joinly.utils.audio import calculate_audio_duration, convert_audio_format
+from joinly.utils.clock import Clock
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +59,8 @@ class DefaultSpeechController(SpeechController):
         self.non_interruptable = non_interruptable
         self._job_queue: asyncio.Queue[SpeakJob] | None = None
         self._worker_task: asyncio.Task | None = None
-        self._chunker = chunkerify(lambda s: len(s.split()), chunk_size=15)
+        self._clock: Clock | None = None
+        self._transcript: Transcript | None = None
 
     async def __aenter__(self) -> Self:
         """Enter the audio stream context."""
@@ -61,13 +70,20 @@ class DefaultSpeechController(SpeechController):
         """Stop the audio stream and clean up resources."""
         await self.stop()
 
-    async def start(self) -> None:
-        """Start the speech controller with the given writer and TTS."""
+    async def start(self, clock: Clock, transcript: Transcript) -> None:
+        """Start the speech controller with the given writer and TTS.
+
+        Args:
+            clock (Clock): The clock to use for timing.
+            transcript (Transcript): The transcript to be speech written to.
+        """
         if self._job_queue is not None or self._worker_task is not None:
             msg = "Audio queue already started"
             raise RuntimeError(msg)
 
         self._job_queue = asyncio.Queue(maxsize=self.job_queue_size)
+        self._clock = clock
+        self._transcript = transcript
         self._worker_task = asyncio.create_task(self._worker_loop())
 
     async def stop(self) -> None:
@@ -85,6 +101,9 @@ class DefaultSpeechController(SpeechController):
                 job.done.set()
                 self._job_queue.task_done()
             self._job_queue = None
+
+        self._clock = None
+        self._transcript = None
 
     async def speak_text(
         self,
@@ -106,7 +125,7 @@ class DefaultSpeechController(SpeechController):
             QueueFull: If the queue is full.
         """
         if self._job_queue is None:
-            msg = "Audio queue not initialized"
+            msg = "Speech controller not active"
             raise RuntimeError(msg)
 
         logger.info("Enqueuing text: %s", text)
@@ -123,14 +142,14 @@ class DefaultSpeechController(SpeechController):
     async def wait_until_no_speech(self) -> None:
         """Wait until all speech jobs in the queue are done."""
         if self._job_queue is None:
-            msg = "Audio queue not initialized"
+            msg = "Speech controller not active"
             raise RuntimeError(msg)
         await self._job_queue.join()
 
     async def _worker_loop(self) -> None:
         """Run the worker loop to process audio chunks."""
         if self._job_queue is None:
-            msg = "Audio queue not initialized"
+            msg = "Speech controller not active"
             raise RuntimeError(msg)
 
         while True:
@@ -152,7 +171,11 @@ class DefaultSpeechController(SpeechController):
         Returns:
             list[str]: A list of text chunks.
         """
-        chunks: list[str] = await asyncio.to_thread(self._chunker, text)  # type: ignore[operator]
+        chunker = chunkerify(
+            lambda s: len(s.split()),
+            chunk_size=max(15, min(50, int(0.2 * len(text.split())))),
+        )
+        chunks: list[str] = await asyncio.to_thread(chunker, text)  # type: ignore[operator]
         return chunks
 
     async def _speech_producer(
@@ -189,7 +212,7 @@ class DefaultSpeechController(SpeechController):
         words = text.split(" ")
         return " ".join(words[: min(word_num, len(words))])
 
-    async def _speak_text(  # noqa: C901
+    async def _speak_text(  # noqa: C901, PLR0912, PLR0915
         self, text: str, *, interrupt: bool, interruptable: bool
     ) -> None:
         """Speak the given text using the virtual microphone.
@@ -202,6 +225,10 @@ class DefaultSpeechController(SpeechController):
         Raises:
             RuntimeError: If the speech was interrupted.
         """
+        if self._transcript is None or self._clock is None:
+            msg = "Speech controller not active"
+            raise RuntimeError(msg)
+
         chunks = await self._chunk_text(text)
         logger.info("Speaking text (chunks): %s", chunks)
 
@@ -209,6 +236,7 @@ class DefaultSpeechController(SpeechController):
         chunk_idx: int = 0
         byte_size: int = 0
         chunk_byte_size: int = 0
+        start: float | None = None
 
         producer = asyncio.create_task(self._speech_producer(chunks, audio_queue))
         buffer = bytearray()
@@ -226,8 +254,25 @@ class DefaultSpeechController(SpeechController):
                         )
                     segment = await audio_queue.get()
 
+                # await active speech to not interrupt it
+                if not interrupt and chunk_idx == 0:
+                    await self.no_speech_event.wait()
+
+                if start is None:
+                    start = self._clock.now_s
+
                 # end of text chunk
                 if segment is _CHUNK_END:
+                    self._transcript.add_segment(
+                        TranscriptSegment(
+                            text=chunks[chunk_idx],
+                            start=start,
+                            end=self._clock.now_s,
+                            speaker=get_settings().name,
+                            role=SpeakerRole.assistant,
+                        )
+                    )
+                    start = None
                     chunk_idx += 1
                     chunk_byte_size = 0
                     continue
@@ -248,10 +293,6 @@ class DefaultSpeechController(SpeechController):
                     )
                 )
 
-                # await active speech to not interrupt it
-                if not interrupt and chunk_idx == 0:
-                    await self.no_speech_event.wait()
-
                 while len(buffer) >= self.writer.chunk_size:
                     # check for speech interruption
                     if (
@@ -262,16 +303,22 @@ class DefaultSpeechController(SpeechController):
                         )
                         > self.non_interruptable
                     ):
-                        spoken_text = " ".join(
-                            [
-                                *chunks[:chunk_idx],
-                                await self._estimate_spoken_text(
-                                    chunks[chunk_idx],
-                                    chunk_byte_size,
-                                    self.writer.audio_format,
-                                ),
-                            ]
+                        estimated_text = await self._estimate_spoken_text(
+                            chunks[chunk_idx],
+                            chunk_byte_size,
+                            self.writer.audio_format,
                         )
+                        self._transcript.add_segment(
+                            TranscriptSegment(
+                                text=estimated_text + "...",
+                                start=start,
+                                end=self._clock.now_s,
+                                speaker=get_settings().name,
+                                role=SpeakerRole.assistant,
+                            )
+                        )
+
+                        spoken_text = " ".join([*chunks[:chunk_idx], estimated_text])
                         msg = (
                             f"Interrupted by detected speech. Spoken until now: "
                             f'"{spoken_text}"'
