@@ -268,9 +268,19 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             (nameArg) => {
                 const emit = n => window.report(n);
                 const find = () => {
-                    const el = document.querySelector(
+                    let el = document.querySelector(
                         'div.speaker-active-container__video-frame span'
                     );
+                    if (!el) {
+                        el = document.querySelector(
+                            'div.speaker-bar-container__video-frame--active span'
+                        );
+                    }
+                    if (!el) {
+                        el = document.querySelector(
+                            'div.speaker-bar-container__video-frame span'
+                        );
+                    }
                     const name = el?.textContent.trim();
                     if (name && name.length > 0 && name !== nameArg)
                         return name;
