@@ -1,16 +1,13 @@
 import contextlib
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import Any, ClassVar
 
 from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
 from joinly.types import MeetingChatHistory, MeetingChatMessage
-
-if TYPE_CHECKING:
-    from pyparsing import Any
 
 _TIME_RX = re.compile(r"^\d{1,2}:\d{2}(?:[AP]M)?$", re.IGNORECASE)
 
