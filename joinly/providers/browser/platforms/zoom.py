@@ -1,11 +1,12 @@
 import logging
 import re
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
+from joinly.settings import get_settings
 from joinly.types import MeetingChatHistory, MeetingChatMessage
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,15 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(
         r"^(?:https?://)?(?:[a-z0-9-]+\.)?zoom\.us/"
     )
+
+    def __init__(self) -> None:
+        """Initialize the Zoom browser platform controller."""
+        self._state: dict[str, Any] = {}
+
+    @property
+    def active_speaker(self) -> str | None:
+        """Get the name of the active speaker in the Zoom meeting."""
+        return self._state.get("active_speaker")
 
     async def join(
         self,
@@ -79,6 +89,8 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             logger.debug(
                 f"No additional Passcode required button found or error occurred: {e}"  # noqa: G004
             )
+
+        await self._setup_active_speaker_observer(page)
 
     async def leave(self, page: Page) -> None:
         """Leave the Zoom meeting using the icon-based button."""
@@ -244,3 +256,42 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             await page.click("button[aria-label='open the chat panel']")
             await page.click("button[aria-label='open the chat panel']")
             await page.wait_for_timeout(1000)
+
+    async def _setup_active_speaker_observer(self, page: Page) -> None:
+        """Setup the active speaker observer for Zoom."""
+        await page.expose_binding(
+            "report",
+            lambda _, name: self._state.update({"active_speaker": name}),
+        )
+        await page.evaluate(
+            """
+            (nameArg) => {
+                const emit = n => window.report(n);
+                const find = () => {
+                    const el = document.querySelector(
+                        'div.speaker-active-container__video-frame span'
+                    );
+                    const name = el?.textContent.trim();
+                    if (name && name.length > 0 && name !== nameArg)
+                        return name;
+                    return null;
+                };
+
+                let last = null, cur;
+                new MutationObserver(() => {
+                    cur = find();
+                    if (cur !== last) { last = cur; emit(cur); }
+                }).observe(
+                    document,
+                    {
+                        subtree: true,
+                        childList: true,
+                        attributes: true,
+                        attributeFilter: ['class']
+                    }
+                );
+                emit(find());
+            }
+            """,
+            get_settings().name,
+        )
