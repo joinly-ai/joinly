@@ -68,6 +68,7 @@ class DeepgramSTT(STT):
             ),
         )
         self._stream_idle_timeout = stream_idle_timeout
+        self._sent_seconds = 0.0
         self._queue: asyncio.Queue[TranscriptSegment | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
@@ -78,6 +79,7 @@ class DeepgramSTT(STT):
             msg = "Already started the audio stream."
             raise RuntimeError(msg)
 
+        self._sent_seconds = 0.0
         self._queue = asyncio.Queue[TranscriptSegment | None]()
 
         async def on_result(
@@ -92,8 +94,8 @@ class DeepgramSTT(STT):
                 if transcript:
                     segment = TranscriptSegment(
                         text=transcript,
-                        start=result.start,
-                        end=result.start + result.duration,
+                        start=result.start - self._sent_seconds,
+                        end=result.start - self._sent_seconds + result.duration,
                     )
                     await self._queue.put(segment)  # type: ignore[attr-defined]
                 if result.from_finalize:
@@ -186,3 +188,8 @@ class DeepgramSTT(STT):
                     )
             finally:
                 producer.cancel()
+                self._sent_seconds += (
+                    speaker_windows[-1][1] - speaker_windows[0][0]
+                    if speaker_windows
+                    else 0.0
+                )
