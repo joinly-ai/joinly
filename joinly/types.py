@@ -246,9 +246,11 @@ class MeetingParticipant(BaseModel):
     Attributes:
         name (str): The name of the participant.
         email (str | None): The email address of the participant.
+        infos (list[str]): Additional information about the participant.
     """
 
     name: str
     email: str | None = None
+    infos: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
