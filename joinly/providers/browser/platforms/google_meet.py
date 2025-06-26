@@ -182,6 +182,16 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
                 infos.append("You")
             if await item.locator('div:has-text("Meeting host")').count() > 0:
                 infos.append("Meeting host")
+            unmute_btn = item.get_by_role(
+                "button", name=re.compile(r"unmute", re.IGNORECASE)
+            )
+            mute_btn = item.get_by_role(
+                "button", name=re.compile(r"mute", re.IGNORECASE)
+            )
+            if await unmute_btn.count() > 0:
+                infos.append("Muted")
+            elif await mute_btn.count() > 0:
+                infos.append("Unmuted")
             if name:
                 participants.append(MeetingParticipant(name=name, infos=infos))
 
