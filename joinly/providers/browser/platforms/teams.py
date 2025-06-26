@@ -9,7 +9,7 @@ from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
-from joinly.types import MeetingChatHistory, MeetingChatMessage
+from joinly.types import MeetingChatHistory, MeetingChatMessage, MeetingParticipant
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +126,38 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             messages.append(MeetingChatMessage(text=text, timestamp=ts, sender=sender))
 
         return MeetingChatHistory(messages=messages)
+
+    async def get_participants(self, page: Page) -> list[MeetingParticipant]:
+        """Get the list of participants in the Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+
+        Returns:
+            list[MeetingParticipant]: A list of participants in the meeting.
+        """
+        participants_list = page.locator('div[aria-label="Attendees"][role="tree"]')
+        is_participant_list_visible = await participants_list.is_visible(timeout=1000)
+
+        if not is_participant_list_visible:
+            participants_button = page.get_by_role(
+                "button", name=re.compile(r"^people", re.IGNORECASE)
+            )
+            await participants_button.wait_for(timeout=2000)
+            await participants_button.click()
+            await page.wait_for_timeout(1000)
+
+        participants: list[MeetingParticipant] = []
+        for item in await participants_list.locator(
+            "li[data-cid='roster-participant']"
+        ).all():
+            if aria_label := await item.get_attribute("aria-label"):
+                labels = aria_label.split(", ")
+                name = labels[0].strip()
+                infos = labels[1:] if len(labels) > 1 else []
+                participants.append(MeetingParticipant(name=name, infos=infos))
+
+        return participants
 
     async def mute(self, page: Page) -> None:
         """Mute the participant in the Teams meeting.

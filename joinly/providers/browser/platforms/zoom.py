@@ -7,7 +7,7 @@ from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
-from joinly.types import MeetingChatHistory, MeetingChatMessage
+from joinly.types import MeetingChatHistory, MeetingChatMessage, MeetingParticipant
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +186,40 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                 )
 
         return MeetingChatHistory(messages=messages)
+
+    async def get_participants(self, page: Page) -> list[MeetingParticipant]:
+        """Get the list of participants in the Zoom meeting.
+
+        Args:
+            page: The Playwright page instance.
+
+        Returns:
+            list[MeetingParticipant]: A list of participants in the meeting.
+        """
+        participants_list = page.locator(
+            'div[role="list"][aria-label^="participants" i]'
+        )
+        is_participant_list_visible = await participants_list.is_visible(timeout=1000)
+
+        if not is_participant_list_visible:
+            await self._activate_controls(page)
+            participants_button = page.get_by_role(
+                "button", name=re.compile(r"participants", re.IGNORECASE)
+            )
+            await participants_button.wait_for(timeout=2000)
+            await participants_button.click()
+            await participants_button.click()
+            await page.wait_for_timeout(1000)
+
+        participants: list[MeetingParticipant] = []
+        for item in await participants_list.locator("div.participants-li").all():
+            if aria_label := await item.get_attribute("aria-label"):
+                labels = aria_label.split(",")
+                name = labels[0].strip()
+                infos = labels[1:] if len(labels) > 1 else []
+                participants.append(MeetingParticipant(name=name, infos=infos))
+
+        return participants
 
     async def mute(self, page: Page) -> None:
         """Mute the microphone in Zoom."""

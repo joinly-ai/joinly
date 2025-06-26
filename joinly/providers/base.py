@@ -1,5 +1,9 @@
 from joinly.core import MeetingProvider
-from joinly.types import MeetingChatHistory, ProviderNotSupportedError
+from joinly.types import (
+    MeetingChatHistory,
+    MeetingParticipant,
+    ProviderNotSupportedError,
+)
 
 
 class BaseMeetingProvider(MeetingProvider):
@@ -28,6 +32,11 @@ class BaseMeetingProvider(MeetingProvider):
     async def get_chat_history(self) -> MeetingChatHistory:
         """Get the chat message history from the meeting."""
         msg = "Provider does not support retrieving chat history."
+        raise ProviderNotSupportedError(msg)
+
+    async def get_participants(self) -> list[MeetingParticipant]:
+        """Get the list of participants in the meeting."""
+        msg = "Provider does not support retrieving participants."
         raise ProviderNotSupportedError(msg)
 
     async def mute(self) -> None:

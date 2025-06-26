@@ -6,6 +6,7 @@ from joinly.types import (
     AudioChunk,
     AudioFormat,
     MeetingChatHistory,
+    MeetingParticipant,
     SpeechWindow,
     Transcript,
     TranscriptSegment,
@@ -189,6 +190,14 @@ class MeetingProvider(Protocol):
 
         Returns:
             MeetingChatHistory: The chat history of the meeting.
+        """
+        ...
+
+    async def get_participants(self) -> list[MeetingParticipant]:
+        """Get the list of participants in the meeting.
+
+        Returns:
+            list[MeetingParticipant]: A list of participants in the meeting.
         """
         ...
 

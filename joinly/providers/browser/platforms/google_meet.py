@@ -7,7 +7,7 @@ from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
-from joinly.types import MeetingChatHistory, MeetingChatMessage
+from joinly.types import MeetingChatHistory, MeetingChatMessage, MeetingParticipant
 
 _TIME_RX = re.compile(r"^\d{1,2}:\d{2}(?:[AP]M)?$", re.IGNORECASE)
 
@@ -151,6 +151,51 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
                     )
 
         return MeetingChatHistory(messages=messages)
+
+    async def get_participants(self, page: Page) -> list[MeetingParticipant]:
+        """Get the list of participants in the Google Meet meeting.
+
+        Args:
+            page: The Playwright page instance.
+
+        Returns:
+            list[MeetingParticipant]: A list of participants in the meeting.
+        """
+        await self._dismiss_dialog(page)
+
+        participants_list = page.locator('div[aria-label="Participants"][role="list"]')
+        is_participant_list_visible = await participants_list.is_visible(timeout=1000)
+
+        if not is_participant_list_visible:
+            participants_button = page.get_by_role(
+                "button", name=re.compile(r"^people", re.IGNORECASE)
+            )
+            await participants_button.wait_for(timeout=2000)
+            await participants_button.click()
+            await page.wait_for_timeout(1000)
+
+        participants: list[MeetingParticipant] = []
+        for item in await participants_list.locator("div[role='listitem']").all():
+            name = await item.get_attribute("aria-label")
+            infos = []
+            if await item.locator('span:has-text("(You)")').count() > 0:
+                infos.append("You")
+            if await item.locator('div:has-text("Meeting host")').count() > 0:
+                infos.append("Meeting host")
+            unmute_btn = item.get_by_role(
+                "button", name=re.compile(r"unmute", re.IGNORECASE)
+            )
+            mute_btn = item.get_by_role(
+                "button", name=re.compile(r"mute", re.IGNORECASE)
+            )
+            if await unmute_btn.count() > 0:
+                infos.append("Muted")
+            elif await mute_btn.count() > 0:
+                infos.append("Unmuted")
+            if name:
+                participants.append(MeetingParticipant(name=name, infos=infos))
+
+        return participants
 
     async def _dismiss_dialog(self, page: Page) -> None:
         """Dismiss any popups that may appear."""
