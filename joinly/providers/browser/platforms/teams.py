@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import logging
 import re
 from datetime import datetime
@@ -62,9 +61,8 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             await join_btn.click(timeout=1000)
 
         finally:
-            dismiss_dialog.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await dismiss_dialog
+            if not dismiss_dialog.done():
+                dismiss_dialog.cancel()
 
         if not await self._check_joined(page):
             msg = "Join check failed: Failed to join the Teams meeting."
