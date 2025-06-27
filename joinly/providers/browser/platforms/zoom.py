@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import re
 from datetime import UTC, datetime
@@ -45,50 +47,51 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             name: The name of the participant.
             passcode: The passcode for the meeting (if required).
         """
-        # Convert the standard join URL to the web client format
+        # convert standard join URL to the web client format
         if re.search(r"/j/\d+", url):
             url = re.sub(r"/j/(\d+)", r"/wc/join/\1", url)
-            logger.info(f"Rewrote Zoom join URL to web client format: {url}")  # noqa: G004
+            logger.info("Rewrote Zoom join URL to web client format: %s", url)
 
         await page.goto(url, wait_until="load", timeout=20000)
+        if await page.get_by_text("invalid").is_visible(timeout=2000):
+            msg = "Meeting link is invalid."
+            raise ValueError(msg)
 
-        # Accept cookies and agree to terms
-        await page.click("button:has-text('ACCEPT COOKIES')", timeout=5000)
-        await page.click("button:has-text('I Agree')", timeout=5000)
+        async def _click_task(page: Page, text: str) -> None:
+            await page.locator("button", has_text=text).first.click(timeout=0)
 
-        # Wait for and fill in the name field
-        name_field = page.locator("#input-for-name, input[placeholder*='Name']")
-        await name_field.fill(name, timeout=10000)
-
-        # Click the "Join" button
-        await page.click("button:has-text('Join')", timeout=5000)
-
-        # If the Join button is still visible, click it again
-        try:
-            join_button = page.locator("button:has-text('Join')")
-            if await join_button.is_visible(timeout=2000):
-                logger.debug("Join button still present, clicking again.")
-                await join_button.click(timeout=5000)
-                await join_button.click(timeout=5000)
-        except Exception as e:  # noqa: BLE001
-            logger.debug(f"No additional Join button found or error occurred: {e}")  # noqa: G004
+        pre_tasks = [
+            asyncio.create_task(_click_task(page, t))
+            for t in ["accept cookies", "i agree"]
+        ]
 
         try:
-            join_button = page.locator("button:has-text('Join')")
-            meeting_passcode = page.locator(
-                "#input-for-passcode, input[placeholder*='Passcode']"
-            )
-            if await meeting_passcode.is_visible(timeout=2000):
-                logger.info("Meeting passcode required.")
+            name_field = page.locator("#input-for-name")
+            await name_field.fill(name, timeout=20000)
+
+            passcode_field = page.locator("input[type='password']")
+            if await passcode_field.is_visible(timeout=1000):
                 if passcode is not None:
-                    await meeting_passcode.fill(passcode, timeout=10000)
-                    await join_button.click(timeout=5000)
+                    await passcode_field.fill(passcode, timeout=1000)
                 else:
-                    logger.error("Passcode is required but not provided.")
-        except Exception as e:  # noqa: BLE001
-            logger.debug(
-                f"No additional Passcode required button found or error occurred: {e}"  # noqa: G004
-            )
+                    msg = "Passcode is required but not provided."
+                    raise ValueError(msg)
+
+            join_btn = page.locator("button", has_text="join").first
+            await join_btn.click(timeout=1000)
+
+            await page.wait_for_timeout(2000)
+            if await join_btn.is_visible(timeout=1000):
+                with contextlib.suppress(Exception):
+                    await join_btn.click(timeout=1000)
+        finally:
+            for task in pre_tasks:
+                if not task.done():
+                    task.cancel()
+
+        if not await self._check_joined(page):
+            msg = "Join check failed: Failed to join the Zoom meeting."
+            raise RuntimeError(msg)
 
         await self._setup_active_speaker_observer(page)
 
@@ -96,38 +99,39 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         """Leave the Zoom meeting using the icon-based button."""
         await self._activate_controls(page)
 
-        # Step 2: Click the Leave button based on its label
-        await page.click("button:has-text('Leave')")
+        leave_btn = page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE))
+        if not await leave_btn.is_visible(timeout=1000):
+            msg = "Leave button not found or not visible."
+            raise RuntimeError(msg)
+        await leave_btn.click(timeout=1000)
 
-        # Attempt a second click if the button is still visible
-        try:
-            leave_button = page.locator("button:has-text('Leave')")
-            if await leave_button.is_visible(timeout=2000):
-                logger.debug("Leave button still present, clicking again.")
-                await leave_button.click(timeout=5000)
-        except Exception as e:  # noqa: BLE001
-            logger.debug(f"No additional Leave button found or error occurred: {e}")  # noqa: G004
+        leave_btn_confirm = page.locator("button", has_text="leave meeting").first
+        if not await leave_btn_confirm.is_visible(timeout=1000):
+            with contextlib.suppress(Exception):
+                await leave_btn.click(timeout=1000)
 
-        # Confirm leaving the meeting
-        await page.click(
-            "button:has-text('Leave meeting')",
-            timeout=5000,
-        )
+        if not await leave_btn_confirm.is_visible(timeout=1000):
+            msg = "Leave meeting confirmation button not found or not visible."
+            raise RuntimeError(msg)
+        await leave_btn_confirm.click(timeout=1000)
+        await page.wait_for_timeout(500)
 
     async def send_chat_message(self, page: Page, message: str) -> None:
         """Send a chat message in Zoom."""
+        if len(message) > 1024:  # noqa: PLR2004
+            msg = "Message exceeds the maximum length of 1024 characters."
+            raise ValueError(msg)
+
         await self._open_chat(page)
+
         chat_input = page.locator("div[contenteditable='true']")
-
-        # Focus the chat input (important for ProseMirror-based editors)
-        await chat_input.click()
+        if not await chat_input.is_visible(timeout=1000):
+            msg = "Chat input not found or not visible."
+            raise RuntimeError(msg)
+        await chat_input.click(timeout=1000)
         await page.wait_for_timeout(200)
-
-        # Type the message (using fill for DOM compatibility)
         await chat_input.fill(message)
-        await page.wait_for_timeout(200)
-
-        # Send the message
+        await page.wait_for_timeout(500)
         await page.keyboard.press("Enter")
 
     async def get_chat_history(self, page: Page) -> MeetingChatHistory:
@@ -153,7 +157,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             sender: str | None = None
             ts: float | None = None
 
-            if parts:
+            if parts and len(parts) >= 3:  # noqa: PLR2004
                 first = parts[0]
                 sender = (
                     (first.split(" to ")[0].strip() or None)
@@ -161,7 +165,6 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                     else (first or None)
                 )
 
-            if len(parts) >= 2:  # noqa: PLR2004
                 raw_time = re.sub(r"[\u00A0\u202F]", "", parts[1]).strip()
                 if _TIME_RX.fullmatch(raw_time):
                     if raw_time[-2:].upper() in {"AM", "PM"}:
@@ -174,16 +177,12 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                     t = t.replace(year=today.year, month=today.month, day=today.day)
                     ts = t.timestamp()
 
-            text_el = row.locator(":scope p").first
-            if await text_el.count():
-                text = (await text_el.inner_text()).strip()
-            else:
-                text = ",".join(parts[2:]).strip() if len(parts) >= 3 else ""  # noqa: PLR2004
+                text = ",".join(parts[2:]).strip()
 
-            if text:
-                messages.append(
-                    MeetingChatMessage(text=text, timestamp=ts, sender=sender)
-                )
+                if text:
+                    messages.append(
+                        MeetingChatMessage(text=text, timestamp=ts, sender=sender)
+                    )
 
         return MeetingChatHistory(messages=messages)
 
@@ -201,15 +200,19 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         )
         is_participant_list_visible = await participants_list.is_visible(timeout=1000)
 
+        participants_button = page.get_by_role(
+            "button", name=re.compile(r"participants", re.IGNORECASE)
+        )
         if not is_participant_list_visible:
             await self._activate_controls(page)
-            participants_button = page.get_by_role(
-                "button", name=re.compile(r"participants", re.IGNORECASE)
-            )
-            await participants_button.wait_for(timeout=2000)
-            await participants_button.click()
-            await participants_button.click()
-            await page.wait_for_timeout(1000)
+            if not await participants_button.is_visible(timeout=1000):
+                msg = "Participants button not found or not visible."
+                raise RuntimeError(msg)
+            await participants_button.click(timeout=1000)
+            if not await participants_list.is_visible(timeout=1000):
+                with contextlib.suppress(Exception):
+                    await participants_button.click(timeout=1000)
+                await page.wait_for_timeout(1000)
 
         participants: list[MeetingParticipant] = []
         for item in await participants_list.locator("div.participants-li").all():
@@ -219,58 +222,68 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                 infos = labels[1:] if len(labels) > 1 else []
                 participants.append(MeetingParticipant(name=name, infos=infos))
 
+        await participants_button.click(timeout=1000)
+
         return participants
 
     async def mute(self, page: Page) -> None:
         """Mute the microphone in Zoom."""
         await self._activate_controls(page)
 
-        try:
-            mic_button = page.locator(
-                "button:has-text('Mute'):not(:has-text('Unmute'))"
-            )
-            if await mic_button.is_visible(timeout=500):
-                logger.debug("Mute button found, clicking it.")
-                await mic_button.click(timeout=500)
-            else:
-                logger.debug("Mute button not found or not visible.")
-        except Exception:  # noqa: BLE001
-            logger.debug("Could not find the Mute button.")
+        mute_btn = page.get_by_role("button", name="mute my microphone")
+        if await mute_btn.is_visible(timeout=1000):
+            await mute_btn.click(timeout=1000)
+        elif not await page.get_by_role(
+            "button", name="unmute my microphone"
+        ).is_visible(timeout=1000):
+            msg = "Mute button not found or not visible."
+            raise RuntimeError(msg)
 
     async def unmute(self, page: Page) -> None:
         """Unmute the microphone in Zoom."""
         await self._activate_controls(page)
 
+        unmute_btn = page.get_by_role("button", name="unmute my microphone")
+        if await unmute_btn.is_visible(timeout=1000):
+            await unmute_btn.click(timeout=1000)
+            if await unmute_btn.is_visible(timeout=1000):
+                with contextlib.suppress(Exception):
+                    await unmute_btn.click(timeout=1000)
+        elif not await page.get_by_role("button", name="mute my microphone").is_visible(
+            timeout=1000
+        ):
+            msg = "Unmute button not found or not visible."
+            raise RuntimeError(msg)
+
+    async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
+        """Check if the Zoom meeting has been joined successfully.
+
+        Args:
+            page: The Playwright page instance.
+            timeout: The timeout in seconds for checking the join status.
+
+        Returns:
+            bool: True if joined, False otherwise.
+        """
+        locators = [
+            page.locator("span >> text=/joining/i"),
+            page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
+        ]
+
+        tasks = [
+            asyncio.create_task(loc.wait_for(state="visible", timeout=0))
+            for loc in locators
+        ]
+
         try:
-            mic_button = page.locator("button:has-text('Unmute')")
-            if await mic_button.is_visible(timeout=500):
-                logger.debug("Unmute button found, clicking it.")
-                await mic_button.click(timeout=500)
-                if await mic_button.is_visible(timeout=500):
-                    logger.debug("Unmute button still present, clicking again.")
-                    await mic_button.click(timeout=500)
-            else:
-                logger.debug("Unmute button not found or not visible.")
-        except Exception:  # noqa: BLE001
-            logger.debug("Could not find the Unmute button.")
-
-    async def start_screen_sharing(self, page: Page) -> None:
-        """Start screen sharing in Zoom."""
-        await self._activate_controls(page)
-
-        # Click the Share Screen button
-        share_btn = page.get_by_role(
-            "button", name=re.compile(r"Share Screen", re.IGNORECASE)
-        )
-        await share_btn.click(timeout=2000)
-        await page.wait_for_timeout(500)
-
-        # Click the option to share a specific screen (like "Screen 1" or "Entire Screen")  # noqa: E501
-        screen_option = page.get_by_role(
-            "button", name=re.compile(r"Screen 1|Entire Screen", re.IGNORECASE)
-        )
-        await screen_option.click(timeout=2000)
-        await page.wait_for_timeout(500)
+            done, _ = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED, timeout=timeout
+            )
+            return any(not task.exception() for task in done)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
 
     async def _activate_controls(self, page: Page) -> None:
         """Activate control bar."""
@@ -284,12 +297,17 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
         if not is_chat_visible:
             await self._activate_controls(page)
-            await page.wait_for_selector(
-                "button[aria-label='open the chat panel']", timeout=2000
+            chat_button = page.get_by_role(
+                "button", name=re.compile(r"chat panel", re.IGNORECASE)
             )
-            await page.click("button[aria-label='open the chat panel']")
-            await page.click("button[aria-label='open the chat panel']")
-            await page.wait_for_timeout(1000)
+            if not await chat_button.is_visible(timeout=1000):
+                msg = "Chat button not found or not visible."
+                raise RuntimeError(msg)
+            await chat_button.click(timeout=1000)
+            if not await chat_input.is_visible(timeout=1000):
+                with contextlib.suppress(Exception):
+                    await chat_button.click(timeout=1000)
+                await page.wait_for_timeout(1000)
 
     async def _setup_active_speaker_observer(self, page: Page) -> None:
         """Setup the active speaker observer for Zoom."""
