@@ -193,7 +193,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         await agent.connect(self._browser_session.cdp_url)
         return agent
 
-    async def _invoke_action(
+    async def _invoke_action(  # noqa: C901
         self,
         action: str,
         prompt: str | None = None,
@@ -232,6 +232,12 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     result = await getattr(self._platform_controller, action)(
                         self._page, *args, **kwargs
                     )
+                except ValueError:
+                    logger.exception(
+                        "Failed to perform action '%s' using platform controller.",
+                        action,
+                    )
+                    raise
                 except Exception:
                     logger.exception(
                         "Failed to perform action '%s' using platform controller.",
