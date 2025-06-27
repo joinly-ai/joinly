@@ -47,24 +47,28 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         """
         await page.goto(url, wait_until="load", timeout=20000)
 
-        async def _dismiss_audio_missing(page: Page) -> None:
-            await page.click("button:has-text('Continue without audio')", timeout=0)
+        async def _dismiss_dialog(page: Page) -> None:
+            await page.click('div[role="dialog"] button', timeout=0)
 
-        dismiss_audio_missing = asyncio.create_task(_dismiss_audio_missing(page))
+        dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
 
         try:
             name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
             await name_field.fill(name, timeout=20000)
 
             join_btn = page.get_by_role(
-                "button", name=re.compile(r"^join", re.IGNORECASE)
+                "button", name=re.compile(r"join", re.IGNORECASE)
             )
-            await join_btn.click(timeout=3000)
+            await join_btn.click(timeout=1000)
 
         finally:
-            dismiss_audio_missing.cancel()
+            dismiss_dialog.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await dismiss_audio_missing
+                await dismiss_dialog
+
+        if not await self._check_joined(page):
+            msg = "Join check failed: Failed to join the Teams meeting."
+            raise RuntimeError(msg)
 
         await self._setup_active_speaker_observer(page)
 
@@ -74,9 +78,10 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         Args:
             page: The Playwright page instance.
         """
-        leave_btn = page.get_by_role(
-            "button", name=re.compile(r"^leave", re.IGNORECASE)
-        )
+        leave_btn = page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE))
+        if not await leave_btn.is_visible(timeout=1000):
+            msg = "Leave button not found or not visible."
+            raise RuntimeError(msg)
         await leave_btn.click(timeout=1000)
         await page.wait_for_timeout(500)
 
@@ -90,7 +95,9 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         await self._open_chat(page)
 
         chat_input = page.locator("div[contenteditable='true']")
-        await chat_input.wait_for(timeout=2000)
+        if not await chat_input.is_visible(timeout=1000):
+            msg = "Chat input not found or not visible."
+            raise RuntimeError(msg)
         await chat_input.fill(message)
         await page.wait_for_timeout(500)
         await page.keyboard.press("Enter")
@@ -143,7 +150,9 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             participants_button = page.get_by_role(
                 "button", name=re.compile(r"^people", re.IGNORECASE)
             )
-            await participants_button.wait_for(timeout=2000)
+            if not await participants_button.is_visible(timeout=1000):
+                msg = "Participants button not found or not visible."
+                raise RuntimeError(msg)
             await participants_button.click()
             await page.wait_for_timeout(1000)
 
@@ -166,8 +175,13 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
         """
         mute_btn = page.get_by_role("button", name=re.compile(r"^mute", re.IGNORECASE))
-        if await mute_btn.is_visible(timeout=2000):
-            await mute_btn.click(timeout=2000)
+        if await mute_btn.is_visible(timeout=1000):
+            await mute_btn.click(timeout=1000)
+        elif not await page.get_by_role(
+            "button", name=re.compile(r"^unmute", re.IGNORECASE)
+        ).is_visible(timeout=1000):
+            msg = "Mute button not found or not visible."
+            raise RuntimeError(msg)
 
     async def unmute(self, page: Page) -> None:
         """Unmute the participant in the Teams meeting.
@@ -178,27 +192,43 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         unmute_btn = page.get_by_role(
             "button", name=re.compile(r"^unmute", re.IGNORECASE)
         )
-        if await unmute_btn.is_visible(timeout=2000):
-            await unmute_btn.click(timeout=2000)
+        if await unmute_btn.is_visible(timeout=1000):
+            await unmute_btn.click(timeout=1000)
+        elif not await page.get_by_role(
+            "button", name=re.compile(r"^mute", re.IGNORECASE)
+        ).is_visible(timeout=1000):
+            msg = "Unmute button not found or not visible."
+            raise RuntimeError(msg)
 
-    async def start_screen_sharing(self, page: Page) -> None:
-        """Start screen sharing in the Teams meeting.
+    async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
+        """Check if the Teams meeting has been joined successfully.
 
         Args:
             page: The Playwright page instance.
-        """
-        screen_share_btn = page.get_by_role(
-            "button", name=re.compile(r"^share", re.IGNORECASE)
-        )
-        await screen_share_btn.wait_for(timeout=2000)
-        await screen_share_btn.click(timeout=2000)
-        await page.wait_for_timeout(500)
+            timeout: The timeout in seconds for checking the join status.
 
-        screen_share_btn = page.get_by_role(
-            "button", name=re.compile(r"^share a screen", re.IGNORECASE)
-        )
-        await screen_share_btn.wait_for(timeout=2000)
-        await screen_share_btn.click(timeout=2000)
+        Returns:
+            bool: True if joined, False otherwise.
+        """
+        locators = [
+            page.locator("span >> text=/please wait/i"),
+            page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
+        ]
+
+        tasks = [
+            asyncio.create_task(loc.wait_for(state="visible", timeout=0))
+            for loc in locators
+        ]
+
+        try:
+            done, _ = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED, timeout=timeout
+            )
+            return any(not task.exception() for task in done)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
 
     async def _open_chat(self, page: Page) -> None:
         """Open the chat in the Teams meeting."""
@@ -209,7 +239,9 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             chat_button = page.get_by_role(
                 "button", name=re.compile(r"^chat", re.IGNORECASE)
             )
-            await chat_button.wait_for(timeout=2000)
+            if not await chat_button.is_visible(timeout=1000):
+                msg = "Chat button not found or not visible."
+                raise RuntimeError(msg)
             await chat_button.click()
             await page.wait_for_timeout(1000)
 
