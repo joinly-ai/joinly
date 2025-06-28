@@ -263,7 +263,12 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
                         if (!!t.querySelector(
                             'div[data-tid="voice-level-stream-outline"].vdi-frame-occlusion'
                         )) {
-                            const el = t.querySelector('div:not(:has(*)):not(:empty)');
+                            let el = t.querySelector(
+                                'div[data-tid="participant-info-nametag"]'
+                            );
+                            if (!el) {
+                                el = t.querySelector('div:not(:has(*)):not(:empty)');
+                            }
                             const name = el?.textContent.trim();
                             if (name && name.length > 0 && name !== nameArg)
                                 return name;
