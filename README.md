@@ -191,11 +191,13 @@ The joinly MCP server provides following tools and resources:
 - **`mute_yourself`** - Mute microphone
 - **`unmute_yourself`** - Unmute microphone
 - **`get_chat_history`** - Get current meeting chat history in JSON format
+- **`get_participants`** - Get current meeting participants in JSON format
+- **`get_transcript`** - Get current meeting transcript in JSON format, optionally filtered by minutes
 - *more soon...*
 
 ### Resources
 
-- `transcript://live` - Live meeting transcript in JSON format. Subscribable for real-time updates when new utterances are added.
+- `transcript://live` - Live meeting transcript in JSON format, including timestamps and speaker information. Subscribable for real-time updates when new utterances are added.
 
 # :building_construction: Developing joinly.ai
 

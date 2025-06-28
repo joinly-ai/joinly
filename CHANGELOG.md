@@ -1,6 +1,30 @@
 
 # Changelog
 
+## v0.3.0 - 2025-06-25
+
+### Added
+
+- add `get_transcript` tool for fetching the meeting transcript with timestamp filters (#21)
+- real-time speaker attribution for the transcript, in core app and all platforms (#27)
+- new tool `get_participants` to retrieve the current meeting participants with available meta-data (e.g., host, muted/unmuted) (#28)
+
+### Improvements
+
+- better internal meeting time measurement with more accurate start and end times (#18)
+- shared meeting clock object for synchronized internal time handling (#22)
+- add speech through `speak_text` tool to the meeting transcript (not included in `transcript://live` resource, but in `get_transcript`) (#23, #24)
+- length-based TTS pre-chunking for better performance with long texts (#25)
+- more compact transcripts by merging nearby segments of the same speaker for better LLM handling (#26)
+- browser action improvements, for more robustness and some fixes (#30, #33, #34)
+- teams live platform support using the existing teams platform actions (#31)
+
+### Fixed
+
+- fix leftover audio in deepgram TTS after interruptions (#19)
+- fix rare case where a update notification without new transcript segments crashes the client (#20)
+- allow `join_meeting` after failed join attempts, which previously caused issues (#32)
+
 ## v0.2.0 - 2025-06-17
 
 ### Added
