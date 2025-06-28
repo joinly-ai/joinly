@@ -210,6 +210,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         """
         locators = [
             page.locator("span >> text=/please wait/i"),
+            page.locator("span >> text=/will let you in/i"),
             page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
         ]
 
@@ -241,7 +242,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
                 msg = "Chat button not found or not visible."
                 raise RuntimeError(msg)
             await chat_button.click()
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(2000)
 
     async def _setup_active_speaker_observer(self, page: Page) -> None:
         """Setup the active speaker observer for Teams."""
