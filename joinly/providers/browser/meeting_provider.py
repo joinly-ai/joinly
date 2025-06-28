@@ -309,7 +309,15 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         prompt = f"Join the meeting at {url} as {name}."
         if passcode:
             prompt += f" If asked, use the passcode: {passcode}."
-        await self._invoke_action("join", prompt, url=url, name=name, passcode=passcode)
+        try:
+            await self._invoke_action(
+                "join", prompt, url=url, name=name, passcode=passcode
+            )
+        except:
+            await self._page.close()
+            self._page = None
+            self._platform_controller = None
+            raise
 
     async def leave(self) -> None:
         """Leave the current meeting."""
