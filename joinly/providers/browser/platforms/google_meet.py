@@ -122,8 +122,10 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
 
             bubbles = await blob.locator("div[data-message-id]").all()
             for bubble in bubbles:
-                raw = (await bubble.inner_text()).splitlines()
-                text = next((ln.strip() for ln in raw if ln.strip()), "")
+                el = bubble.locator(
+                    "div:not(:has(*))", has_text=re.compile(r"\S")
+                ).first
+                text = (await el.inner_text()).strip() if await el.count() else None
                 if text:
                     messages.append(
                         MeetingChatMessage(text=text, timestamp=ts, sender=sender)
