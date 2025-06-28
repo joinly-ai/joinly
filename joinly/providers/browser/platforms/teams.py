@@ -156,7 +156,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
 
         participants: list[MeetingParticipant] = []
         for item in await participants_list.locator(
-            "li[data-cid='roster-participant']"
+            "[data-cid='roster-participant'][aria-label]"
         ).all():
             if aria_label := await item.get_attribute("aria-label"):
                 labels = aria_label.split(", ")
