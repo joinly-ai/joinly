@@ -87,15 +87,8 @@ class MeetingSession:
         await self._transcription_controller.start(self._clock, self._transcript)
         await self._speech_controller.start(self._clock, self._transcript)
 
-    async def leave_meeting(self, *, force: bool = False) -> None:
-        """Leave the current meeting.
-
-        Args:
-            force (bool): Whether to force leave the meeting, otherwise wait for speech.
-                Defaults to False.
-        """
-        if not force:
-            await self._speech_controller.wait_until_no_speech()
+    async def leave_meeting(self) -> None:
+        """Leave the current meeting."""
         await self._meeting_provider.leave()
         await self._transcription_controller.stop()
         await self._speech_controller.stop()

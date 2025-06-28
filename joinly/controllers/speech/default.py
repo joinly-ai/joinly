@@ -139,13 +139,6 @@ class DefaultSpeechController(SpeechController):
         if job.exception is not None:
             raise job.exception
 
-    async def wait_until_no_speech(self) -> None:
-        """Wait until all speech jobs in the queue are done."""
-        if self._job_queue is None:
-            msg = "Speech controller not active"
-            raise RuntimeError(msg)
-        await self._job_queue.join()
-
     async def _worker_loop(self) -> None:
         """Run the worker loop to process audio chunks."""
         if self._job_queue is None:
