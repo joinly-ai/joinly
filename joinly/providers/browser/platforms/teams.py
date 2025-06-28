@@ -17,7 +17,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
     """Controller for managing Teams browser meetings."""
 
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(
-        r"^(?:https?://)?(?:[a-z0-9-]+\.)?teams\.microsoft\.com/"
+        r"^(?:https?://)?(?:[a-z0-9-]+\.)?(?:teams\.microsoft\.com|teams\.live\.com)/"
     )
 
     def __init__(self) -> None:
