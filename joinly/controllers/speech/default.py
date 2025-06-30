@@ -43,6 +43,7 @@ class DefaultSpeechController(SpeechController):
         self.non_interruptable = non_interruptable
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
+        self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> Self:
         """Enter the audio stream context."""
@@ -87,11 +88,12 @@ class DefaultSpeechController(SpeechController):
             interruptable (bool): Whether this speech can be interrupted by detected
                 speech.
         """
-        await self._speak_text(
-            text=text,
-            interrupt=interrupt,
-            interruptable=interruptable,
-        )
+        async with self._lock:
+            await self._speak_text(
+                text=text,
+                interrupt=interrupt,
+                interruptable=interruptable,
+            )
 
     async def _chunk_text(self, text: str) -> list[str]:
         """Chunk the text into smaller segments for processing.
