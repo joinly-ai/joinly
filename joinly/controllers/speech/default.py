@@ -1,8 +1,6 @@
 import asyncio
-import contextlib
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Self, cast
+from typing import Self, cast
 
 from semchunk.semchunk import chunkerify
 
@@ -24,16 +22,6 @@ _CHUNK_END = object()
 _TEXT_END = object()
 
 
-@dataclass
-class SpeakJob:
-    """A class to represent a job for speaking text."""
-
-    text: str
-    kwargs: dict[str, Any] = field(default_factory=dict)
-    done: asyncio.Event = field(default_factory=asyncio.Event)
-    exception: Exception | None = None
-
-
 class DefaultSpeechController(SpeechController):
     """A class to manage the speech flow."""
 
@@ -44,21 +32,15 @@ class DefaultSpeechController(SpeechController):
     def __init__(
         self,
         *,
-        job_queue_size: int = 10,
         non_interruptable: float = 0.5,
     ) -> None:
         """Initialize the SpeechFlowController.
 
         Args:
-            job_queue_size (int): The maximum size of the speech job queue
-                (default is 10).
             non_interruptable (float): The duration in seconds from the start for
                 which speech cannot be interrupted (default is 0.5).
         """
-        self.job_queue_size = job_queue_size
         self.non_interruptable = non_interruptable
-        self._job_queue: asyncio.Queue[SpeakJob] | None = None
-        self._worker_task: asyncio.Task | None = None
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
 
@@ -71,37 +53,21 @@ class DefaultSpeechController(SpeechController):
         await self.stop()
 
     async def start(self, clock: Clock, transcript: Transcript) -> None:
-        """Start the speech controller with the given writer and TTS.
+        """Start the speech controller.
 
         Args:
             clock (Clock): The clock to use for timing.
             transcript (Transcript): The transcript to be speech written to.
         """
-        if self._job_queue is not None or self._worker_task is not None:
-            msg = "Audio queue already started"
+        if self._clock is not None or self._transcript is not None:
+            msg = "Speech controller already active"
             raise RuntimeError(msg)
 
-        self._job_queue = asyncio.Queue(maxsize=self.job_queue_size)
         self._clock = clock
         self._transcript = transcript
-        self._worker_task = asyncio.create_task(self._worker_loop())
 
     async def stop(self) -> None:
-        """Stop the speech controller and clean up resources."""
-        if self._worker_task is not None:
-            self._worker_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._worker_task
-            self._worker_task = None
-
-        if self._job_queue is not None:
-            while not self._job_queue.empty():
-                job = self._job_queue.get_nowait()
-                logger.warning("Canceled speaking of: %s", job.text)
-                job.done.set()
-                self._job_queue.task_done()
-            self._job_queue = None
-
+        """Stop the speech controller."""
         self._clock = None
         self._transcript = None
 
@@ -120,40 +86,12 @@ class DefaultSpeechController(SpeechController):
                 the speech to finish.
             interruptable (bool): Whether this speech can be interrupted by detected
                 speech.
-
-        Raises:
-            QueueFull: If the queue is full.
         """
-        if self._job_queue is None:
-            msg = "Speech controller not active"
-            raise RuntimeError(msg)
-
-        logger.info("Enqueuing text: %s", text)
-
-        job = SpeakJob(
-            text=text, kwargs={"interrupt": interrupt, "interruptable": interruptable}
+        await self._speak_text(
+            text=text,
+            interrupt=interrupt,
+            interruptable=interruptable,
         )
-        self._job_queue.put_nowait(job)
-
-        await job.done.wait()
-        if job.exception is not None:
-            raise job.exception
-
-    async def _worker_loop(self) -> None:
-        """Run the worker loop to process audio chunks."""
-        if self._job_queue is None:
-            msg = "Speech controller not active"
-            raise RuntimeError(msg)
-
-        while True:
-            job = await self._job_queue.get()
-            try:
-                await self._speak_text(job.text, **job.kwargs)
-            except Exception as e:  # noqa: BLE001
-                job.exception = e
-            finally:
-                job.done.set()
-                self._job_queue.task_done()
 
     async def _chunk_text(self, text: str) -> list[str]:
         """Chunk the text into smaller segments for processing.
