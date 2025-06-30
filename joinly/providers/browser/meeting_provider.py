@@ -20,7 +20,12 @@ from joinly.providers.browser.platforms import (
     ZoomBrowserPlatformController,
 )
 from joinly.settings import get_settings
-from joinly.types import AudioChunk, MeetingChatHistory, MeetingParticipant
+from joinly.types import (
+    AudioChunk,
+    MeetingChatHistory,
+    MeetingParticipant,
+    ProviderNotSupportedError,
+)
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
@@ -232,7 +237,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                     result = await getattr(self._platform_controller, action)(
                         self._page, *args, **kwargs
                     )
-                except ValueError:
+                except (ValueError, ProviderNotSupportedError):
                     logger.exception(
                         "Failed to perform action '%s' using platform controller.",
                         action,
