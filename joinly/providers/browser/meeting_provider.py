@@ -328,11 +328,15 @@ class BrowserMeetingProvider(BaseMeetingProvider):
     async def leave(self) -> None:
         """Leave the current meeting."""
         prompt = "Leave the meeting."
-        await self._invoke_action("leave", prompt)
-        self._platform_controller = None
-        if self._page is not None and not self._page.is_closed():
-            await self._page.close()
-            self._page = None
+        try:
+            await self._invoke_action("leave", prompt)
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to leave the meeting, forcing page close.")
+        finally:
+            self._platform_controller = None
+            if self._page is not None and not self._page.is_closed():
+                await self._page.close()
+                self._page = None
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.
