@@ -232,28 +232,32 @@ class DefaultTranscriptionController(TranscriptionController):
                 )
 
         seg_count = 0
-        stt_stream = self.stt.stream(_window_iterator())
-        async for s in stt_stream:
-            start = start or float("-inf")
-            end = end or float("inf")
-            segment_start = min(max(s.start, start), end)
-            segment_end = max(min(s.end, end), segment_start)
-            segment = TranscriptSegment(
-                text=s.text,
-                start=segment_start,
-                end=segment_end,
-                speaker=s.speaker,
-            )
-            self._transcript.add_segment(segment)
-            logger.info(
-                "%s: %s (%.2fs-%.2fs)",
-                segment.speaker if segment.speaker else "Unknown",
-                segment.text,
-                segment.start,
-                segment.end,
-            )
-            self._notify("segment")
-            seg_count += 1
+        try:
+            stt_stream = self.stt.stream(_window_iterator())
+            async for s in stt_stream:
+                start = start or float("-inf")
+                end = end or float("inf")
+                segment_start = min(max(s.start, start), end)
+                segment_end = max(min(s.end, end), segment_start)
+                segment = TranscriptSegment(
+                    text=s.text,
+                    start=segment_start,
+                    end=segment_end,
+                    speaker=s.speaker,
+                )
+                self._transcript.add_segment(segment)
+                logger.info(
+                    "%s: %s (%.2fs-%.2fs)",
+                    segment.speaker if segment.speaker else "Unknown",
+                    segment.text,
+                    segment.start,
+                    segment.end,
+                )
+                self._notify("segment")
+                seg_count += 1
+        except Exception:
+            logger.exception("Error during STT processing")
+            raise
 
         if seg_count > 0:
             if end_ts is not None:
