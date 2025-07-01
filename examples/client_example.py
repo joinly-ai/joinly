@@ -199,12 +199,15 @@ async def run(  # noqa: C901, PLR0915
                         segment.text,
                     )
 
-                async for chunk in agent.astream(
-                    {"messages": transcript_to_messages(transcript)},
-                    config={"configurable": {"thread_id": "1"}},
-                    stream_mode="updates",
-                ):
-                    log_chunk(chunk)
+                try:
+                    async for chunk in agent.astream(
+                        {"messages": transcript_to_messages(transcript)},
+                        config={"configurable": {"thread_id": "1"}},
+                        stream_mode="updates",
+                    ):
+                        log_chunk(chunk)
+                except Exception:
+                    logger.exception("Error during agent invocation")
 
         finally:
             logger.info("Leaving meeting")
