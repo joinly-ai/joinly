@@ -234,10 +234,14 @@ class DefaultTranscriptionController(TranscriptionController):
         seg_count = 0
         stt_stream = self.stt.stream(_window_iterator())
         async for s in stt_stream:
+            start = start or float("-inf")
+            end = end or float("inf")
+            segment_start = min(max(s.start, start), end)
+            segment_end = max(min(s.end, end), segment_start)
             segment = TranscriptSegment(
                 text=s.text,
-                start=max(s.start, start or float("-inf")),
-                end=min(s.end, end or float("inf")),
+                start=segment_start,
+                end=segment_end,
                 speaker=s.speaker,
             )
             self._transcript.add_segment(segment)
