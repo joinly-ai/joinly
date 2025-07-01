@@ -300,7 +300,3 @@ class SpeechController(Protocol):
             SpeechInterruptedError: If the speech is interrupted before completion.
         """
         ...
-
-    async def wait_until_no_speech(self) -> None:
-        """Wait until no speech is emitted."""
-        ...
