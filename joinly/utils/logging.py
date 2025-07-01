@@ -1,4 +1,3 @@
-import contextlib
 import logging
 
 LOGGING_TRACE = 5
@@ -20,7 +19,7 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
     logging.addLevelName(LOGGING_TRACE, "TRACE")
 
     if not plain:
-        with contextlib.suppress(ImportError):
+        try:
             from rich.logging import RichHandler
 
             logging.basicConfig(
@@ -29,6 +28,9 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
                 datefmt="[%X]",
                 handlers=[RichHandler(rich_tracebacks=True)],
             )
+        except ImportError:
+            pass
+        else:
             return
 
     logging.basicConfig(

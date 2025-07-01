@@ -35,6 +35,7 @@ FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
 ENV PYTHONUNBUFFERED=1 \
     JOINLY_SERVER_HOST="0.0.0.0" \
     JOINLY_SERVER_PORT=8000 \
+    JOINLY_LOGGING_PLAIN=1 \
     JOINLY_DEVICE="cuda" \
     ONNX_PROVIDER=CUDAExecutionProvider
 
