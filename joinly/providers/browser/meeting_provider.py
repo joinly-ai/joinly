@@ -149,6 +149,8 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             if self._browser_agent is not None:
                 await self._browser_agent.close()
                 self._browser_agent = None
+            if self._page is not None and not self._page.is_closed():
+                await self.leave()
         finally:
             await self._stack.aclose()
 
