@@ -219,7 +219,12 @@ def _parse_kv(
 @click.option(
     "-q", "--quiet", is_flag=True, help="Suppress all but error and critical logging."
 )
-@click.option("--logging-plain", is_flag=True, help="Use plain logging format.")
+@click.option(
+    "--logging-plain",
+    is_flag=True,
+    help="Use plain logging format.",
+    envvar="JOINLY_LOGGING_PLAIN",
+)
 @click.argument(
     "meeting-url",
     default=None,
