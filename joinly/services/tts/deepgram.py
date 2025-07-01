@@ -71,6 +71,10 @@ class DeepgramTTS(TTS):
             self._speak_options.model,
         )
         await self._client.start(self._speak_options)
+        if not await self._client.is_connected():
+            msg = "Failed to connect to Deepgram TTS service."
+            logger.error(msg)
+            raise RuntimeError(msg)
         logger.info("Connected to Deepgram TTS service")
 
         return self
