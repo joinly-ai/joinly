@@ -17,6 +17,17 @@ class IncompatibleAudioFormatError(Exception):
 class SpeechInterruptedError(Exception):
     """Raised when speech is interrupted by detected speech."""
 
+    _TEMPLATE = 'Interrupted by detected speech. Spoken until now: "%s"'
+
+    def __init__(self, spoken_text: str = "") -> None:
+        """Initialize the SpeechInterruptedError with the spoken text."""
+        self.spoken_text: str = spoken_text
+        super().__init__(self.__str__())
+
+    def __str__(self) -> str:
+        """Return a string representation of the error."""
+        return self._TEMPLATE % self.spoken_text
+
 
 @dataclass(frozen=True, slots=True)
 class AudioFormat:
