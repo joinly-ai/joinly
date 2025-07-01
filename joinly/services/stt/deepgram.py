@@ -108,6 +108,10 @@ class DeepgramSTT(STT):
             self._live_options.model,
         )
         await self._client.start(self._live_options)
+        if not await self._client.is_connected():
+            msg = "Failed to connect to Deepgram STT service."
+            logger.error(msg)
+            raise RuntimeError(msg)
         logger.info("Connected to Deepgram STT service")
 
         return self
