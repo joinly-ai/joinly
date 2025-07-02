@@ -12,6 +12,7 @@ from deepgram import (
 )
 
 from joinly.core import TTS
+from joinly.settings import get_settings
 from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
@@ -21,9 +22,15 @@ class DeepgramTTS(TTS):
     """Text-to-Speech (TTS) service for converting text to speech."""
 
     def __init__(
-        self, *, model_name: str = "aura-2-andromeda-en", sample_rate: int = 24000
+        self, *, model_name: str | None = None, sample_rate: int = 24000
     ) -> None:
-        """Initialize the TTS service."""
+        """Initialize the TTS service.
+
+        Args:
+            model_name: The Deepgram TTS model to use (default is "aura-2-andromeda-en"
+                for English and "aura-2-estrella-es" for Spanish).
+            sample_rate: The sample rate of the audio (default is 24000).
+        """
         config = DeepgramClientOptions(
             options={
                 "keep_alive": True,
@@ -32,8 +39,18 @@ class DeepgramTTS(TTS):
         )
         dg = DeepgramClient(config=config)
         self._client: AsyncSpeakWebSocketClient = dg.speak.asyncwebsocket.v("1")
+        if model_name is None and get_settings().language not in ["en", "es"]:
+            logger.warning(
+                "Unsupported language %s for Deepgram TTS, falling back to English.",
+                get_settings().language,
+            )
         self._speak_options = SpeakWSOptions(
-            model=model_name,
+            model=model_name
+            or (
+                "aura-2-estrella-es"
+                if get_settings().language == "es"
+                else "aura-2-andromeda-en"
+            ),
             encoding="linear16",
             sample_rate=sample_rate,
         )

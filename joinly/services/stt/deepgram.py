@@ -32,7 +32,7 @@ class DeepgramSTT(STT):
     def __init__(
         self,
         *,
-        model_name: str = "nova-3-general",
+        model_name: str | None = None,
         sample_rate: int = 16000,
         hotwords: list[str] | None = None,
         stream_idle_timeout: float = 2.0,
@@ -40,7 +40,8 @@ class DeepgramSTT(STT):
         """Initialize the DeepgramSTT.
 
         Args:
-            model_name: The Deepgram model to use (default is "nova-3-general").
+            model_name: The Deepgram model to use (default is "nova-3-general" for
+                English and "nova-2-general" otherwise).
             sample_rate: The sample rate of the audio (default is 16000).
             hotwords: A list of hotwords to improve transcription accuracy.
             stream_idle_timeout: The duration to wait after finalizing the stream before
@@ -50,11 +51,14 @@ class DeepgramSTT(STT):
         config = DeepgramClientOptions(options={"keep_alive": True})
         dg = DeepgramClient(config=config)
         self._client: AsyncListenWebSocketClient = dg.listen.asyncwebsocket.v("1")  # type: ignore[attr-type]
+        model_name = model_name or (
+            "nova-3-general" if get_settings().language == "en" else "nova-2-general"
+        )
         self._live_options = LiveOptions(
             model=model_name,
             encoding="linear16",
             sample_rate=sample_rate,
-            language="en",
+            language=get_settings().language,
             channels=1,
             endpointing=False,
             interim_results=False,

@@ -202,7 +202,7 @@ class WhisperSTT(STT):
             segments, _ = await asyncio.to_thread(
                 self._model.transcribe,
                 audio_segment,
-                language="en",
+                language=get_settings().language,
                 beam_size=5,
                 condition_on_previous_text=False,
                 hotwords=self._hotwords_str,
