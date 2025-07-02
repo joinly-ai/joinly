@@ -9,6 +9,7 @@ from typing import Self
 from kokoro_onnx import Kokoro
 
 from joinly.core import TTS
+from joinly.settings import get_settings
 from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,25 @@ class KokoroTTS(TTS):
     """Text-to-Speech (TTS) service for converting text to speech."""
 
     def __init__(self, *, voice: str = "af_bella") -> None:
-        """Initialize the TTS service."""
-        self._voice = voice
+        """Initialize the TTS service.
+
+        Args:
+            voice: The voice to use for TTS (default is "af_bella" for English).
+        """
+        default_voices = {
+            "en": "af_bella",
+            "es": "ef_dora",
+            "fr": "ff_siwis",
+            "it": "if_sara",
+        }
+        if get_settings().language not in default_voices:
+            logger.warning(
+                "Unsupported language %s for Kokoro TTS, falling back to English.",
+                get_settings().language,
+            )
+        self._voice = voice or default_voices.get(
+            get_settings().language, default_voices["en"]
+        )
         self._model: Kokoro | None = None
         self._sem = asyncio.BoundedSemaphore(1)
         self.audio_format = AudioFormat(sample_rate=24000, byte_depth=4)

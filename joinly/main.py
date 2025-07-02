@@ -51,6 +51,15 @@ def _parse_kv(
     envvar="JOINLY_NAME",
 )
 @click.option(
+    "--language",
+    "--lang",
+    type=str,
+    help="The language to use for transcription and text-to-speech.",
+    default="en",
+    show_default=True,
+    envvar="JOINLY_LANGUAGE",
+)
+@click.option(
     "--device",
     type=str,
     help="The device to use for the model. "
