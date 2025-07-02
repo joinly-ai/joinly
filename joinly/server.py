@@ -92,7 +92,7 @@ mcp = FastMCP(
 async def get_transcript(ctx: Context) -> Transcript:
     """Get the live transcript of the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    return ms.transcript.with_role(SpeakerRole.participant).compact()
+    return ms.transcript.with_role(SpeakerRole.participant)
 
 
 @mcp.tool(
