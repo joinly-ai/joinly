@@ -210,20 +210,8 @@ class DefaultSpeechController(SpeechController):
             while len(buffer) >= self.writer.chunk_size:
                 # check for speech interruption
                 if not self.no_speech_event.is_set():
-                    estimated_text = (
-                        await self._estimate_spoken_text(
-                            chunks[chunk_idx], byte_size, self.writer.audio_format
-                        )
-                        + "..."
-                    )
-                    self._transcript.add_segment(
-                        TranscriptSegment(
-                            text=estimated_text,
-                            start=start if byte_size > 0 else self._clock.now_s,
-                            end=self._clock.now_s,
-                            speaker=get_settings().name,
-                            role=SpeakerRole.assistant,
-                        )
+                    estimated_text = await self._estimate_spoken_text(
+                        chunks[chunk_idx], byte_size, self.writer.audio_format
                     )
                     logger.info(
                         'Spoken (%d/%d): "%s" (interrupted)',
@@ -232,6 +220,16 @@ class DefaultSpeechController(SpeechController):
                         estimated_text,
                     )
                     spoken_text = " ".join([*chunks[:chunk_idx], estimated_text])
+                    if spoken_text:
+                        self._transcript.add_segment(
+                            TranscriptSegment(
+                                text=estimated_text + "...",
+                                start=start if byte_size > 0 else self._clock.now_s,
+                                end=self._clock.now_s,
+                                speaker=get_settings().name,
+                                role=SpeakerRole.assistant,
+                            )
+                        )
                     raise SpeechInterruptedError(spoken_text=spoken_text)
 
                 await self.writer.write(bytes(buffer[: self.writer.chunk_size]))
