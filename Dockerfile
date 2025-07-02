@@ -70,7 +70,7 @@ RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.p
     PATH="/app/.venv/bin:${PATH}" \
     /app/.venv/bin/python download_assets.py \
     --assets playwright whisper silero kokoro \
-    --whisper-model base.en
+    --whisper-model base
 
 # Set entrypoint
 ENTRYPOINT ["/app/.venv/bin/joinly"]

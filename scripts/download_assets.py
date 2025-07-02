@@ -20,7 +20,7 @@ def download_playwright() -> None:
     logger.info("Playwright browser downloaded successfully")
 
 
-def download_whisper(model_name: str = "tiny.en") -> None:
+def download_whisper(model_name: str) -> None:
     """Download Whisper model."""
     logger.info("Downloading Whisper model %s", model_name)
     _ = WhisperModel(model_name)
@@ -117,8 +117,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--whisper-model",
         type=str,
-        default="base.en",
-        help="Whisper model to download (default: base.en)",
+        default="base",
+        help="Whisper model to download (default: base)",
     )
     return parser.parse_args()
 

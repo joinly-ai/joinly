@@ -36,7 +36,7 @@ class WhisperSTT(STT):
 
         Args:
             model_name: The Whisper model to use (default is None, where for cpu it
-                uses "base.en" and for cuda "distil-large-v3").
+                uses "base" and for cuda "distil-large-v3").
             compute_type: The compute type for the model (default is "auto").
             min_audio: Minimum audio length (in seconds) to consider for transcription.
             min_silence: Minimum silence length (in seconds) to consider before ending
@@ -44,7 +44,7 @@ class WhisperSTT(STT):
             hotwords: A list of hotwords to improve transcription accuracy.
         """
         self.model_name = model_name or (
-            "distil-large-v3" if get_settings().device == "cuda" else "base.en"
+            "distil-large-v3" if get_settings().device == "cuda" else "base"
         )
         self._set_model_name = model_name is not None
         self.compute_type = compute_type
