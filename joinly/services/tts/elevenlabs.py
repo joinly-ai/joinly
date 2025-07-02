@@ -44,10 +44,14 @@ class ElevenlabsTTS(TTS):
         Returns:
             AsyncIterator[bytes]: An asynchronous iterator that yields audio chunks.
         """
+        language_code = None
+        if self._model_id in ("eleven_flash_v2_5", "eleven_turbo_v2_5"):
+            language_code = get_settings().language
+
         return self._client.text_to_speech.stream(
             text=text,
             voice_id=self._voice_id,
             model_id=self._model_id,
             output_format=self._output_format,
-            language_code=get_settings().language,
+            language_code=language_code,
         )
