@@ -1,7 +1,32 @@
 
 # Changelog
 
-## v0.3.0 - 2025-06-25
+## v0.3.1 - 2025-07-02
+
+### Added
+
+- ElevenLabs TTS support via `--tts elevenlabs` (#47)
+- new setting `--lang <language_code>` to set the language for TTS and STT (depends on support of services) (#46)
+
+### Improvements
+
+- streamline speech controller implementation (#41)
+- improve error handling and interrupts in speech controller (#41)
+- force leave by closing page on failed leave action (#35)
+- auto leave on session tear down (#38)
+- set docker logging to plain format (#39)
+
+### Fixed
+
+- handle exceptions during agent invocation (#45)
+- log speech-to-text exceptions (#44)
+- ensure aligned segment timestamps in transcript (#40)
+- fail on failed deepgram connection (#37)
+- propagate ProviderNotSupportedError (#36)
+- stop adding a segment for an interrupted speech without any spoken text (#48)
+- fix no new segment error due to compact transcript after interruption (#49)
+
+## v0.3.0 - 2025-06-28
 
 ### Added
 

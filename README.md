@@ -132,9 +132,14 @@ uv run joinly --client <MeetingUrl>
 # Change name (default: joinly)
 uv run joinly --name "AI Assistant"
 
+# Change language of TTS/STT (default: en)
+# Note, this depends on the TTS/STT provider
+uv run joinly --lang de
+
 # Change TTS provider
 uv run joinly --tts kokoro # default: local Kokoro
 uv run joinly --tts deepgram # include DEEPGRAM_API_KEY in your .env
+uv run joinly --tts elevenlabs # include ELEVENLABS_API_KEY in your .env
 
 # Change Transcription (STT) provider
 uv run joinly --stt whisper # default: local Whisper (faster-whisper)

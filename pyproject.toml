@@ -1,6 +1,6 @@
 [project]
 name = "joinly"
-version = "0.3.0"
+version = "0.3.1"
 description = "Make your meetings accessible to AI Agents"
 readme = "README.md"
 authors = [
