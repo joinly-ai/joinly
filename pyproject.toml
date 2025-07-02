@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1.8",
     "deepgram-sdk>=4.1.1",
+    "elevenlabs>=2.5.0",
     "faster-whisper>=1.1.1",
     "fastmcp>=2.3.3",
     "kokoro-onnx>=0.4.8",
