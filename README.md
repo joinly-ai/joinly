@@ -32,7 +32,7 @@
 - **Conversational flow**: Built-in logic that ensures natural conversations by handling interruptions and multi-speaker interactions
 - **Cross-platform**: Join Google Meet, Zoom, and Microsoft Teams (or any available over the browser)
 - **Bring-your-own-LLM**: Works with all LLM providers (also locally with Ollama)
-- **Choose-your-preferred-TTS/STT**: Modular design supports multiple services - Whisper/Deepgram for STT and Kokoro/Deepgram for TTS (and more to come...)
+- **Choose-your-preferred-TTS/STT**: Modular design supports multiple services - Whisper/Deepgram for STT and Kokoro/ElevenLabs/Deepgram for TTS (and more to come...)
 - **100% open-source, self-hosted and privacy-first** :rocket:
 
 # :video_camera: Demos
