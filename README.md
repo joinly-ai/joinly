@@ -116,52 +116,83 @@ Add the tools of any MCP server to the example client by providing a JSON config
 
 You can also add multiple entries under `"mcpServers"` which will all be available as tools in the meeting (see [fastmcp client docs](https://gofastmcp.com/clients/client) for config syntax). Then, run the client using the config file (`--config <file>`):
 
+> [!IMPORTANT]
+> Make sure the joinly server is running in the other terminal
+
 ```bash  
 uv run examples/client_example.py --mcp-url http://127.0.0.1:8000/mcp/ --config examples/config_tavily.json <MeetingUrl>
 ```
 
 # :wrench: Configurations
 
+Configurations can be given via env variables and/or command line args. Here is a list of common configuration options, which can be used when starting the docker container:
 ```bash
-# Start server (default), connect via own client
-uv run joinly
+docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:latest <MyOptionArgs>
+```
 
-# Start directly as client
-uv run joinly --client <MeetingUrl>
+## Basic Settings
 
-# Change name (default: joinly)
-uv run joinly --name "AI Assistant"
+In general, the docker image provides an MCP server which is started by default. But to quickly get started, we also include a client implementation that can be used via `--client`. Note, in this case no server is started and no other client can connect to it.
+
+```bash
+# Start directly as client; default is as server, to which an external client can connect
+--client <MeetingUrl>
+
+# Change participant name (default: joinly)
+--name "AI Assistant"
 
 # Change language of TTS/STT (default: en)
-# Note, this depends on the TTS/STT provider
-uv run joinly --lang de
-
-# Change TTS provider
-uv run joinly --tts kokoro # default: local Kokoro
-uv run joinly --tts deepgram # include DEEPGRAM_API_KEY in your .env
-uv run joinly --tts elevenlabs # include ELEVENLABS_API_KEY in your .env
-
-# Change Transcription (STT) provider
-uv run joinly --stt whisper # default: local Whisper (faster-whisper)
-uv run joinly --stt deepgram # include DEEPGRAM_API_KEY in your .env
+# Note, availability depends on the TTS/STT provider
+--lang de
 
 # Change host & port of the joinly MCP server
-uv run joinly --host 0.0.0.0 --port 8000
+--host 0.0.0.0 --port 8000
+```
 
+## Providers
+
+### Text-to-Speech
+```bash
+# Kokoro (local) TTS (default)
+--tts kokoro
+--tts-arg voice=<VoiceName>  # optionally, set different voice
+
+# ElevenLabs TTS, include ELEVENLABS_API_KEY in .env
+--tts elevenlabs
+--tts-arg voice_id=<VoiceID>  # optionally, set different voice
+
+# Deepgram TTS, include DEEPGRAM_API_KEY in .env
+--tts deepgram
+--tts-arg model_name=<ModelName>  # optionally, set different model (voice)
+```
+
+### Transcription
+```bash
+# Whisper (local) STT (default)
+--stt whisper
+--stt-arg model_name=<ModelName>  # optionally, set different model (default: base), for GPU support see below
+
+# Deepgram STT, include DEEPGRAM_API_KEY in .env
+--tts deepgram
+--tts-arg model_name=<ModelName>  # optionally, set different model
+```
+
+## Debugging and Experimental
+```bash
 # Start browser with a VNC server for debugging;
 # forward the port and connect to it using a VNC client
-uv run joinly --vnc-server --vnc-server-port 5900
+--vnc-server --vnc-server-port 5900
+
+# Logging
+-v  # or -vv, -vvv
+
+# Help
+--help
 
 # Use browser agent as fallback/to join any meeting website (Experimental)
 # Note: this requires npx (not installed in the docker but in devcontainer),
 # LLM is selected using the same ENV variables as described earlier
-uv run joinly --browser-agent playwright-mcp
-
-# Logging
-uv run joinly -v  # or -vv, -vvv
-
-# Help
-uv run joinly --help
+--browser-agent playwright-mcp
 ```
 
 ## GPU Support
@@ -179,7 +210,7 @@ docker run --gpus all --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly-cuda
 docker run --gpus all --env-file .env ghcr.io/joinly-ai/joinly-cuda:latest -v --client <MeetingURL>
 ```
 
-By default, the `joinly` image uses the Whisper model `base.en` for transcription, since it still runs reasonably fast on CPU. For `joinly-cuda`, it automatically defaults to `distil-large-v3` for significantly better transcription quality. You can change the model by setting `--stt-arg model_name=<model_name>` (e.g., `--stt-arg model_name=large-v3`). However, only the respective default models are packaged in the docker image, so it will start to download the model weights on container start.
+By default, the `joinly` image uses the Whisper model `base` for transcription, since it still runs reasonably fast on CPU. For `joinly-cuda`, it automatically defaults to `distil-large-v3` for significantly better transcription quality. You can change the model by setting `--stt-arg model_name=<model_name>` (e.g., `--stt-arg model_name=large-v3`). However, only the respective default models are packaged in the docker image, so it will start to download the model weights on container start.
 
 # :test_tube: Create your own client
 
@@ -219,18 +250,18 @@ We'd love to see what you are using it for or building with it. Showcase your wo
 # :pencil2: Roadmap
 
 **Meeting**
+- [x] Meeting chat access
 - [ ] Camera in video call with status updates
 - [ ] Enable screen share during video conferences
-- [ ] Meeting chat as resource
 - [ ] Participant metadata and joining/leaving
 - [ ] Improve browser agent capabilities
 
 **Conversation**
+- [x] Speaker attribute for transcription
 - [ ] Improve client memory: reduce token usage, allow persistence across meetings
 events
 - [ ] Improve End-of-Utterance/turn-taking detection
 - [ ] Human approval mechanism from inside the meeting
-- [ ] Speaker diarization
 
 **Integrations**
 - [ ] Showcase how to add agents using the A2A protocol
