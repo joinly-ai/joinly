@@ -81,9 +81,9 @@ class MeetingSession:
             passcode (str | None): The password or passcode for the meeting
                 (if required).
         """
+        await self._meeting_provider.join(meeting_url, participant_name, passcode)
         self._clock = Clock()
         self._transcript = Transcript()
-        await self._meeting_provider.join(meeting_url, participant_name, passcode)
         await self._transcription_controller.start(self._clock, self._transcript)
         await self._speech_controller.start(self._clock, self._transcript)
 
