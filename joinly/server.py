@@ -2,10 +2,9 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
-from mcp.server import NotificationOptions
 from pydantic import AnyUrl, Field
 
 from joinly.container import SessionContainer
@@ -17,9 +16,6 @@ from joinly.types import (
     SpeechInterruptedError,
     Transcript,
 )
-
-if TYPE_CHECKING:
-    from mcp import ServerSession
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +36,12 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     session_container = SessionContainer()
     meeting_session = await session_container.__aenter__()
 
-    _removers: dict[ServerSession, Callable[[], None]] = {}
+    _remover: Callable[[], None] | None = None
 
     @server._mcp_server.subscribe_resource()  # noqa: SLF001
     async def _handle_subscribe_resource(url: AnyUrl) -> None:
-        if url != transcript_url:
+        nonlocal _remover
+        if url != transcript_url and _remover is not None:
             return
         logger.info("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
@@ -54,20 +51,19 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
                 logger.debug("Sending transcription update notification")
                 await session.send_resource_updated(transcript_url)
 
-        _removers[session] = meeting_session.add_transcription_listener(_push)
+        _remover = meeting_session.add_transcription_listener(_push)
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
-        session = server._mcp_server.request_context.session  # noqa: SLF001
-        if url == transcript_url and (rem := _removers.pop(session, None)):
+        if url == transcript_url and _remover is not None:
             logger.info("Unsubscribing from resource: %s", url)
-            rem()
+            _remover()
 
     try:
         yield SessionContext(meeting_session=meeting_session)
     finally:
-        for rem in _removers.values():
-            rem()
+        if _remover is not None:
+            _remover()
 
         # ensure proper cleanup
         from anyio import CancelScope
@@ -76,12 +72,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
             await session_container.__aexit__()
 
 
-mcp = FastMCP(
-    "joinly",
-    lifespan=session_lifespan,
-    notification_options=NotificationOptions(resources_changed=True),
-    capabilities={"resources": {"subscribe": True}},
-)
+mcp = FastMCP("joinly", lifespan=session_lifespan)
 
 
 @mcp.resource(
