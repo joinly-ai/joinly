@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -5,10 +6,12 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
-from pydantic import AnyUrl, Field
+from fastmcp.server.dependencies import get_http_headers
+from pydantic import AnyUrl, Field, ValidationError
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
+from joinly.settings import Settings, get_settings, reset_settings, set_settings
 from joinly.types import (
     MeetingChatHistory,
     MeetingParticipant,
@@ -29,10 +32,31 @@ class SessionContext:
     meeting_session: MeetingSession
 
 
+def _extract_settings() -> Settings:
+    """Extract settings from the HTTP headers."""
+    current = get_settings()
+    header = get_http_headers().get("joinly-settings")
+    if not header:
+        return current
+
+    try:
+        patch: Settings = Settings.model_validate(json.loads(header))
+        settings = current.model_copy(update=patch.model_dump(exclude_unset=True))
+    except (json.JSONDecodeError, ValidationError):
+        msg = "Invalid joinly-settings."
+        logger.exception(msg)
+        logger.warning("Continuing with current settings")
+        return current
+
+    return settings
+
+
 @asynccontextmanager
 async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     """Create and enter a MeetingSession once per client connection."""
     logger.info("Creating meeting session")
+    settings = _extract_settings()
+    settings_token = set_settings(settings)
     session_container = SessionContainer()
     meeting_session = await session_container.__aenter__()
 
@@ -70,6 +94,8 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
 
         with CancelScope(shield=True):
             await session_container.__aexit__()
+
+        reset_settings(settings_token)
 
 
 mcp = FastMCP("joinly", lifespan=session_lifespan)
