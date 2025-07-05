@@ -36,6 +36,9 @@ cuda = [
     "onnxruntime-gpu>=1.22.0",
 ]
 
+[tool.uv.sources]
+joinly-client = { workspace = true }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -54,4 +57,9 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["joinly"]
+packages = ["joinly", "shared"]
+
+[tool.uv.workspace]
+members = [
+    "client",
+]

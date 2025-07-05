@@ -5,6 +5,8 @@
     "typeCheckingMode": "standard",
     "include": [
         "joinly",
+        "client",
+        "shared",
         "tests"
     ],
     "exclude": [

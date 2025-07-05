@@ -47,6 +47,9 @@ convention = "google"
 "scripts/**/*.py" = [
     "INP001",
 ]
+"shared/**/*.py" = [
+    "INP001",
+]
 "examples/**/*.py" = [
     "INP001",
 ]
