@@ -94,6 +94,7 @@ class TranscriptSegment(BaseModel):
         start (float): The start time of the segment in seconds.
         end (float): The end time of the segment in seconds.
         speaker (str | None): The speaker of the segment, if available.
+        role (SpeakerRole): The role of the speaker in the segment.
     """
 
     text: str
