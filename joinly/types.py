@@ -100,7 +100,7 @@ class TranscriptSegment(BaseModel):
     start: float
     end: float
     speaker: str | None = None
-    role: SpeakerRole = Field(default=SpeakerRole.participant, exclude=True)
+    role: SpeakerRole = Field(default=SpeakerRole.participant)
 
     model_config = ConfigDict(frozen=True)
 
