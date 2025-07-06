@@ -154,14 +154,15 @@ def _parse_kv(
 @click.option(
     "--stt",
     type=str,
-    help='Speech-to-Text service to use. Options are: "whisper".',
+    help='Speech-to-Text service to use. Options are: "whisper" (local), "deepgram".',
     default="whisper",
     show_default=True,
 )
 @click.option(
     "--tts",
     type=str,
-    help='Text-to-Speech service to use. Options are: "kokoro", "deepgram".',
+    help='Text-to-Speech service to use. Options are: "kokoro" (local), '
+    '"elevenlabs", "deepgram".',
     default="kokoro",
     show_default=True,
 )
