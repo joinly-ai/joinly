@@ -967,12 +967,6 @@ source = { editable = "client" }
 dependencies = [
     { name = "click" },
     { name = "fastmcp" },
-    { name = "langchain" },
-    { name = "langchain-anthropic" },
-    { name = "langchain-mcp-adapters" },
-    { name = "langchain-ollama" },
-    { name = "langchain-openai" },
-    { name = "langgraph" },
     { name = "python-dotenv" },
     { name = "rich" },
 ]
@@ -981,12 +975,6 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
     { name = "fastmcp", specifier = ">=2.10.1" },
-    { name = "langchain", specifier = ">=0.3.25" },
-    { name = "langchain-anthropic", specifier = ">=0.3.15" },
-    { name = "langchain-mcp-adapters", specifier = ">=0.0.3" },
-    { name = "langchain-ollama", specifier = ">=0.3.3" },
-    { name = "langchain-openai", specifier = ">=0.3.16" },
-    { name = "langgraph", specifier = ">=0.4.1" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "rich", specifier = ">=14.0.0" },
 ]
