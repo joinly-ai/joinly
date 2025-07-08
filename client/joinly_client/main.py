@@ -9,7 +9,7 @@ import click
 from dotenv import load_dotenv
 from fastmcp import Client, FastMCP
 
-from joinly_client.agent import ConversationalAgent
+from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ def _parse_kv(
     help="The URL of the joinly server to connect to.",
     default="http://localhost:8000/mcp/",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_URL",
 )
 @click.option(
@@ -52,6 +53,7 @@ def _parse_kv(
     help="The meeting participant name.",
     default="joinly",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_NAME",
 )
 @click.option(
@@ -61,24 +63,28 @@ def _parse_kv(
     help="The language to use for transcription and text-to-speech.",
     default="en",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_LANGUAGE",
 )
 @click.option(
-    "--model-name",
-    type=str,
-    help="The name of the model to use in the client.",
-    default="gpt-4o",
-    show_default=True,
-    envvar="JOINLY_MODEL_NAME",
-)
-@click.option(
+    "--llm-provider",
     "--model-provider",
     type=str,
-    help="The provider of the model to use in the client. "
-    "Automatically determined by the model name, "
-    'but e.g. for Azure OpenAI use "azure_openai".',
-    default=None,
-    envvar="JOINLY_MODEL_PROVIDER",
+    help="The provider of the LLM model to use in the client.",
+    default="openai",
+    show_default=True,
+    show_envvar=True,
+    envvar=["JOINLY_LLM_PROVIDER", "JOINLY_MODEL_PROVIDER"],
+)
+@click.option(
+    "--llm-model",
+    "--model-name",
+    type=str,
+    help="The name of the LLM model to use in the client.",
+    default="gpt-4o",
+    show_default=True,
+    show_envvar=True,
+    envvar=["JOINLY_LLM_MODEL", "JOINLY_MODEL_NAME"],
 )
 @click.option(
     "--prompt",
@@ -86,6 +92,7 @@ def _parse_kv(
     help="System prompt to use for the model. If not provided, the default "
     "system prompt will be used.",
     default=None,
+    show_default=True,
     envvar="JOINLY_PROMPT",
 )
 @click.option(
@@ -108,6 +115,8 @@ def _parse_kv(
     help='Voice Activity Detection service to use. Options are: "silero", "webrtc".',
     default="silero",
     show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_VAD",
 )
 @click.option(
     "--stt",
@@ -115,6 +124,8 @@ def _parse_kv(
     help='Speech-to-Text service to use. Options are: "whisper" (local), "deepgram".',
     default="whisper",
     show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_STT",
 )
 @click.option(
     "--tts",
@@ -123,6 +134,8 @@ def _parse_kv(
     '"elevenlabs", "deepgram".',
     default="kokoro",
     show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_TTS",
 )
 @click.option(
     "--vad-arg",
@@ -184,8 +197,8 @@ def cli(  # noqa: PLR0913
     *,
     joinly_url: str,
     name: str,
-    model_name: str,
-    model_provider: str | None,
+    llm_provider: str,
+    llm_model: str,
     prompt: str | None,
     name_trigger: bool,
     mcp_config: str | None,
@@ -222,11 +235,11 @@ def cli(  # noqa: PLR0913
         asyncio.run(
             run(
                 joinly_url=joinly_url,
-                name=name,
                 meeting_url=meeting_url,
-                model_name=model_name,
-                model_provider=model_provider,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
                 prompt=prompt,
+                name=name,
                 name_trigger=name_trigger,
                 mcp_config=mcp_config_dict,
                 settings=settings,
@@ -239,9 +252,9 @@ def cli(  # noqa: PLR0913
 async def run(  # noqa: PLR0913
     joinly_url: str | FastMCP,
     meeting_url: str,
-    model_name: str,
+    llm_provider: str,
+    llm_model: str,
     *,
-    model_provider: str | None = None,
     prompt: str | None = None,
     name: str | None = None,
     name_trigger: bool = False,
@@ -256,8 +269,8 @@ async def run(  # noqa: PLR0913
         settings=settings,
     )
     mcp_client = Client(mcp_config) if mcp_config else None
-    agent = ConversationalAgent(  # noqa: F841
-        model_name, model_provider=model_provider, prompt=prompt
+    agent = ConversationalToolAgent(  # noqa: F841
+        llm_provider=llm_provider, llm_model=llm_model, prompt=prompt
     )
     async with joinly_client, mcp_client or contextlib.nullcontext():
         await joinly_client.join_meeting(meeting_url)
