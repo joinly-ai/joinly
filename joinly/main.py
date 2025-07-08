@@ -90,7 +90,7 @@ def _parse_kv(
 @click.option(
     "--model-name",
     type=str,
-    help="The name of the model to use in the client and/or browser agent.",
+    help="The name of the model to use in the client.",
     default="gpt-4o",
     show_default=True,
     envvar="JOINLY_MODEL_NAME",
@@ -98,7 +98,7 @@ def _parse_kv(
 @click.option(
     "--model-provider",
     type=str,
-    help="The provider of the model to use in the client and/or browser agent. "
+    help="The provider of the model to use in the client. "
     "Automatically determined by the model name, "
     'but e.g. for Azure OpenAI use "azure_openai".',
     default=None,
@@ -135,16 +135,6 @@ def _parse_kv(
     show_default=True,
 )
 @click.option(
-    "--browser-agent",
-    type=str,
-    help="Browser agent to use for the meeting provider. "
-    'Defaults to no browser agent, options are: "playwright-mcp". '
-    "Only applicable with --meeting-provider browser.",
-    default=None,
-    show_default=True,
-    envvar="JOINLY_BROWSER_AGENT",
-)
-@click.option(
     "--vad",
     type=str,
     help='Voice Activity Detection service to use. Options are: "webrtc", "silero".',
@@ -154,14 +144,15 @@ def _parse_kv(
 @click.option(
     "--stt",
     type=str,
-    help='Speech-to-Text service to use. Options are: "whisper".',
+    help='Speech-to-Text service to use. Options are: "whisper" (local), "deepgram".',
     default="whisper",
     show_default=True,
 )
 @click.option(
     "--tts",
     type=str,
-    help='Text-to-Speech service to use. Options are: "kokoro", "deepgram".',
+    help='Text-to-Speech service to use. Options are: "kokoro" (local), '
+    '"elevenlabs", "deepgram".',
     default="kokoro",
     show_default=True,
 )
@@ -250,7 +241,6 @@ def cli(  # noqa: PLR0913
     model_provider: str | None,
     vnc_server: bool,
     vnc_server_port: int,
-    browser_agent: str | None,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -259,20 +249,12 @@ def cli(  # noqa: PLR0913
     **cli_settings: dict[str, Any],
 ) -> None:
     """Start joinly MCP server or server + client to join meetings."""
-    if cli_settings.get("meeting_provider") == "browser":
-        if vnc_server:
-            cli_settings["meeting_provider_args"] = cli_settings.get(
-                "meeting_provider_args", {}
-            )
-            cli_settings["meeting_provider_args"]["vnc_server"] = True
-            cli_settings["meeting_provider_args"]["vnc_server_port"] = vnc_server_port
-        if browser_agent:
-            cli_settings["meeting_provider_args"]["browser_agent"] = browser_agent
-        if not cli_settings.get("meeting_provider_args", {}).get("browser_agent_args"):
-            cli_settings["meeting_provider_args"]["browser_agent_args"] = {
-                "model_name": model_name,
-                "model_provider": model_provider,
-            }
+    if cli_settings.get("meeting_provider") == "browser" and vnc_server:
+        cli_settings["meeting_provider_args"] = cli_settings.get(
+            "meeting_provider_args", {}
+        )
+        cli_settings["meeting_provider_args"]["vnc_server"] = True
+        cli_settings["meeting_provider_args"]["vnc_server_port"] = vnc_server_port
 
     settings = Settings(**cli_settings)  # type: ignore[arg-type]
     set_settings(settings)

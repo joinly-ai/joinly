@@ -36,9 +36,9 @@
 - **100% open-source, self-hosted and privacy-first** :rocket:
 
 # :video_camera: Demos
-### Websearch
-[![Tavily Demo](https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/tavily-demo.png)](https://www.youtube.com/watch?v=MbIDuf7a-_8)
-> In this demo video, you can see joinly anwsering simple questions by accessing the latest news from the web.
+### GitHub
+[![GitHub Demo](https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/github-demo.png)](https://youtu.be/XWolVuxw8I8)
+> In this demo video, joinly answers the question 'What is Joinly?' by accessing the latest news from the web. It then creates an issue in a GitHub demo repository.
 ### Notion
 [![Notion Demo](https://raw.githubusercontent.com/joinly-ai/assets/main/images/others/notion-demo.png)](https://www.youtube.com/watch?v=pvYqZi2KeI0)
 > In this demo video, we connect joinly to our notion via MCP and let it edit the content of a page content live in the meeting. 
@@ -177,7 +177,7 @@ In general, the docker image provides an MCP server which is started by default.
 --tts-arg model_name=<ModelName>  # optionally, set different model
 ```
 
-## Debugging and Experimental
+## Debugging
 ```bash
 # Start browser with a VNC server for debugging;
 # forward the port and connect to it using a VNC client
@@ -188,11 +188,6 @@ In general, the docker image provides an MCP server which is started by default.
 
 # Help
 --help
-
-# Use browser agent as fallback/to join any meeting website (Experimental)
-# Note: this requires npx (not installed in the docker but in devcontainer),
-# LLM is selected using the same ENV variables as described earlier
---browser-agent playwright-mcp
 ```
 
 ## GPU Support
