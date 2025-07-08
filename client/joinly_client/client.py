@@ -1,5 +1,3 @@
-import asyncio
-import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -49,7 +47,6 @@ class JoinlyClient:
         self._utterance_callback: (
             Callable[[list[TranscriptSegment]], Awaitable[None]] | None
         ) = None
-        self._utterance_task: asyncio.Task | None = None
         self._last_segment: float = 0.0
 
     @property
@@ -78,16 +75,11 @@ class JoinlyClient:
                 isinstance(message, ServerNotification)
                 and isinstance(message.root, ResourceUpdatedNotification)
                 and message.root.params.uri == TRANSCRIPT_URL
-            ) and self._utterance_callback:
-                if self._utterance_task is not None and not self._utterance_task.done():
-                    self._utterance_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await self._utterance_task
-
-                if new_segments := await self._get_new_segments():
-                    self._utterance_task = asyncio.ensure_future(
-                        self._utterance_callback(new_segments)
-                    )
+                and self._utterance_callback
+            ):
+                new_segments = await self._get_new_segments()
+                if new_segments:
+                    await self._utterance_callback(new_segments)
 
         if isinstance(self.joinly_url, str):
             transport = StreamableHttpTransport(
