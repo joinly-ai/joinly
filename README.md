@@ -177,7 +177,7 @@ In general, the docker image provides an MCP server which is started by default.
 --tts-arg model_name=<ModelName>  # optionally, set different model
 ```
 
-## Debugging and Experimental
+## Debugging
 ```bash
 # Start browser with a VNC server for debugging;
 # forward the port and connect to it using a VNC client
@@ -188,11 +188,6 @@ In general, the docker image provides an MCP server which is started by default.
 
 # Help
 --help
-
-# Use browser agent as fallback/to join any meeting website (Experimental)
-# Note: this requires npx (not installed in the docker but in devcontainer),
-# LLM is selected using the same ENV variables as described earlier
---browser-agent playwright-mcp
 ```
 
 ## GPU Support
