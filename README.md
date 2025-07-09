@@ -66,8 +66,8 @@ Create a new `.env` file in the project root with your API keys. See [.env.examp
 # .env
 # for OpenAI LLM
 # change key and model to your desired one
-JOINLY_MODEL_NAME=gpt-4o
-JOINLY_MODEL_PROVIDER=openai
+JOINLY_LLM_MODEL=gpt-4o
+JOINLY_LLM_PROVIDER=openai
 OPENAI_API_KEY=your-openai-api-key
 ```
 > [!TIP]
