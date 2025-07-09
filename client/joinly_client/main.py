@@ -11,6 +11,7 @@ from fastmcp import Client, FastMCP
 
 from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
+from joinly_client.utils import get_llm
 
 logger = logging.getLogger(__name__)
 
@@ -286,8 +287,12 @@ async def run(  # noqa: PLR0913
         settings=settings,
     )
     mcp_client = Client(mcp_config) if mcp_config else None
+    llm = get_llm(
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+    )
     agent = ConversationalToolAgent(  # noqa: F841
-        llm_provider=llm_provider, llm_model=llm_model, prompt=prompt
+        llm=llm, prompt=prompt
     )
     async with joinly_client, mcp_client or contextlib.nullcontext():
         await joinly_client.join_meeting(meeting_url)

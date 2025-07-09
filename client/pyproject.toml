@@ -10,6 +10,11 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1.8",
     "fastmcp>=2.10.1",
+    "llama-index>=0.12.48",
+    "llama-index-llms-anthropic>=0.7.6",
+    "llama-index-llms-azure-openai>=0.3.4",
+    "llama-index-llms-ollama>=0.6.2",
+    "llama-index-llms-openai>=0.4.7",
     "python-dotenv>=1.1.0",
     "rich>=14.0.0",
 ]
