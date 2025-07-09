@@ -96,6 +96,14 @@ def _parse_kv(
     envvar="JOINLY_PROMPT",
 )
 @click.option(
+    "--prompt-file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help="Path to a text file containing the system prompt.",
+    default=None,
+    show_default=True,
+    envvar="JOINLY_PROMPT_FILE",
+)
+@click.option(
     "--mcp-config",
     type=str,
     help="Path to a JSON configuration file for additional MCP servers. "
@@ -200,6 +208,7 @@ def cli(  # noqa: PLR0913
     llm_provider: str,
     llm_model: str,
     prompt: str | None,
+    prompt_file: str | None,
     name_trigger: bool,
     mcp_config: str | None,
     meeting_url: str,
@@ -221,6 +230,14 @@ def cli(  # noqa: PLR0913
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
+
+    if prompt_file and not prompt:
+        try:
+            with Path(prompt_file).open("r") as f:
+                prompt = f.read().strip()
+        except Exception:
+            logger.exception("Failed to load prompt file")
+            prompt = None
 
     mcp_config_dict: dict[str, Any] | None = None
     if mcp_config:
