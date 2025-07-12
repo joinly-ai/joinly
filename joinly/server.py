@@ -65,7 +65,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     @server._mcp_server.subscribe_resource()  # noqa: SLF001
     async def _handle_subscribe_resource(url: AnyUrl) -> None:
         nonlocal _remover
-        if url != transcript_url and _remover is not None:
+        if url != transcript_url or _remover is not None:
             return
         logger.info("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
@@ -79,9 +79,11 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
+        nonlocal _remover
         if url == transcript_url and _remover is not None:
             logger.info("Unsubscribing from resource: %s", url)
             _remover()
+            _remover = None
 
     try:
         yield SessionContext(meeting_session=meeting_session)
