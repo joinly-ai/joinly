@@ -1,15 +1,17 @@
+import json
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
-from mcp.server import NotificationOptions
-from pydantic import AnyUrl, Field
+from fastmcp.server.dependencies import get_http_headers
+from pydantic import AnyUrl, Field, ValidationError
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
+from joinly.settings import Settings, get_settings, reset_settings, set_settings
 from joinly.types import (
     MeetingChatHistory,
     MeetingParticipant,
@@ -17,9 +19,6 @@ from joinly.types import (
     SpeechInterruptedError,
     Transcript,
 )
-
-if TYPE_CHECKING:
-    from mcp import ServerSession
 
 logger = logging.getLogger(__name__)
 
@@ -33,18 +32,40 @@ class SessionContext:
     meeting_session: MeetingSession
 
 
+def _extract_settings() -> Settings:
+    """Extract settings from the HTTP headers."""
+    current = get_settings()
+    header = get_http_headers().get("joinly-settings")
+    if not header:
+        return current
+
+    try:
+        patch: Settings = Settings.model_validate(json.loads(header))
+        settings = current.model_copy(update=patch.model_dump(exclude_unset=True))
+    except (json.JSONDecodeError, ValidationError):
+        msg = "Invalid joinly-settings."
+        logger.exception(msg)
+        logger.warning("Continuing with current settings")
+        return current
+
+    return settings
+
+
 @asynccontextmanager
 async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     """Create and enter a MeetingSession once per client connection."""
     logger.info("Creating meeting session")
+    settings = _extract_settings()
+    settings_token = set_settings(settings)
     session_container = SessionContainer()
     meeting_session = await session_container.__aenter__()
 
-    _removers: dict[ServerSession, Callable[[], None]] = {}
+    _remover: Callable[[], None] | None = None
 
     @server._mcp_server.subscribe_resource()  # noqa: SLF001
     async def _handle_subscribe_resource(url: AnyUrl) -> None:
-        if url != transcript_url:
+        nonlocal _remover
+        if url != transcript_url and _remover is not None:
             return
         logger.info("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
@@ -54,20 +75,19 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
                 logger.debug("Sending transcription update notification")
                 await session.send_resource_updated(transcript_url)
 
-        _removers[session] = meeting_session.add_transcription_listener(_push)
+        _remover = meeting_session.add_transcription_listener(_push)
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
-        session = server._mcp_server.request_context.session  # noqa: SLF001
-        if url == transcript_url and (rem := _removers.pop(session, None)):
+        if url == transcript_url and _remover is not None:
             logger.info("Unsubscribing from resource: %s", url)
-            rem()
+            _remover()
 
     try:
         yield SessionContext(meeting_session=meeting_session)
     finally:
-        for rem in _removers.values():
-            rem()
+        if _remover is not None:
+            _remover()
 
         # ensure proper cleanup
         from anyio import CancelScope
@@ -75,13 +95,10 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
         with CancelScope(shield=True):
             await session_container.__aexit__()
 
+        reset_settings(settings_token)
 
-mcp = FastMCP(
-    "joinly",
-    lifespan=session_lifespan,
-    notification_options=NotificationOptions(resources_changed=True),
-    capabilities={"resources": {"subscribe": True}},
-)
+
+mcp = FastMCP("joinly", lifespan=session_lifespan)
 
 
 @mcp.resource(

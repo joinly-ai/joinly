@@ -1,4 +1,4 @@
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any
 
 from pydantic import Field
@@ -49,10 +49,30 @@ _current_settings: ContextVar[Settings] = ContextVar("settings", default=Setting
 
 
 def get_settings() -> Settings:
-    """Get the current settings."""
+    """Get the current settings.
+
+    Returns:
+        Settings: The current settings.
+    """
     return _current_settings.get()
 
 
-def set_settings(settings: Settings) -> None:
-    """Set the current settings."""
-    _current_settings.set(settings)
+def set_settings(settings: Settings) -> Token[Settings]:
+    """Set the current settings.
+
+    Args:
+        settings (Settings): The settings to set.
+
+    Returns:
+        Token[Settings]: A token that can be used to reset the settings.
+    """
+    return _current_settings.set(settings)
+
+
+def reset_settings(token: Token[Settings]) -> None:
+    """Reset the current settings to the previous value.
+
+    Args:
+        token (Token[Settings]): The token returned by `set_settings`.
+    """
+    _current_settings.reset(token)

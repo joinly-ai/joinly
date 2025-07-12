@@ -22,6 +22,7 @@ import os
 import re
 
 from fastmcp import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
@@ -132,9 +133,19 @@ async def run(  # noqa: C901, PLR0915
         "If interrupted mid-response, use 'finish'."
     )
 
+    # optionally, set settings for joinly (requires v0.3.2)
+    settings = {
+        # "name": "joinly",  # noqa: ERA001
+        # "language": "en",  # noqa: ERA001
+        # "tts": "elevenlabs",  # noqa: ERA001
+    }
+    transport = StreamableHttpTransport(
+        url=mcp_url, headers={"joinly-settings": json.dumps(settings)}
+    )
+
     # separate joinly client, since fastmcp does not support notifications
     # in proxy server mode yet (v2.7.0)
-    joinly_client = Client(mcp_url, message_handler=_message_handler)
+    joinly_client = Client(transport, message_handler=_message_handler)
     client = Client(config) if config and config.get("mcpServers") else None
 
     mcp_servers = list(config.get("mcpServers", {}).keys()) if config else None
@@ -174,9 +185,7 @@ async def run(  # noqa: C901, PLR0915
         last_time = -1.0
 
         logger.info("Joining meeting at %s", meeting_url)
-        await joinly_client.call_tool(
-            "join_meeting", {"meeting_url": meeting_url, "participant_name": "joinly"}
-        )
+        await joinly_client.call_tool("join_meeting", {"meeting_url": meeting_url})
         logger.info("Joined meeting successfully")
 
         try:
