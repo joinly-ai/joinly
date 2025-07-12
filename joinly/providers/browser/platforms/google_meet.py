@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import re
-from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
@@ -107,16 +106,12 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             parts = [p.strip() for p in inner_text.splitlines() if p.strip()]
 
             sender: str | None = None
-            ts: float | None = None
+            ts: str | None = None
             for part in parts:
                 clean = re.sub(r"[\u00A0\u202F]", "", part).strip()
 
                 if _TIME_RX.fullmatch(clean):
-                    fmt = "%I:%M%p" if clean[-2:].upper() in ("AM", "PM") else "%H:%M"
-                    t = datetime.strptime(clean.upper(), fmt).replace(tzinfo=UTC)
-                    today = datetime.now(UTC).date()
-                    t = t.replace(year=today.year, month=today.month, day=today.day)
-                    ts = t.timestamp()
+                    ts = clean
                 elif sender is None:
                     sender = clean or None
 

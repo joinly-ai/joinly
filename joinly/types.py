@@ -1,6 +1,5 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
@@ -226,23 +225,15 @@ class MeetingChatMessage(BaseModel):
 
     Attributes:
         text (str): The content of the chat message.
-        timestamp (float): The timestamp of when the message was sent.
+        timestamp (str | None): The timestamp of when the message was sent.
         sender (str | None): The sender of the message, if available.
     """
 
     text: str
-    timestamp: float | None = Field(..., exclude=True)
+    timestamp: str | None = None
     sender: str | None = None
 
     model_config = ConfigDict(frozen=True)
-
-    @computed_field(alias="timestamp")
-    @property
-    def timestamp_readable(self) -> str | None:
-        """Expose ISO-formatted timestamp in JSON instead of the float."""
-        if self.timestamp:
-            return datetime.fromtimestamp(self.timestamp, tz=UTC).isoformat()
-        return None
 
 
 class MeetingChatHistory(BaseModel):
