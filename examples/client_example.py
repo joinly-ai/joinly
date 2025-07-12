@@ -89,7 +89,7 @@ def log_chunk(chunk) -> None:  # noqa: ANN001
             logger.info("%s: %s", m.name, m.content)
 
 
-async def run(  # noqa: C901, PLR0915
+async def run(  # noqa: C901
     mcp_url: str,
     meeting_url: str,
     model_name: str,
@@ -188,40 +188,34 @@ async def run(  # noqa: C901, PLR0915
         await joinly_client.call_tool("join_meeting", {"meeting_url": meeting_url})
         logger.info("Joined meeting successfully")
 
-        try:
-            while True:
-                await transcript_event.wait()
-                transcript_full = Transcript.model_validate_json(
-                    (await joinly_client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+        while True:
+            await transcript_event.wait()
+            transcript_full = Transcript.model_validate_json(
+                (await joinly_client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+            )
+            transcript = transcript_after(transcript_full, after=last_time)
+            transcript_event.clear()
+            if not transcript.segments:
+                logger.warning("No new segments in the transcript after update")
+                continue
+
+            last_time = transcript.segments[-1].start
+            for segment in transcript.segments:
+                logger.info(
+                    '%s: "%s"',
+                    segment.speaker if segment.speaker else "User",
+                    segment.text,
                 )
-                transcript = transcript_after(transcript_full, after=last_time)
-                transcript_event.clear()
-                if not transcript.segments:
-                    logger.warning("No new segments in the transcript after update")
-                    continue
 
-                last_time = transcript.segments[-1].start
-                for segment in transcript.segments:
-                    logger.info(
-                        '%s: "%s"',
-                        segment.speaker if segment.speaker else "User",
-                        segment.text,
-                    )
-
-                try:
-                    async for chunk in agent.astream(
-                        {"messages": transcript_to_messages(transcript)},
-                        config={"configurable": {"thread_id": "1"}},
-                        stream_mode="updates",
-                    ):
-                        log_chunk(chunk)
-                except Exception:
-                    logger.exception("Error during agent invocation")
-
-        finally:
-            logger.info("Leaving meeting")
-            with contextlib.suppress(Exception):
-                await joinly_client.call_tool("leave_meeting")
+            try:
+                async for chunk in agent.astream(
+                    {"messages": transcript_to_messages(transcript)},
+                    config={"configurable": {"thread_id": "1"}},
+                    stream_mode="updates",
+                ):
+                    log_chunk(chunk)
+            except Exception:
+                logger.exception("Error during agent invocation")
 
 
 if __name__ == "__main__":
