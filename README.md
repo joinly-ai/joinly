@@ -173,8 +173,8 @@ In general, the docker image provides an MCP server which is started by default.
 --stt-arg model_name=<ModelName>  # optionally, set different model (default: base), for GPU support see below
 
 # Deepgram STT, include DEEPGRAM_API_KEY in .env
---tts deepgram
---tts-arg model_name=<ModelName>  # optionally, set different model
+--stt deepgram
+--stt-arg model_name=<ModelName>  # optionally, set different model
 ```
 
 ## Debugging
