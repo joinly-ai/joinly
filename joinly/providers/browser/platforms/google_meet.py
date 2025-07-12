@@ -69,7 +69,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await self._dismiss_dialog(page)
 
         leave_btn = page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE))
-        if not await leave_btn.is_visible(timeout=1000):
+        if not await leave_btn.is_visible():
             msg = "Leave button not found or not visible."
             raise RuntimeError(msg)
         await leave_btn.click(timeout=1000)
@@ -85,7 +85,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await self._open_chat(page)
 
         chat_input = page.locator("textarea[placeholder*='Send a message']")
-        if not await chat_input.is_visible(timeout=1000):
+        if not await chat_input.is_visible():
             msg = "Chat input not found or not visible."
             raise RuntimeError(msg)
         await chat_input.fill(message)
@@ -145,17 +145,19 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await self._dismiss_dialog(page)
 
         participants_list = page.locator('div[aria-label="Participants"][role="list"]')
-        is_participant_list_visible = await participants_list.is_visible(timeout=1000)
+        is_participant_list_visible = await participants_list.is_visible()
 
         if not is_participant_list_visible:
             participants_button = page.get_by_role(
                 "button", name=re.compile(r"^people", re.IGNORECASE)
             )
-            if not await participants_button.is_visible(timeout=1000):
+            if not await participants_button.is_visible():
                 msg = "Participants button not found or not visible."
                 raise RuntimeError(msg)
             await participants_button.click()
             await page.wait_for_timeout(1000)
+            if not await participants_list.is_visible():
+                await page.wait_for_timeout(1000)
 
         participants: list[MeetingParticipant] = []
         for item in await participants_list.locator("div[role='listitem']").all():
@@ -191,11 +193,11 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         mute_btn = page.get_by_role(
             "button", name=re.compile(r"^turn off mic", re.IGNORECASE)
         )
-        if await mute_btn.is_visible(timeout=1000):
+        if await mute_btn.is_visible():
             await mute_btn.click(timeout=1000)
         elif not await page.get_by_role(
             "button", name=re.compile(r"^turn on mic", re.IGNORECASE)
-        ).is_visible(timeout=1000):
+        ).is_visible():
             msg = "Mute button not found or not visible."
             raise RuntimeError(msg)
 
@@ -210,11 +212,11 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         unmute_btn = page.get_by_role(
             "button", name=re.compile(r"^turn on mic", re.IGNORECASE)
         )
-        if await unmute_btn.is_visible(timeout=1000):
+        if await unmute_btn.is_visible():
             await unmute_btn.click(timeout=1000)
         elif not await page.get_by_role(
             "button", name=re.compile(r"^turn off mic", re.IGNORECASE)
-        ).is_visible(timeout=1000):
+        ).is_visible():
             msg = "Unmute button not found or not visible."
             raise RuntimeError(msg)
 
@@ -262,17 +264,19 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await self._dismiss_dialog(page)
 
         chat_input = page.locator("textarea[placeholder*='Send a message']")
-        is_chat_visible = await chat_input.is_visible(timeout=1000)
+        is_chat_visible = await chat_input.is_visible()
 
         if not is_chat_visible:
             chat_button = page.get_by_role(
                 "button", name=re.compile(r"^chat", re.IGNORECASE)
             )
-            if not await chat_button.is_visible(timeout=1000):
+            if not await chat_button.is_visible():
                 msg = "Chat button not found or not visible."
                 raise RuntimeError(msg)
             await chat_button.click()
             await page.wait_for_timeout(1000)
+            if not await chat_input.is_visible():
+                await page.wait_for_timeout(1000)
 
     async def _setup_active_speaker_observer(self, page: Page) -> None:
         """Setup the active speaker observer for Google Meet."""
