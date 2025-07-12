@@ -52,7 +52,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             logger.info("Rewrote Zoom join URL to web client format: %s", url)
 
         await page.goto(url, wait_until="load", timeout=20000)
-        if await page.get_by_text("invalid").is_visible(timeout=2000):
+        if await page.get_by_text("invalid").is_visible():
             msg = "Meeting link is invalid."
             raise ValueError(msg)
 
@@ -69,7 +69,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             await name_field.fill(name, timeout=20000)
 
             passcode_field = page.locator("input[type='password']")
-            if await passcode_field.is_visible(timeout=1000):
+            if await passcode_field.is_visible():
                 if passcode is not None:
                     await passcode_field.fill(passcode, timeout=1000)
                 else:
@@ -80,7 +80,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             await join_btn.click(timeout=1000)
 
             await page.wait_for_timeout(2000)
-            if await join_btn.is_visible(timeout=1000):
+            if await join_btn.is_visible():
                 with contextlib.suppress(Exception):
                     await join_btn.click(timeout=1000)
         finally:
@@ -99,17 +99,17 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         await self._activate_controls(page)
 
         leave_btn = page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE))
-        if not await leave_btn.is_visible(timeout=1000):
+        if not await leave_btn.is_visible():
             msg = "Leave button not found or not visible."
             raise RuntimeError(msg)
         await leave_btn.click(timeout=1000)
 
         leave_btn_confirm = page.locator("button", has_text="leave meeting").first
-        if not await leave_btn_confirm.is_visible(timeout=1000):
+        if not await leave_btn_confirm.is_visible():
             with contextlib.suppress(Exception):
                 await leave_btn.click(timeout=1000)
 
-        if not await leave_btn_confirm.is_visible(timeout=1000):
+        if not await leave_btn_confirm.is_visible():
             msg = "Leave meeting confirmation button not found or not visible."
             raise RuntimeError(msg)
         await leave_btn_confirm.click(timeout=1000)
@@ -124,7 +124,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         await self._open_chat(page)
 
         chat_input = page.locator("div[contenteditable='true']")
-        if not await chat_input.is_visible(timeout=1000):
+        if not await chat_input.is_visible():
             msg = "Chat input not found or not visible."
             raise RuntimeError(msg)
         await chat_input.click(timeout=1000)
@@ -189,18 +189,18 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         participants_list = page.locator(
             'div[role="list"][aria-label^="participants" i]'
         )
-        is_participant_list_visible = await participants_list.is_visible(timeout=1000)
+        is_participant_list_visible = await participants_list.is_visible()
 
         participants_button = page.get_by_role(
             "button", name=re.compile(r"participants", re.IGNORECASE)
         )
         if not is_participant_list_visible:
             await self._activate_controls(page)
-            if not await participants_button.is_visible(timeout=1000):
+            if not await participants_button.is_visible():
                 msg = "Participants button not found or not visible."
                 raise RuntimeError(msg)
             await participants_button.click(timeout=1000)
-            if not await participants_list.is_visible(timeout=1000):
+            if not await participants_list.is_visible():
                 with contextlib.suppress(Exception):
                     await participants_button.click(timeout=1000)
                 await page.wait_for_timeout(1000)
@@ -222,11 +222,11 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         await self._activate_controls(page)
 
         mute_btn = page.get_by_role("button", name="mute my microphone")
-        if await mute_btn.is_visible(timeout=1000):
+        if await mute_btn.is_visible():
             await mute_btn.click(timeout=1000)
         elif not await page.get_by_role(
             "button", name="unmute my microphone"
-        ).is_visible(timeout=1000):
+        ).is_visible():
             msg = "Mute button not found or not visible."
             raise RuntimeError(msg)
 
@@ -235,9 +235,9 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         await self._activate_controls(page)
 
         unmute_btn = page.get_by_role("button", name="unmute my microphone")
-        if await unmute_btn.is_visible(timeout=1000):
+        if await unmute_btn.is_visible():
             await unmute_btn.click(timeout=1000)
-            if await unmute_btn.is_visible(timeout=1000):
+            if await unmute_btn.is_visible():
                 with contextlib.suppress(Exception):
                     await unmute_btn.click(timeout=1000)
         elif not await page.get_by_role("button", name="mute my microphone").is_visible(
@@ -284,18 +284,18 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
     async def _open_chat(self, page: Page) -> None:
         """Open the chat in the Zoom meeting."""
         chat_input = page.locator("div[contenteditable='true']")
-        is_chat_visible = await chat_input.is_visible(timeout=1000)
+        is_chat_visible = await chat_input.is_visible()
 
         if not is_chat_visible:
             await self._activate_controls(page)
             chat_button = page.get_by_role(
                 "button", name=re.compile(r"chat panel", re.IGNORECASE)
             )
-            if not await chat_button.is_visible(timeout=1000):
+            if not await chat_button.is_visible():
                 msg = "Chat button not found or not visible."
                 raise RuntimeError(msg)
             await chat_button.click(timeout=1000)
-            if not await chat_input.is_visible(timeout=1000):
+            if not await chat_input.is_visible():
                 with contextlib.suppress(Exception):
                     await chat_button.click(timeout=1000)
                 await page.wait_for_timeout(1000)
