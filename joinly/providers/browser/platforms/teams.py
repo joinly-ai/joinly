@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import re
-from datetime import datetime
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
@@ -119,12 +118,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             if not await content_el.count():
                 continue
             text = (await content_el.first.inner_text()).strip()
-            dt_attr = await el.locator("time[datetime]").first.get_attribute("datetime")
-            ts = (
-                datetime.fromisoformat(dt_attr.rstrip("Z")).timestamp()
-                if dt_attr
-                else None
-            )
+            ts = await el.locator("time[datetime]").first.get_attribute("datetime")
             author_locator = el.locator('[data-tid="message-author-name"]').first
             sender_text = await author_locator.text_content() or ""
             sender = sender_text.strip() or None
