@@ -133,7 +133,7 @@ async def run(  # noqa: C901, PLR0915
         "If interrupted mid-response, use 'finish'."
     )
 
-    # optionally, set settings for joinly
+    # optionally, set settings for joinly (requires v0.3.2)
     settings = {
         # "name": "joinly",  # noqa: ERA001
         # "language": "en",  # noqa: ERA001
@@ -200,7 +200,7 @@ async def run(  # noqa: C901, PLR0915
                     logger.warning("No new segments in the transcript after update")
                     continue
 
-                last_time = transcript.segments[-1].end
+                last_time = transcript.segments[-1].start
                 for segment in transcript.segments:
                     logger.info(
                         '%s: "%s"',
