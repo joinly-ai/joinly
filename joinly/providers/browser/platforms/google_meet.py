@@ -11,6 +11,7 @@ from joinly.settings import get_settings
 from joinly.types import MeetingChatHistory, MeetingChatMessage, MeetingParticipant
 
 _TIME_RX = re.compile(r"^\d{1,2}:\d{2}(?:[AP]M)?$", re.IGNORECASE)
+_MAX_MESSAGE_LENGTH = 500
 
 
 class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
@@ -82,6 +83,13 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
             message: The message to send.
         """
+        if len(message) > _MAX_MESSAGE_LENGTH:
+            msg = (
+                f"Message exceeds the maximum length of {_MAX_MESSAGE_LENGTH} "
+                f"characters, got {len(message)}."
+            )
+            raise ValueError(msg)
+
         await self._open_chat(page)
 
         chat_input = page.locator("textarea[placeholder*='Send a message']")

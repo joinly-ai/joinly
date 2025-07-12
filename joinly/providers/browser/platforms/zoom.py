@@ -14,6 +14,7 @@ from joinly.types import MeetingChatHistory, MeetingChatMessage, MeetingParticip
 logger = logging.getLogger(__name__)
 
 _TIME_RX = re.compile(r"^\d{1,2}:\d{2}(?:\s*[AP]M)?$", re.IGNORECASE)
+_MAX_MESSAGE_LENGTH = 1024
 
 
 class ZoomBrowserPlatformController(BaseBrowserPlatformController):
@@ -118,8 +119,11 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
 
     async def send_chat_message(self, page: Page, message: str) -> None:
         """Send a chat message in Zoom."""
-        if len(message) > 1024:  # noqa: PLR2004
-            msg = "Message exceeds the maximum length of 1024 characters."
+        if len(message) > _MAX_MESSAGE_LENGTH:
+            msg = (
+                f"Message exceeds the maximum length of {_MAX_MESSAGE_LENGTH} "
+                f"characters, got {len(message)}."
+            )
             raise ValueError(msg)
 
         await self._open_chat(page)
