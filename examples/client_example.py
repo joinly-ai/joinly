@@ -191,7 +191,7 @@ async def run(  # noqa: C901, PLR0915
                     logger.warning("No new segments in the transcript after update")
                     continue
 
-                last_time = transcript.segments[-1].end
+                last_time = transcript.segments[-1].start
                 for segment in transcript.segments:
                     logger.info(
                         '%s: "%s"',
