@@ -35,6 +35,7 @@ class DeepgramSTT(STT):
         model_name: str | None = None,
         sample_rate: int = 16000,
         hotwords: list[str] | None = None,
+        padding_silence: float = 0.5,
         stream_idle_timeout: float = 2.0,
     ) -> None:
         """Initialize the DeepgramSTT.
@@ -44,6 +45,8 @@ class DeepgramSTT(STT):
                 English and "nova-2-general" otherwise).
             sample_rate: The sample rate of the audio (default is 16000).
             hotwords: A list of hotwords to improve transcription accuracy.
+            padding_silence: The duration of silence to pad at the start of each audio
+                window (default is 0.2 seconds).
             stream_idle_timeout: The duration to wait after finalizing the stream before
                 closing it (default is 2.0 seconds). Normally, this should never
                 trigger as the stream is finalized.
@@ -76,6 +79,11 @@ class DeepgramSTT(STT):
         self._queue: asyncio.Queue[TranscriptSegment | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
+        self._padding_silence = b"\x00" * (
+            int(padding_silence * self.audio_format.sample_rate)
+            * self.audio_format.byte_depth
+        )
+        self._padding_silence_dur = padding_silence
 
     async def __aenter__(self) -> Self:
         """Enter the context."""
@@ -148,6 +156,9 @@ class DeepgramSTT(STT):
         async def _producer() -> None:
             """Producer coroutine to send audio data."""
             nonlocal stream_start, stream_end
+            if self._padding_silence:
+                self._sent_seconds += self._padding_silence_dur
+                await self._client.send(self._padding_silence)
             async for window in windows:
                 if stream_start is None:
                     stream_start = window.time_ns / 1e9
