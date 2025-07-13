@@ -218,4 +218,6 @@ class DeepgramSTT(STT):
                     )
             finally:
                 producer.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await producer
                 self._sent_seconds += (stream_end or 0) - (stream_start or 0)
