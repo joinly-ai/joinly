@@ -89,9 +89,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             await page.wait_for_timeout(1000)
             if await page.get_by_text("incorrect password").is_visible():
                 pwd_param = parse_qs(urlparse(url).query).get("pwd", [None])[0]
-                if passcode or (
-                    pwd_param is not None and (passcode := pwd_param.split(".1")[-1])
-                ):
+                if passcode := pwd_param.split(".1")[-1] if pwd_param else None:
                     await passcode_field.fill(passcode, timeout=1000)
                     await join_btn.click(timeout=1000)
                 else:
