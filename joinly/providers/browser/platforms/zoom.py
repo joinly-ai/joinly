@@ -3,6 +3,7 @@ import contextlib
 import logging
 import re
 from typing import Any, ClassVar
+from urllib.parse import parse_qs, urlparse
 
 from playwright.async_api import Page
 
@@ -32,7 +33,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         """Get the name of the active speaker in the Zoom meeting."""
         return self._state.get("active_speaker")
 
-    async def join(
+    async def join(  # noqa: C901, PLR0912
         self,
         page: Page,
         url: str,
@@ -66,7 +67,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         ]
 
         try:
-            name_field = page.locator("#input-for-name")
+            name_field = page.locator("#input-for-name, #inputname")
             await name_field.fill(name, timeout=20000)
 
             passcode_field = page.locator("input[type='password']")
@@ -84,6 +85,16 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
             if await join_btn.is_visible():
                 with contextlib.suppress(Exception):
                     await join_btn.click(timeout=1000)
+
+            await page.wait_for_timeout(1000)
+            if await page.get_by_text("incorrect password").is_visible():
+                pwd_param = parse_qs(urlparse(url).query).get("pwd", [None])[0]
+                if passcode := pwd_param.split(".1")[-1] if pwd_param else None:
+                    await passcode_field.fill(passcode, timeout=1000)
+                    await join_btn.click(timeout=1000)
+                else:
+                    msg = "Incorrect passcode provided."
+                    raise ValueError(msg)
         finally:
             for task in pre_tasks:
                 if not task.done():
