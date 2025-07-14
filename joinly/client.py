@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import datetime
 import logging
 import re
@@ -176,39 +175,34 @@ async def run(
             {"meeting_url": meeting_url, "participant_name": settings.name},
         )
 
-        try:
-            while True:
-                await transcript_event.wait()
-                transcript_full = Transcript.model_validate_json(
-                    (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+        while True:
+            await transcript_event.wait()
+            transcript_full = Transcript.model_validate_json(
+                (await client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+            )
+            transcript = transcript_after(transcript_full, after=last_time)
+            transcript_event.clear()
+            if not transcript.segments:
+                logger.warning("No new segments in the transcript after update")
+                continue
+
+            if name_trigger and not name_in_transcript(transcript, settings.name):
+                continue
+
+            last_time = transcript.segments[-1].start
+            for segment in transcript.segments:
+                logger.info(
+                    '%s: "%s"',
+                    segment.speaker if segment.speaker else "User",
+                    segment.text,
                 )
-                transcript = transcript_after(transcript_full, after=last_time)
-                transcript_event.clear()
-                if not transcript.segments:
-                    logger.warning("No new segments in the transcript after update")
-                    continue
 
-                if name_trigger and not name_in_transcript(transcript, settings.name):
-                    continue
-
-                last_time = transcript.segments[-1].start
-                for segment in transcript.segments:
-                    logger.info(
-                        '%s: "%s"',
-                        segment.speaker if segment.speaker else "User",
-                        segment.text,
-                    )
-
-                try:
-                    async for chunk in agent.astream(
-                        {"messages": transcript_to_messages(transcript)},
-                        config={"configurable": {"thread_id": "1"}},
-                        stream_mode="updates",
-                    ):
-                        log_chunk(chunk)
-                except Exception:
-                    logger.exception("Error during agent invocation")
-
-        finally:
-            with contextlib.suppress(Exception):
-                await client.call_tool("leave_meeting")
+            try:
+                async for chunk in agent.astream(
+                    {"messages": transcript_to_messages(transcript)},
+                    config={"configurable": {"thread_id": "1"}},
+                    stream_mode="updates",
+                ):
+                    log_chunk(chunk)
+            except Exception:
+                logger.exception("Error during agent invocation")
