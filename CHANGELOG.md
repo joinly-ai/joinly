@@ -1,6 +1,25 @@
 
 # Changelog
 
+## v0.3.2 - 2025-07-14
+
+### Improvements
+
+- allow setting session-specific settings from the client (e.g., which STT/TTS), this will be further improved in the next release with client improvements (#57)
+- remove redundant leave on exit (#59, #62)
+- remove browser agent (#56)
+
+### Fixed
+
+- zoom additional passcode handling (#61)
+- deepgram misses first word (#60)
+- resource subscribe flow (#58)
+- enforce maximum message length (#55)
+- make opening menu panels more robust and remove deprecated timeout (#54)
+- change last segment timing to start in example (#53)
+- simplify chat timestamps (#52)
+- await meeting provider join before initializing transcript (#51)
+
 ## v0.3.1 - 2025-07-02
 
 ### Added
