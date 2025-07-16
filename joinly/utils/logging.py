@@ -1,6 +1,34 @@
+import asyncio
 import logging
 
+from fastmcp.server.dependencies import get_context
+
 LOGGING_TRACE = 5
+
+
+class MCPLogger(logging.Handler):
+    """Custom logging handler to use with FastMCP."""
+
+    def __init__(self, level: int = logging.ERROR) -> None:
+        """Initialize the MCPLogger."""
+        super().__init__(level=level)
+        self._tasks: set[asyncio.Task] = set()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Emit a log record."""
+        if record.levelno < logging.ERROR:
+            return
+
+        try:
+            ctx = get_context()
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            return
+
+        message = self.format(record)
+        task = loop.create_task(ctx.error(message))
+        task.add_done_callback(self._tasks.discard)
+        self._tasks.add(task)
 
 
 def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
@@ -26,7 +54,7 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
                 level=log_level,
                 format="%(message)s",
                 datefmt="[%X]",
-                handlers=[RichHandler(rich_tracebacks=True)],
+                handlers=[RichHandler(rich_tracebacks=True), MCPLogger()],
             )
         except ImportError:
             pass
@@ -37,4 +65,5 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
         level=log_level,
         format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[MCPLogger()],
     )

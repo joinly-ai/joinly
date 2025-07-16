@@ -22,6 +22,7 @@ import os
 import re
 
 from fastmcp import Client
+from fastmcp.client.logging import LogMessage
 from fastmcp.client.transports import StreamableHttpTransport
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
@@ -89,7 +90,7 @@ def log_chunk(chunk) -> None:  # noqa: ANN001
             logger.info("%s: %s", m.name, m.content)
 
 
-async def run(  # noqa: C901
+async def run(  # noqa: C901, PLR0915
     mcp_url: str,
     meeting_url: str,
     model_name: str,
@@ -115,6 +116,10 @@ async def run(  # noqa: C901
             and message.root.params.uri == transcript_url
         ):
             transcript_event.set()
+
+    async def _log_handler(message: LogMessage) -> None:
+        """Handle log messages from the MCP server."""
+        logger.warning("joinly(%s): %s", message.level, message.data)
 
     llm = init_chat_model(model_name, model_provider=model_provider)
 
@@ -145,7 +150,9 @@ async def run(  # noqa: C901
 
     # separate joinly client, since fastmcp does not support notifications
     # in proxy server mode yet (v2.7.0)
-    joinly_client = Client(transport, message_handler=_message_handler)
+    joinly_client = Client(
+        transport, message_handler=_message_handler, log_handler=_log_handler
+    )
     client = Client(config) if config and config.get("mcpServers") else None
 
     mcp_servers = list(config.get("mcpServers", {}).keys()) if config else None
