@@ -300,8 +300,14 @@ async def run(  # noqa: PLR0913
     )
     mcp_client = Client(mcp_config) if mcp_config else None
     llm = get_llm(llm_provider, llm_model)
+
     async with client, mcp_client or contextlib.nullcontext():
-        tools, tool_executor = await load_tools({"joinly": client.client})
+        tools, tool_executor = await load_tools(
+            {"joinly": client.client}
+            if not mcp_client
+            else {"joinly": client.client, "mcp": mcp_client},
+            exclude=["joinly_join_meeting"],
+        )
         agent = ConversationalToolAgent(llm, tools, tool_executor, prompt=prompt)
         client.set_utterance_callback(agent.on_utterance)
         await client.join_meeting(meeting_url)

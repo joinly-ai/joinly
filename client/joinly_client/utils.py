@@ -43,18 +43,25 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
 
 async def load_tools(
     clients: Client | dict[str, Client],
+    exclude: list[str] | None = None,
 ) -> tuple[list[ToolDefinition], ToolExecutor]:
     """Load tools from the client.
 
     Args:
         clients (Client | dict[str, Client]): The client instance(s) to load tools from.
+        exclude (list[str] | None): List of tool names to exclude. Defaults to None.
+            If clients is provided as a dictionary, the keys should be used as prefixes
+            for the tool names.
 
     Returns:
         tuple[list[ToolDefinition], ToolExecutor]: A list of tool definitions and a
             corresponding tool executor.
     """
+    if not exclude:
+        exclude = []
     if isinstance(clients, Client):
         clients = {"default": clients}
+        exclude = [f"default_{name}" for name in exclude]
 
     tools = []
     for prefix, client in clients.items():
@@ -65,6 +72,7 @@ async def load_tools(
                 parameters_json_schema=tool.inputSchema,
             )
             for tool in await client.list_tools()
+            if f"{prefix}_{tool.name}" not in exclude
         )
 
     async def _tool_executor(tool_name: str, args: dict[str, Any]) -> Any:  # noqa: ANN401
