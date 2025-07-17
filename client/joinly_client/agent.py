@@ -147,16 +147,12 @@ class ConversationalToolAgent:
             ModelRequest | None: A ModelRequest containing the results of the tool
                 calls, or None if there are no tool calls.
         """
-        tool_calls = [
-            p
-            for p in response.parts
-            if isinstance(p, ToolCallPart) and p.tool_name != "finish"
-        ]
+        tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
         if not tool_calls:
             return None
 
         results: list[ModelRequestPart] = await asyncio.gather(
-            *[self._call_tool(tool_call) for tool_call in tool_calls]
+            *[self._call_tool(t) for t in tool_calls]
         )
         return ModelRequest(parts=results)
 
@@ -170,6 +166,13 @@ class ConversationalToolAgent:
         Returns:
             ToolReturnPart: The result of the tool call.
         """
+        if tool_call.tool_name == "finish":
+            return ToolReturnPart(
+                tool_name="finish",
+                content="",
+                tool_call_id=tool_call.tool_call_id,
+            )
+
         try:
             logger.info(
                 "%s: %s",
