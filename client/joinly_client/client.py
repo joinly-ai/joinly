@@ -16,6 +16,7 @@ from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment
 logger = logging.getLogger(__name__)
 
 TRANSCRIPT_URL = AnyUrl("transcript://live")
+SEGMENTS_URL = AnyUrl("transcript://live/segments")
 
 
 class JoinlyClient:
@@ -47,6 +48,10 @@ class JoinlyClient:
             Callable[[list[TranscriptSegment]], Awaitable[None]] | None
         ) = None
         self._last_utterance: float = 0.0
+        self._segment_callback: (
+            Callable[[list[TranscriptSegment]], Awaitable[None]] | None
+        ) = None
+        self._last_segment: float = 0.0
         self._tasks: set[asyncio.Task] = set()
 
     @property
@@ -74,10 +79,49 @@ class JoinlyClient:
                 The callback to be called with new transcript segments.
         """
         self._utterance_callback = callback
+        if self._client is not None:
+            self._track_task(
+                asyncio.create_task(
+                    self._client.session.subscribe_resource(TRANSCRIPT_URL)
+                )
+            )
 
     def unset_utterance_callback(self) -> None:
         """Unset the utterance callback."""
         self._utterance_callback = None
+        if self._client is not None:
+            self._track_task(
+                asyncio.create_task(
+                    self._client.session.unsubscribe_resource(TRANSCRIPT_URL)
+                )
+            )
+
+    def set_segment_callback(
+        self, callback: Callable[[list[TranscriptSegment]], Awaitable[None]]
+    ) -> None:
+        """Set a callback to be called on segment events.
+
+        Args:
+            callback (Callable[[list[TranscriptSegment]], Awaitable[None]]):
+                The callback to be called with new transcript segments.
+        """
+        self._segment_callback = callback
+        if self._client is not None:
+            self._track_task(
+                asyncio.create_task(
+                    self._client.session.subscribe_resource(SEGMENTS_URL)
+                )
+            )
+
+    def unset_segment_callback(self) -> None:
+        """Unset the segment callback."""
+        self._segment_callback = None
+        if self._client is not None:
+            self._track_task(
+                asyncio.create_task(
+                    self._client.session.unsubscribe_resource(SEGMENTS_URL)
+                )
+            )
 
     async def join_meeting(
         self,
@@ -102,6 +146,7 @@ class JoinlyClient:
                 "participant_name": self.name,
             },
         )
+        self._last_utterance = 0.0
         self._last_segment = 0.0
 
     async def __aenter__(self) -> Self:
@@ -118,19 +163,20 @@ class JoinlyClient:
         await self._stack.aclose()
         self._client = None
 
-    async def _connect(self) -> None:
+    async def _connect(self) -> None:  # noqa: C901
         """Connect to the joinly server."""
         if self._client is not None:
             msg = "Already connected to the joinly server"
             raise RuntimeError(msg)
 
         async def _message_handler(message) -> None:  # noqa: ANN001
-            if (
-                isinstance(message, ServerNotification)
-                and isinstance(message.root, ResourceUpdatedNotification)
-                and message.root.params.uri == TRANSCRIPT_URL
+            if isinstance(message, ServerNotification) and isinstance(
+                message.root, ResourceUpdatedNotification
             ):
-                self.track_task(asyncio.create_task(self._utterance_update()))
+                if message.root.params.uri == TRANSCRIPT_URL:
+                    self._track_task(asyncio.create_task(self._utterance_update()))
+                elif message.root.params.uri == SEGMENTS_URL:
+                    self._track_task(asyncio.create_task(self._segment_update()))
 
         if isinstance(self.url, str):
             transport = StreamableHttpTransport(
@@ -144,7 +190,6 @@ class JoinlyClient:
         self._client = Client(transport=transport, message_handler=_message_handler)
         try:
             await self._stack.enter_async_context(self._client)
-            await self._client.session.subscribe_resource(TRANSCRIPT_URL)
         except Exception:
             logger.exception("Failed to connect to joinly server")
             await self._stack.aclose()
@@ -152,7 +197,12 @@ class JoinlyClient:
         else:
             logger.info("Connected to joinly server")
 
-    def track_task(self, task: asyncio.Task) -> None:
+        if self._utterance_callback:
+            await self._client.session.subscribe_resource(TRANSCRIPT_URL)
+        if self._segment_callback:
+            await self._client.session.subscribe_resource(SEGMENTS_URL)
+
+    def _track_task(self, task: asyncio.Task) -> None:
         """Track a task to ensure it is cleaned up on exit.
 
         Args:
@@ -176,6 +226,16 @@ class JoinlyClient:
             self._last_utterance = new_transcript.segments[-1].start
             if self._utterance_callback:
                 await self._utterance_callback(new_transcript.compact().segments)
+
+    async def _segment_update(self) -> None:
+        """Update the segment callback with new segments."""
+        resource = await self.client.read_resource(SEGMENTS_URL)
+        transcript = Transcript.model_validate_json(resource[0].text)  # type: ignore[attr-defined]
+        new_transcript = transcript.after(self._last_segment)
+        if new_transcript.segments:
+            self._last_segment = new_transcript.segments[-1].start
+            if self._segment_callback:
+                await self._segment_callback(new_transcript.segments)
 
     async def get_transcript(self) -> Transcript:
         """Get the full transcript from the server.
