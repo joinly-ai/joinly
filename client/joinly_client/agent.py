@@ -1,19 +1,209 @@
+import asyncio
+import contextlib
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from pydantic_ai.models import Model
+from pydantic_ai.direct import model_request
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelRequestPart,
+    ModelResponse,
+    ToolCallPart,
+    ToolReturnPart,
+)
+from pydantic_ai.models import Model, ModelRequestParameters
+from pydantic_ai.settings import ModelSettings
+from pydantic_ai.tools import ToolDefinition
+
+from joinly_client.types import TranscriptSegment
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_PROMPT = (
+    "You are joinly, a professional and knowledgeable meeting assistant. "
+    "Provide concise, valuable contributions in the meeting. "
+    "You are only with one other participant in the meeting, therefore "
+    "respond to all messages and questions. "
+    "When you are greeted, respond politely in spoken language. "
+    "Give information, answer questions, and fullfill tasks as needed. "
+    "You receive real-time transcripts from the ongoing meeting. "
+    "Respond interactively and use available tools to assist participants. "
+    "Always finish your response with the 'finish' tool. "
+    "Never directly use the 'finish' tool, always respond first and then use it. "
+    "If interrupted mid-response, use 'finish'."
+)
+
+ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
 
 
 class ConversationalToolAgent:
     """A conversational agent implementation to interact with joinly."""
 
-    def __init__(self, llm: Model, prompt: str | None) -> None:
+    def __init__(
+        self,
+        llm: Model,
+        tools: list[ToolDefinition],
+        tool_executor: ToolExecutor,
+        *,
+        prompt: str | None = None,
+    ) -> None:
         """Initialize the conversational agent with a model.
 
         Args:
             llm (Model): The language model to use for the agent.
+            tools (list[ToolDefinition] | None): List of tools for the agent. Defaults
+                to None.
+            tool_executor (ToolExecutor | None): A function to execute a tool. Defaults
+                to None.
             prompt (str | None): An optional prompt to initialize the agent with.
         """
+        if not tools:
+            msg = "At least one tool must be provided to the agent."
+            raise ValueError(msg)
+
         self._llm = llm
-        self._prompt = prompt
+        self._prompt = prompt or DEFAULT_PROMPT
+        self._tools = tools
+        self._tool_executor = tool_executor
+        self._messages: list[ModelMessage] = []
+        self._run_task: asyncio.Task | None = None
+
+    async def on_utterance(self, segments: list[TranscriptSegment]) -> None:
+        """Handle an utterance event.
+
+        Args:
+            segments (list[TranscriptSegment]): The segments of the transcript to
+                process.
+        """
+        if self._run_task and not self._run_task.done():
+            self._run_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._run_task
+        self._run_task = asyncio.create_task(self._run_loop(segments))
+
+    async def _run_loop(self, segments: list[TranscriptSegment]) -> None:
+        """Run the agent loop with the provided segments.
+
+        Args:
+            segments (list[TranscriptSegment]): The segments of the transcript to
+                process.
+        """
+        for segment in segments:
+            logger.info(
+                '%s: "%s"',
+                segment.speaker or "Participant",
+                segment.text,
+            )
+            prompt = f"{segment.speaker or 'Participant'}: {segment.text}"
+            self._messages.append(ModelRequest.user_text_prompt(prompt))
+
+        while True:
+            response = await self._call_llm(self._messages)
+            request = await self._call_tools(response)
+            self._messages.append(response)
+            if request:
+                self._messages.append(request)
+            if self._check_finished(response):
+                break
+
+    async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
+        """Call the LLM with the current messages.
+
+        Args:
+            messages (list[ModelMessage]): The messages to send to the LLM.
+
+        Returns:
+            ModelResponse: The response from the LLM.
+        """
+        return await model_request(
+            self._llm,
+            messages,
+            model_settings=ModelSettings(
+                temperature=0.2,
+                parallel_tool_calls=True,
+            ),
+            model_request_parameters=ModelRequestParameters(
+                function_tools=[
+                    *self._tools,
+                    ToolDefinition(
+                        name="finish",
+                        description="Finish the current response.",
+                        parameters_json_schema={"properties": {}, "type": "object"},
+                    ),
+                ],
+                allow_text_output=False,
+            ),
+        )
+
+    async def _call_tools(self, response: ModelResponse) -> ModelRequest | None:
+        """Handle the response from the LLM and call tools.
+
+        Args:
+            response (ModelResponse): The response from the LLM containing tool calls.
+
+        Returns:
+            ModelRequest | None: A ModelRequest containing the results of the tool
+                calls, or None if there are no tool calls.
+        """
+        tool_calls = [
+            p
+            for p in response.parts
+            if isinstance(p, ToolCallPart) and p.tool_name != "finish"
+        ]
+        if not tool_calls:
+            return None
+
+        results: list[ModelRequestPart] = await asyncio.gather(
+            *[self._call_tool(tool_call) for tool_call in tool_calls]
+        )
+        return ModelRequest(parts=results)
+
+    async def _call_tool(self, tool_call: ToolCallPart) -> ToolReturnPart:
+        """Call a tool with the given name and arguments.
+
+        Args:
+            tool_call (ToolCallPart): The tool call part containing the tool name and
+                arguments.
+
+        Returns:
+            ToolReturnPart: The result of the tool call.
+        """
+        try:
+            logger.info(
+                "%s: %s",
+                tool_call.tool_name,
+                ", ".join(
+                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                    for k, v in tool_call.args_as_dict().items()
+                ),
+            )
+            content = await self._tool_executor(
+                tool_call.tool_name, tool_call.args_as_dict()
+            )
+        except Exception:
+            logger.exception("Error calling tool %s", tool_call.tool_name)
+            content = f"Error calling tool {tool_call.tool_name}"
+
+        logger.info("%s: %s", tool_call.tool_name, content)
+        return ToolReturnPart(
+            tool_name=tool_call.tool_name,
+            content=content,
+            tool_call_id=tool_call.tool_call_id,
+        )
+
+    def _check_finished(self, response: ModelResponse) -> bool:
+        """Check if the response indicates that the agent has finished.
+
+        Returns True if the agent called the 'finish' tool or if there are no tool
+        calls.
+
+        Args:
+            response (ModelResponse): The response from the LLM.
+
+        Returns:
+            bool: True if the agent has finished, False otherwise.
+        """
+        tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
+        return not tool_calls or any(p.tool_name == "finish" for p in tool_calls)

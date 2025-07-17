@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -6,7 +8,7 @@ from typing import Any, Self
 
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp import ResourceUpdatedNotification, ServerNotification, Tool
+from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
 from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment
@@ -21,23 +23,20 @@ class JoinlyClient:
 
     def __init__(
         self,
-        joinly_url: str | FastMCP,
+        url: str | FastMCP,
         *,
         name: str | None = None,
-        name_trigger: bool = False,
         settings: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the JoinlyClient with the server URL.
 
         Args:
-            joinly_url (str | FastMCP): The URL of the Joinly server or a
+            url (str | FastMCP): The URL of the Joinly server or a
                 FastMCP instance.
             name (str | None): The name of the participant, defaults to "joinly".
-            name_trigger (bool): Whether to use name trigger for speech recognition.
             settings (dict[str, Any]): Additional settings for the client.
         """
-        self.joinly_url = joinly_url
-        self.name_trigger = name_trigger
+        self.url = url
         self.settings = settings or {}
         self.name = name or self.settings.get("name", "joinly")
         self.settings["name"] = self.name
@@ -47,71 +46,25 @@ class JoinlyClient:
         self._utterance_callback: (
             Callable[[list[TranscriptSegment]], Awaitable[None]] | None
         ) = None
-        self._last_segment: float = 0.0
+        self._last_utterance: float = 0.0
+        self._tasks: set[asyncio.Task] = set()
 
     @property
     def client(self) -> Client:
-        """Get the current client instance."""
+        """Get the current client instance.
+
+        Returns:
+            Client: The current client instance.
+
+        Raises:
+            RuntimeError: If the client is not connected.
+        """
         if self._client is None:
             msg = "Client is not connected"
             raise RuntimeError(msg)
         return self._client
 
-    async def __aenter__(self) -> Self:
-        """Connect to the joinly server."""
-        await self._connect()
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        """Disconnect from the joinly server."""
-        await self._stack.aclose()
-        self._client = None
-
-    async def _connect(self) -> None:
-        """Connect to the joinly server."""
-
-        async def _message_handler(message) -> None:  # noqa: ANN001
-            if (
-                isinstance(message, ServerNotification)
-                and isinstance(message.root, ResourceUpdatedNotification)
-                and message.root.params.uri == TRANSCRIPT_URL
-                and self._utterance_callback
-            ):
-                new_segments = await self._get_new_segments()
-                if new_segments:
-                    await self._utterance_callback(new_segments)
-
-        if isinstance(self.joinly_url, str):
-            transport = StreamableHttpTransport(
-                url=self.joinly_url,
-                headers={"joinly-settings": json.dumps(self.settings)},
-            )
-        else:
-            transport = self.joinly_url
-
-        self._client = Client(transport=transport, message_handler=_message_handler)
-
-        logger.info("Connecting to joinly server at %s", self.joinly_url)
-        try:
-            await self._stack.enter_async_context(self.client)
-            await self.client.session.subscribe_resource(TRANSCRIPT_URL)
-        except Exception:
-            logger.exception("Failed to connect to joinly server")
-            await self._stack.aclose()
-            raise
-        else:
-            logger.info("Connected to joinly server")
-
-    async def list_tools(self) -> list[Tool]:
-        """List available tools on the joinly server.
-
-        Returns:
-            list[Tool]: A list of available tools excluding the "join_meeting" tool.
-        """
-        tools = await self.client.list_tools()
-        return [tool for tool in tools if tool.name != "join_meeting"]
-
-    async def on_utterance(
+    def set_utterance_callback(
         self, callback: Callable[[list[TranscriptSegment]], Awaitable[None]]
     ) -> None:
         """Set a callback to be called on utterance events.
@@ -121,6 +74,10 @@ class JoinlyClient:
                 The callback to be called with new transcript segments.
         """
         self._utterance_callback = callback
+
+    def unset_utterance_callback(self) -> None:
+        """Unset the utterance callback."""
+        self._utterance_callback = None
 
     async def join_meeting(
         self,
@@ -147,26 +104,81 @@ class JoinlyClient:
         )
         self._last_segment = 0.0
 
-    async def _get_new_segments(self) -> list[TranscriptSegment]:
-        """Get new transcript segments from the server.
+    async def __aenter__(self) -> Self:
+        """Connect to the joinly server."""
+        await self._connect()
+        return self
 
-        Returns:
-            list[TranscriptSegment]: A list of new transcript segments.
+    async def __aexit__(self, *_exc: object) -> None:
+        """Disconnect from the joinly server."""
+        for task in self._tasks:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        await self._stack.aclose()
+        self._client = None
+
+    async def _connect(self) -> None:
+        """Connect to the joinly server."""
+        if self._client is not None:
+            msg = "Already connected to the joinly server"
+            raise RuntimeError(msg)
+
+        async def _message_handler(message) -> None:  # noqa: ANN001
+            if (
+                isinstance(message, ServerNotification)
+                and isinstance(message.root, ResourceUpdatedNotification)
+                and message.root.params.uri == TRANSCRIPT_URL
+            ):
+                self.track_task(asyncio.create_task(self._utterance_update()))
+
+        if isinstance(self.url, str):
+            transport = StreamableHttpTransport(
+                url=self.url,
+                headers={"joinly-settings": json.dumps(self.settings)},
+            )
+            logger.info("Connecting to joinly server at %s", self.url)
+        else:
+            transport = self.url
+
+        self._client = Client(transport=transport, message_handler=_message_handler)
+        try:
+            await self._stack.enter_async_context(self._client)
+            await self._client.session.subscribe_resource(TRANSCRIPT_URL)
+        except Exception:
+            logger.exception("Failed to connect to joinly server")
+            await self._stack.aclose()
+            raise
+        else:
+            logger.info("Connected to joinly server")
+
+    def track_task(self, task: asyncio.Task) -> None:
+        """Track a task to ensure it is cleaned up on exit.
+
+        Args:
+            task (asyncio.Task): The task to track.
         """
-        resource = await self.client.read_resource(TRANSCRIPT_URL)
-        transcript = Transcript.model_validate(resource[0].text)  # type: ignore[attr-defined]
-        new_transcript = (
-            transcript.after(self._last_segment)
-            .with_role(SpeakerRole.participant)
-            .compact()
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        task.add_done_callback(
+            lambda t: t.exception()
+            and logger.error("Task %s failed with exception: %s", t, t.exception())
         )
-        if not new_transcript.segments:
-            return []
-        self._last_segment = new_transcript.segments[-1].start
-        return new_transcript.segments
+
+    async def _utterance_update(self) -> None:
+        """Update the utterance callback with new segments."""
+        resource = await self.client.read_resource(TRANSCRIPT_URL)
+        transcript = Transcript.model_validate_json(resource[0].text)  # type: ignore[attr-defined]
+        new_transcript = transcript.with_role(SpeakerRole.participant).after(
+            self._last_utterance
+        )
+        if new_transcript.segments:
+            self._last_utterance = new_transcript.segments[-1].start
+            if self._utterance_callback:
+                await self._utterance_callback(new_transcript.compact().segments)
 
     async def get_transcript(self) -> Transcript:
-        """Get the current transcript from the server.
+        """Get the full transcript from the server.
 
         Returns:
             Transcript: The current transcript.

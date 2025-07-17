@@ -11,6 +11,7 @@ from fastmcp import Client, FastMCP
 
 from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
+from joinly_client.utils import get_llm, load_tools
 
 logger = logging.getLogger(__name__)
 
@@ -274,24 +275,37 @@ async def run(  # noqa: PLR0913
     *,
     prompt: str | None = None,
     name: str | None = None,
-    name_trigger: bool = False,
+    name_trigger: bool = False,  # noqa: ARG001
     mcp_config: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
 ) -> None:
-    """Run the joinly client."""
-    joinly_client = JoinlyClient(
+    """Run the joinly client.
+
+    Args:
+        joinly_url (str | FastMCP): The URL of the joinly server or a FastMCP instance.
+        meeting_url (str): The URL of the meeting to join.
+        llm_provider (str): The provider of the LLM model to use.
+        llm_model (str): The name of the LLM model to use.
+        prompt (str | None): System prompt to use for the model.
+        name (str | None): The name of the participant.
+        name_trigger (bool): Whether to trigger the agent only when the name is
+            mentioned.
+        mcp_config (dict[str, Any] | None): Configuration for additional MCP servers.
+        settings (dict[str, Any] | None): Additional settings for the client.
+    """
+    client = JoinlyClient(
         joinly_url,
         name=name,
-        name_trigger=name_trigger,
         settings=settings,
     )
     mcp_client = Client(mcp_config) if mcp_config else None
-    agent = ConversationalToolAgent(  # noqa: F841
-        llm_provider=llm_provider, llm_model=llm_model, prompt=prompt
-    )
-    async with joinly_client, mcp_client or contextlib.nullcontext():
-        await joinly_client.join_meeting(meeting_url)
-        await asyncio.Event().wait()
+    llm = get_llm(llm_provider, llm_model)
+    async with client, mcp_client or contextlib.nullcontext():
+        tools, tool_executor = await load_tools({"joinly": client.client})
+        agent = ConversationalToolAgent(llm, tools, tool_executor, prompt=prompt)
+        client.set_utterance_callback(agent.on_utterance)
+        await client.join_meeting(meeting_url)
+        await asyncio.Event().wait()  # change to wait until left
 
 
 if __name__ == "__main__":
