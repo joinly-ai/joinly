@@ -10,6 +10,7 @@ from pydantic_ai.messages import (
     ModelRequest,
     ModelRequestPart,
     ModelResponse,
+    SystemPromptPart,
     ToolCallPart,
     ToolReturnPart,
 )
@@ -119,7 +120,7 @@ class ConversationalToolAgent:
         """
         return await model_request(
             self._llm,
-            messages,
+            [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
             model_settings=ModelSettings(
                 temperature=0.2,
                 parallel_tool_calls=True,
