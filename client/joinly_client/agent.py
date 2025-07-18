@@ -117,7 +117,7 @@ class ConversationalToolAgent:
             self._messages.append(response)
             if request:
                 self._messages.append(request)
-            if self._check_finished(response):
+            if self._check_finished(response, request):
                 break
 
     async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
@@ -211,17 +211,30 @@ class ConversationalToolAgent:
             tool_call_id=tool_call.tool_call_id,
         )
 
-    def _check_finished(self, response: ModelResponse) -> bool:
+    def _check_finished(
+        self, response: ModelResponse, request: ModelRequest | None
+    ) -> bool:
         """Check if the response indicates that the agent has finished.
 
-        Returns True if the agent called the 'finish' tool or if there are no tool
-        calls.
+        Returns True if the agent called the 'finish' tool, if there are no tool
+        calls, or if tool response includes speech interruption.
 
         Args:
             response (ModelResponse): The response from the LLM.
+            request (ModelRequest): The request sent to the LLM.
 
         Returns:
             bool: True if the agent has finished, False otherwise.
         """
         tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
-        return not tool_calls or any(p.tool_name == "finish" for p in tool_calls)
+        tool_responses = (
+            [p for p in request.parts if isinstance(p, ToolReturnPart)]
+            if request
+            else []
+        )
+
+        return (
+            not tool_calls
+            or any(p.tool_name == "finish" for p in tool_calls)
+            or any(p for p in tool_responses if "Interrupted" in str(p.content))
+        )
