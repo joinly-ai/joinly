@@ -138,12 +138,15 @@ class ConversationalToolAgent:
             ),
             model_request_parameters=ModelRequestParameters(
                 function_tools=[
-                    *self._tools,
                     ToolDefinition(
                         name="finish",
-                        description="Finish the current response.",
+                        description=(
+                            "Finish the current response. "
+                            "Use this directly if no response is needed."
+                        ),
                         parameters_json_schema={"properties": {}, "type": "object"},
                     ),
+                    *self._tools,
                 ],
                 allow_text_output=False,
             ),
