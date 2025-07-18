@@ -311,7 +311,7 @@ async def run(  # noqa: PLR0913
         agent = ConversationalToolAgent(
             llm, tools, tool_executor, prompt=prompt or get_prompt(name=client.name)
         )
-        client.set_utterance_callback(agent.on_utterance)
+        client.add_utterance_callback(agent.on_utterance)
         async with agent:
             await client.join_meeting(meeting_url)
             await asyncio.Event().wait()  # change to wait until left

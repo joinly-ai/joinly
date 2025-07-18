@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from contextlib import AsyncExitStack
 from typing import Any, Self
 
@@ -44,13 +44,13 @@ class JoinlyClient:
 
         self._client: Client | None = None
         self._stack = AsyncExitStack()
-        self._utterance_callback: (
-            Callable[[list[TranscriptSegment]], Awaitable[None]] | None
-        ) = None
+        self._utterance_callbacks: set[
+            Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]
+        ] = set()
         self._last_utterance: float = 0.0
-        self._segment_callback: (
-            Callable[[list[TranscriptSegment]], Awaitable[None]] | None
-        ) = None
+        self._segment_callbacks: set[
+            Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]
+        ] = set()
         self._last_segment: float = 0.0
         self._tasks: set[asyncio.Task] = set()
 
@@ -69,59 +69,69 @@ class JoinlyClient:
             raise RuntimeError(msg)
         return self._client
 
-    def set_utterance_callback(
-        self, callback: Callable[[list[TranscriptSegment]], Awaitable[None]]
-    ) -> None:
-        """Set a callback to be called on utterance events.
+    def add_utterance_callback(
+        self, callback: Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]
+    ) -> Callable[[], None]:
+        """Add a callback to be called on utterance events.
 
         Args:
-            callback (Callable[[list[TranscriptSegment]], Awaitable[None]]):
+            callback (Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]):
                 The callback to be called with new transcript segments.
+
+        Returns:
+            Callable[[], None]: A function to remove the callback.
         """
-        self._utterance_callback = callback
-        if self._client is not None:
+        if self._client is not None and not self._utterance_callbacks:
             self._track_task(
                 asyncio.create_task(
                     self._client.session.subscribe_resource(TRANSCRIPT_URL)
                 )
             )
+        self._utterance_callbacks.add(callback)
 
-    def unset_utterance_callback(self) -> None:
-        """Unset the utterance callback."""
-        self._utterance_callback = None
-        if self._client is not None:
-            self._track_task(
-                asyncio.create_task(
-                    self._client.session.unsubscribe_resource(TRANSCRIPT_URL)
+        def remove_callback() -> None:
+            """Remove the callback from the utterance callbacks."""
+            self._utterance_callbacks.discard(callback)
+            if self._client is not None and not self._utterance_callbacks:
+                self._track_task(
+                    asyncio.create_task(
+                        self._client.session.unsubscribe_resource(TRANSCRIPT_URL)
+                    )
                 )
-            )
 
-    def set_segment_callback(
-        self, callback: Callable[[list[TranscriptSegment]], Awaitable[None]]
-    ) -> None:
-        """Set a callback to be called on segment events.
+        return remove_callback
+
+    def add_segment_callback(
+        self, callback: Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]
+    ) -> Callable[[], None]:
+        """Add a callback to be called on segment events.
 
         Args:
-            callback (Callable[[list[TranscriptSegment]], Awaitable[None]]):
+            callback (Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]):
                 The callback to be called with new transcript segments.
+
+        Returns:
+            Callable[[], None]: A function to remove the callback.
         """
-        self._segment_callback = callback
-        if self._client is not None:
+        if self._client is not None and not self._segment_callbacks:
             self._track_task(
                 asyncio.create_task(
                     self._client.session.subscribe_resource(SEGMENTS_URL)
                 )
             )
+        self._segment_callbacks.add(callback)
 
-    def unset_segment_callback(self) -> None:
-        """Unset the segment callback."""
-        self._segment_callback = None
-        if self._client is not None:
-            self._track_task(
-                asyncio.create_task(
-                    self._client.session.unsubscribe_resource(SEGMENTS_URL)
+        def remove_callback() -> None:
+            """Remove the callback from the segment callbacks."""
+            self._segment_callbacks.discard(callback)
+            if self._client is not None and not self._segment_callbacks:
+                self._track_task(
+                    asyncio.create_task(
+                        self._client.session.unsubscribe_resource(SEGMENTS_URL)
+                    )
                 )
-            )
+
+        return remove_callback
 
     async def join_meeting(
         self,
@@ -156,6 +166,8 @@ class JoinlyClient:
 
     async def __aexit__(self, *_exc: object) -> None:
         """Disconnect from the joinly server."""
+        self._utterance_callbacks.clear()
+        self._segment_callbacks.clear()
         for task in list(self._tasks):
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -197,9 +209,9 @@ class JoinlyClient:
         else:
             logger.info("Connected to joinly server")
 
-        if self._utterance_callback:
+        if self._utterance_callbacks:
             await self._client.session.subscribe_resource(TRANSCRIPT_URL)
-        if self._segment_callback:
+        if self._segment_callbacks:
             await self._client.session.subscribe_resource(SEGMENTS_URL)
 
     def _track_task(self, task: asyncio.Task) -> None:
@@ -224,8 +236,10 @@ class JoinlyClient:
         )
         if new_transcript.segments:
             self._last_utterance = new_transcript.segments[-1].start
-            if self._utterance_callback:
-                await self._utterance_callback(new_transcript.compact().segments)
+            for callback in self._utterance_callbacks:
+                self._track_task(
+                    asyncio.create_task(callback(new_transcript.compact().segments))
+                )
 
     async def _segment_update(self) -> None:
         """Update the segment callback with new segments."""
@@ -234,8 +248,8 @@ class JoinlyClient:
         new_transcript = transcript.after(self._last_segment)
         if new_transcript.segments:
             self._last_segment = new_transcript.segments[-1].start
-            if self._segment_callback:
-                await self._segment_callback(new_transcript.segments)
+            for callback in self._segment_callbacks:
+                self._track_task(asyncio.create_task(callback(new_transcript.segments)))
 
     async def get_transcript(self) -> Transcript:
         """Get the full transcript from the server.
