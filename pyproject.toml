@@ -12,7 +12,7 @@ dependencies = [
     "deepgram-sdk>=4.1.1",
     "elevenlabs>=2.5.0",
     "faster-whisper>=1.1.1",
-    "fastmcp>=2.10.1",
+    "fastmcp>=2.10.5",
     "joinly-client",
     "kokoro-onnx>=0.4.8",
     "numpy>=2.2.4",

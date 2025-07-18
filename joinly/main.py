@@ -280,7 +280,7 @@ def cli(  # noqa: PLR0913
     )
 
     if server:
-        mcp.run(transport="streamable-http", host=host, port=port)
+        mcp.run(transport="streamable-http", host=host, port=port, show_banner=False)
     else:
         if not meeting_url:
             msg = (
