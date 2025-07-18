@@ -1,11 +1,27 @@
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import Client
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.tools import ToolDefinition
 
-from joinly_client.agent import ToolExecutor
+from joinly_client.types import ToolExecutor
+
+DEFAULT_PROMPT_TEMPLATE = (
+    "Today is {date}. "
+    "You are {name}, a professional and knowledgeable meeting assistant. "
+    "Provide concise, valuable contributions in the meeting. "
+    "You are only with one other participant in the meeting, therefore "
+    "respond to all messages and questions. "
+    "When you are greeted, respond politely in spoken language. "
+    "Give information, answer questions, and fullfill tasks as needed. "
+    "You receive real-time transcripts from the ongoing meeting. "
+    "Respond interactively and use available tools to assist participants. "
+    "Always finish your response with the 'finish' tool. "
+    "Never directly use the 'finish' tool, always respond first and then use it. "
+    "If interrupted mid-response, use 'finish'."
+)
 
 
 def get_llm(llm_provider: str, model_name: str) -> Model:
@@ -39,6 +55,20 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
         llm_provider = "azure"
 
     return infer_model(f"{llm_provider}:{model_name}")
+
+
+def get_prompt(template: str = DEFAULT_PROMPT_TEMPLATE, name: str = "joinly") -> str:
+    """Get the prompt template for the agent.
+
+    Args:
+        template (str): The prompt template to use. Defaults to DEFAULT_PROMPT_TEMPLATE.
+        name (str): The name of the agent. Defaults to 'joinly'.
+
+    Returns:
+        str: The formatted prompt template.
+    """
+    today = datetime.now(tz=UTC).strftime("%d.%m.%Y")
+    return template.format(name=name, date=today)
 
 
 async def load_tools(

@@ -39,7 +39,7 @@ class JoinlyClient:
         """
         self.url = url
         self.settings = settings or {}
-        self.name = name or self.settings.get("name", "joinly")
+        self.name: str = name or self.settings.get("name", "joinly")
         self.settings["name"] = self.name
 
         self._client: Client | None = None

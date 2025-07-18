@@ -11,7 +11,7 @@ from fastmcp import Client, FastMCP
 
 from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
-from joinly_client.utils import get_llm, load_tools
+from joinly_client.utils import get_llm, get_prompt, load_tools
 
 logger = logging.getLogger(__name__)
 
@@ -308,7 +308,9 @@ async def run(  # noqa: PLR0913
             else {"joinly": client.client, "mcp": mcp_client},
             exclude=["joinly_join_meeting"],
         )
-        agent = ConversationalToolAgent(llm, tools, tool_executor, prompt=prompt)
+        agent = ConversationalToolAgent(
+            llm, tools, tool_executor, prompt=prompt or get_prompt(name=client.name)
+        )
         client.set_utterance_callback(agent.on_utterance)
         async with agent:
             await client.join_meeting(meeting_url)
