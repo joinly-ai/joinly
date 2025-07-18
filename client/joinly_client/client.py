@@ -156,7 +156,7 @@ class JoinlyClient:
 
     async def __aexit__(self, *_exc: object) -> None:
         """Disconnect from the joinly server."""
-        for task in self._tasks:
+        for task in list(self._tasks):
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
