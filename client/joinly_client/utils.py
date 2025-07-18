@@ -1,7 +1,13 @@
+import asyncio
 import os
 from typing import Any
 
 from fastmcp import Client
+from mcp.types import (
+    CancelledNotification,
+    CancelledNotificationParams,
+    ClientNotification,
+)
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.tools import ToolDefinition
 
@@ -82,7 +88,22 @@ async def load_tools(
         if not client:
             msg = f"MCP '{prefix}' not found"
             raise ValueError(msg)
-        result = await client.call_tool_mcp(tool_name, args)
+
+        request_id = client.session._request_id  # noqa: SLF001
+        try:
+            result = await client.call_tool_mcp(tool_name, args)
+        except asyncio.CancelledError:
+            await client.session.send_notification(
+                ClientNotification(
+                    CancelledNotification(
+                        method="notifications/cancelled",
+                        params=CancelledNotificationParams(requestId=request_id),
+                    )
+                ),
+                related_request_id=request_id,
+            )
+            return "Request cancelled"
+
         if result.structuredContent:
             return result.structuredContent
         texts = [p.text for p in result.content if p.type == "text"]
