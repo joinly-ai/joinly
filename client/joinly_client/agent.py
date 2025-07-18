@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Self
 
 from pydantic_ai.direct import model_request
 from pydantic_ai.messages import (
@@ -70,6 +70,17 @@ class ConversationalToolAgent:
         self._tool_executor = tool_executor
         self._messages: list[ModelMessage] = []
         self._run_task: asyncio.Task | None = None
+
+    async def __aenter__(self) -> Self:
+        """Enter the agent context."""
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        """Exit the agent context and clean up resources."""
+        if self._run_task and not self._run_task.done():
+            self._run_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._run_task
 
     async def on_utterance(self, segments: list[TranscriptSegment]) -> None:
         """Handle an utterance event.
