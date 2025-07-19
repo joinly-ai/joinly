@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator
 from typing import Protocol
 
 from joinly.types import (
@@ -12,6 +12,7 @@ from joinly.types import (
     TranscriptSegment,
 )
 from joinly.utils.clock import Clock
+from joinly.utils.events import EventBus
 
 
 class AudioReader(Protocol):
@@ -234,30 +235,20 @@ class TranscriptionController(Protocol):
         """
         ...
 
-    async def start(self, clock: Clock, transcript: Transcript) -> None:
+    async def start(
+        self, clock: Clock, transcript: Transcript, event_bus: EventBus
+    ) -> None:
         """Start the transcription process.
 
         Args:
             clock: The clock to use for timing.
             transcript: The transcript object to which the transcription will be added.
+            event_bus: The event bus to publish events to.
         """
         ...
 
     async def stop(self) -> None:
         """Stop the transcription process."""
-        ...
-
-    def add_listener(
-        self, listener: Callable[[str], Coroutine[None, None, None]]
-    ) -> Callable[[], None]:
-        """Add a listener for transcript updates.
-
-        Args:
-            listener: A callable that takes an event string and returns a coroutine.
-
-        Returns:
-            Callable[[], None]: A function to remove the listener.
-        """
         ...
 
 
@@ -277,12 +268,15 @@ class SpeechController(Protocol):
     tts: TTS
     no_speech_event: asyncio.Event
 
-    async def start(self, clock: Clock, transcript: Transcript) -> None:
+    async def start(
+        self, clock: Clock, transcript: Transcript, event_bus: EventBus
+    ) -> None:
         """Start the speech output process.
 
         Args:
             clock: The clock to use for timing.
             transcript: The transcript object to which the speech will be added.
+            event_bus: The event bus to publish events to.
         """
         ...
 
