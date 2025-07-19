@@ -82,12 +82,15 @@ class JoinlyClient:
             Callable[[], None]: A function to remove the callback.
         """
         if self._client is not None and not self._utterance_callbacks:
-            self._track_task(
-                asyncio.create_task(
-                    self._client.session.subscribe_resource(TRANSCRIPT_URL)
-                )
-            )
-        self._utterance_callbacks.add(callback)
+            # update last utterance and subscribe
+            async def _subscribe() -> None:
+                await self._utterance_update()
+                self._utterance_callbacks.add(callback)
+                await self.client.session.subscribe_resource(TRANSCRIPT_URL)
+
+            self._track_task(asyncio.create_task(_subscribe()))
+        else:
+            self._utterance_callbacks.add(callback)
 
         def remove_callback() -> None:
             """Remove the callback from the utterance callbacks."""
@@ -114,12 +117,15 @@ class JoinlyClient:
             Callable[[], None]: A function to remove the callback.
         """
         if self._client is not None and not self._segment_callbacks:
-            self._track_task(
-                asyncio.create_task(
-                    self._client.session.subscribe_resource(SEGMENTS_URL)
-                )
-            )
-        self._segment_callbacks.add(callback)
+            # update last segment and subscribe
+            async def _subscribe() -> None:
+                await self._segment_update()
+                self._segment_callbacks.add(callback)
+                await self.client.session.subscribe_resource(SEGMENTS_URL)
+
+            self._track_task(asyncio.create_task(_subscribe()))
+        else:
+            self._segment_callbacks.add(callback)
 
         def remove_callback() -> None:
             """Remove the callback from the segment callbacks."""
