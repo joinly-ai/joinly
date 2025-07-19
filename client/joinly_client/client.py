@@ -42,6 +42,7 @@ class JoinlyClient:
         self.name: str = name or self.settings.get("name", "joinly")
         self.settings["name"] = self.name
 
+        self.joined: bool = False
         self._client: Client | None = None
         self._stack = AsyncExitStack()
         self._utterance_callbacks: set[
@@ -162,6 +163,7 @@ class JoinlyClient:
                 "participant_name": self.name,
             },
         )
+        self.joined = True
         self._last_utterance = 0.0
         self._last_segment = 0.0
 
@@ -235,6 +237,9 @@ class JoinlyClient:
 
     async def _utterance_update(self) -> None:
         """Update the utterance callback with new segments."""
+        if not self.joined:
+            return
+
         resource = await self.client.read_resource(TRANSCRIPT_URL)
         transcript = Transcript.model_validate_json(resource[0].text)  # type: ignore[attr-defined]
         new_transcript = transcript.with_role(SpeakerRole.participant).after(
@@ -249,6 +254,9 @@ class JoinlyClient:
 
     async def _segment_update(self) -> None:
         """Update the segment callback with new segments."""
+        if not self.joined:
+            return
+
         resource = await self.client.read_resource(SEGMENTS_URL)
         transcript = Transcript.model_validate_json(resource[0].text)  # type: ignore[attr-defined]
         new_transcript = transcript.after(self._last_segment)
@@ -263,5 +271,8 @@ class JoinlyClient:
         Returns:
             Transcript: The current transcript.
         """
+        if not self.joined:
+            return Transcript(segments=[])
+
         result = await self.client.call_tool("get_transcript")
         return Transcript.model_validate(result.content[0].text)  # type: ignore[attr-defined]
