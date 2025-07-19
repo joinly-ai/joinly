@@ -275,4 +275,4 @@ class JoinlyClient:
             return Transcript(segments=[])
 
         result = await self.client.call_tool("get_transcript")
-        return Transcript.model_validate(result.content[0].text)  # type: ignore[attr-defined]
+        return Transcript.model_validate_json(result.content[0].text)  # type: ignore[attr-defined]
