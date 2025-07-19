@@ -72,12 +72,11 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
 
         _event = "utterance" if url == TRANSCRIPT_URL else "segment"
 
-        async def _push(event: str) -> None:
-            if event == _event:
-                logger.debug("Sending %s notification", _event)
-                await session.send_resource_updated(url)
+        async def _push() -> None:
+            logger.debug("Sending %s notification", _event)
+            await session.send_resource_updated(url)
 
-        _remover[url] = meeting_session.add_transcription_listener(_push)
+        _remover[url] = meeting_session.subscribe(_event, _push)
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
