@@ -8,6 +8,8 @@ from typing import Annotated, Literal
 from fastmcp import Context, FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from pydantic import AnyUrl, Field, ValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
@@ -269,6 +271,12 @@ async def unmute_yourself(
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.unmute()
     return "Unmuted yourself."
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(_req: Request) -> JSONResponse:
+    """Health check endpoint."""
+    return JSONResponse({"status": "healthy"})
 
 
 if __name__ == "__main__":
