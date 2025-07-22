@@ -220,5 +220,9 @@ class ConversationalToolAgent:
         return (
             not tool_calls
             or any(p.tool_name == "finish" for p in tool_calls)
-            or any(p for p in tool_responses if "Interrupted" in str(p.content))
+            or any(
+                p
+                for p in tool_responses
+                if "Interrupted by detected speech" in str(p.content)
+            )
         )
