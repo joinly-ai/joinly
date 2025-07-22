@@ -273,6 +273,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         """
         locators = [
             page.locator("span >> text=/joining/i"),
+            page.locator("span >> text=/we've let them know you're here/i"),
             page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
         ]
 
