@@ -1,4 +1,6 @@
 import os
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 
@@ -6,7 +8,7 @@ from fastmcp import Client
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.tools import ToolDefinition
 
-from joinly_client.types import ToolExecutor
+from joinly_client.types import ToolExecutor, Transcript
 
 DEFAULT_PROMPT_TEMPLATE = (
     "Today is {date}. "
@@ -119,3 +121,31 @@ async def load_tools(
         return texts[0] if len(texts) == 1 else texts
 
     return tools, _tool_executor
+
+
+def normalize(s: str) -> str:
+    """Normalize a string.
+
+    Args:
+        s: The string to normalize.
+
+    Returns:
+        The normalized string.
+    """
+    normalized = unicodedata.normalize("NFKD", s.casefold().strip())
+    chars = (c for c in normalized if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^\w\s]", "", "".join(chars))
+
+
+def name_in_transcript(transcript: Transcript, name: str) -> bool:
+    """Check if the name is mentioned in the transcript.
+
+    Args:
+        transcript: The transcript to check.
+        name: The name to look for.
+
+    Returns:
+        True if the name is mentioned in the transcript, False otherwise.
+    """
+    pattern = rf"\b{re.escape(normalize(name))}\b"
+    return bool(re.search(pattern, normalize(transcript.text)))

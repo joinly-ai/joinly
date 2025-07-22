@@ -12,6 +12,7 @@ from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
 from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment
+from joinly_client.utils import name_in_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class JoinlyClient:
         url: str | FastMCP,
         *,
         name: str | None = None,
+        name_trigger: bool = False,
         settings: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the JoinlyClient with the server URL.
@@ -35,11 +37,14 @@ class JoinlyClient:
             url (str | FastMCP): The URL of the Joinly server or a
                 FastMCP instance.
             name (str | None): The name of the participant, defaults to "joinly".
+            name_trigger (bool): Whether to only trigger utterances when the name is
+                mentioned.
             settings (dict[str, Any]): Additional settings for the client.
         """
         self.url = url
         self.settings = settings or {}
         self.name: str = name or self.settings.get("name", "joinly")
+        self.name_trigger = name_trigger
         self.settings["name"] = self.name
 
         self.joined: bool = False
@@ -245,7 +250,9 @@ class JoinlyClient:
         new_transcript = transcript.with_role(SpeakerRole.participant).after(
             self._last_utterance
         )
-        if new_transcript.segments:
+        if new_transcript.segments and (
+            not self.name_trigger or name_in_transcript(new_transcript, self.name)
+        ):
             self._last_utterance = new_transcript.segments[-1].start
             for callback in self._utterance_callbacks:
                 self._track_task(
