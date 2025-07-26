@@ -12,7 +12,7 @@ from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
 from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment
-from joinly_client.utils import name_in_transcript
+from joinly_client.utils import is_async_context, name_in_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,11 @@ class JoinlyClient:
         Returns:
             Callable[[], None]: A function to remove the callback.
         """
-        if self._client is not None and not self._utterance_callbacks:
+        if (
+            self._client is not None
+            and not self._utterance_callbacks
+            and is_async_context()
+        ):
             # update last utterance and subscribe
             async def _subscribe() -> None:
                 await self._utterance_update()
@@ -101,7 +105,11 @@ class JoinlyClient:
         def remove_callback() -> None:
             """Remove the callback from the utterance callbacks."""
             self._utterance_callbacks.discard(callback)
-            if self._client is not None and not self._utterance_callbacks:
+            if (
+                self._client is not None
+                and not self._utterance_callbacks
+                and is_async_context()
+            ):
                 self._track_task(
                     asyncio.create_task(
                         self._client.session.unsubscribe_resource(TRANSCRIPT_URL)
@@ -122,7 +130,11 @@ class JoinlyClient:
         Returns:
             Callable[[], None]: A function to remove the callback.
         """
-        if self._client is not None and not self._segment_callbacks:
+        if (
+            self._client is not None
+            and not self._segment_callbacks
+            and is_async_context()
+        ):
             # update last segment and subscribe
             async def _subscribe() -> None:
                 await self._segment_update()
@@ -136,7 +148,11 @@ class JoinlyClient:
         def remove_callback() -> None:
             """Remove the callback from the segment callbacks."""
             self._segment_callbacks.discard(callback)
-            if self._client is not None and not self._segment_callbacks:
+            if (
+                self._client is not None
+                and not self._segment_callbacks
+                and is_async_context()
+            ):
                 self._track_task(
                     asyncio.create_task(
                         self._client.session.unsubscribe_resource(SEGMENTS_URL)

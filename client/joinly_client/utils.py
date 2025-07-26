@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import unicodedata
@@ -149,3 +150,17 @@ def name_in_transcript(transcript: Transcript, name: str) -> bool:
     """
     pattern = rf"\b{re.escape(normalize(name))}\b"
     return bool(re.search(pattern, normalize(transcript.text)))
+
+
+def is_async_context() -> bool:
+    """Check if the current context is asynchronous.
+
+    Returns:
+        bool: True if the current context is asynchronous, False otherwise.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    else:
+        return True
