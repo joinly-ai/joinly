@@ -78,10 +78,10 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             logger.error(msg)
             raise RuntimeError(msg)
 
-        logger.info("Creating FIFO file: %s", self.fifo_path)
+        logger.debug("Creating FIFO file: %s", self.fifo_path)
         os.mkfifo(self.fifo_path, 0o600)
 
-        logger.info("Creating virtual audio sink: %s", self.sink_name)
+        logger.debug("Creating virtual audio sink: %s", self.sink_name)
         self._module_id = await self._load_module(
             "module-pipe-sink",
             f"sink_name={self.sink_name}",
@@ -92,13 +92,13 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             "use_system_clock_for_timing=yes",
             env=self._env,
         )
-        logger.info(
+        logger.debug(
             "Created virtual audio sink: %s (id: %s)",
             self.sink_name,
             self._module_id,
         )
 
-        logger.info("Setting up FIFO file for reading: %s", self.fifo_path)
+        logger.debug("Setting up FIFO file for reading: %s", self.fifo_path)
         fd = os.open(self.fifo_path, os.O_RDWR | os.O_NONBLOCK)
         fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, self.pipe_size)
 
@@ -111,7 +111,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         self._env[_ENV_VAR] = self.sink_name
         self._time_ns = 0
 
-        logger.info(
+        logger.debug(
             "Virtual speaker is ready (sink: %s, id: %s, fifo: %s, rate: %s)",
             self.sink_name,
             self._module_id,
@@ -126,14 +126,14 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         if self._reader is None:
             logger.warning("No FIFO file to close")
         else:
-            logger.info("Closing FIFO file: %s", self.fifo_path)
+            logger.debug("Closing FIFO file: %s", self.fifo_path)
             self._reader.feed_eof()
             self._reader = None
 
         if self._module_id is None:
             logger.warning("No module ID found, skipping unload.")
         else:
-            logger.info(
+            logger.debug(
                 "Unloading virtual audio sink: %s (id: %s)",
                 self.sink_name,
                 self._module_id,
@@ -144,7 +144,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             if self._env.get(_ENV_VAR) == self.sink_name:
                 self._env.pop(_ENV_VAR)
 
-            logger.info(
+            logger.debug(
                 "Unloaded virtual audio sink: %s (id: %s)",
                 self.sink_name,
                 self._module_id,
@@ -153,11 +153,11 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
 
         if self._dir is not None:
             self._dir.cleanup()
-            logger.info("Temporary directory removed: %s", self._dir.name)
+            logger.debug("Temporary directory removed: %s", self._dir.name)
             self._dir = None
         elif self.fifo_path is not None:
             self.fifo_path.unlink()
-            logger.info("FIFO file removed: %s", self.fifo_path)
+            logger.debug("FIFO file removed: %s", self.fifo_path)
             self.fifo_path = None
         else:
             logger.warning("No FIFO file to remove")

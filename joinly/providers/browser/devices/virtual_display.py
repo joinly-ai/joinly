@@ -45,7 +45,7 @@ class VirtualDisplay:
             msg = "Xvfb already started"
             raise RuntimeError(msg)
 
-        logger.info("Starting Xvfb display")
+        logger.debug("Starting Xvfb display")
 
         self._env["XDG_SESSION_TYPE"] = "x11"
         self._env.pop("WAYLAND_DISPLAY", None)
@@ -71,7 +71,7 @@ class VirtualDisplay:
         self.display_name = f":{disp}"
         self._env["DISPLAY"] = self.display_name
 
-        logger.info(
+        logger.debug(
             "Started Xvfb display: %s (size: %dx%d, depth: %d)",
             self.display_name,
             self.size[0],
@@ -121,7 +121,7 @@ class VirtualDisplay:
             logger.warning("Xvfb is not started, skipping exit")
             return
 
-        logger.info("Stopping Xvfb display: %s", self.display_name)
+        logger.debug("Stopping Xvfb display: %s", self.display_name)
 
         if self._proc.returncode is None:
             self._proc.terminate()
@@ -138,11 +138,11 @@ class VirtualDisplay:
         if self._env.get("DISPLAY") == self.display_name:
             self._env.pop("DISPLAY")
 
-        logger.info("Stopped Xvfb display: %s", self.display_name)
+        logger.debug("Stopped Xvfb display: %s", self.display_name)
         self.display_name = None
 
         if self._vnc_proc is not None:
-            logger.info("Stopping VNC server on port: %s", self._vnc_port)
+            logger.debug("Stopping VNC server on port: %s", self._vnc_port)
             if self._vnc_proc.returncode is None:
                 self._vnc_proc.terminate()
             try:
@@ -154,6 +154,6 @@ class VirtualDisplay:
                 )
                 self._vnc_proc.kill()
                 await self._vnc_proc.wait()
-            logger.info("Stopped VNC server on port: %s", self._vnc_port)
+            logger.debug("Stopped VNC server on port: %s", self._vnc_port)
             self._vnc_proc = None
             self._vnc_port = None

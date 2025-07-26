@@ -64,7 +64,7 @@ class KokoroTTS(TTS):
             model_path=str(cache_dir / "kokoro-v1.0.onnx"),
             voices_path=str(cache_dir / "voices-v1.0.bin"),
         )
-        logger.info("Loaded TTS model")
+        logger.debug("Loaded TTS model")
 
         return self
 

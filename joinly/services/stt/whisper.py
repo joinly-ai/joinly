@@ -73,7 +73,7 @@ class WhisperSTT(STT):
             local_files_only=not self._set_model_name,
         )
 
-        logger.info("Initialized Whisper model")
+        logger.debug("Initialized Whisper model")
 
         return self
 
@@ -192,7 +192,7 @@ class WhisperSTT(STT):
             raise RuntimeError(msg)
 
         async with self._sem:
-            logger.info(
+            logger.debug(
                 "Processing audio chunk of size: %d (%.2fs)",
                 len(data),
                 calculate_audio_duration(len(data), self.audio_format),

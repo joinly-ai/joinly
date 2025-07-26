@@ -69,7 +69,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     async def _handle_subscribe_resource(url: AnyUrl) -> None:
         if url not in (TRANSCRIPT_URL, SEGMENTS_URL) or url in _remover:
             return
-        logger.info("Subscribing to resource: %s", url)
+        logger.debug("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
 
         _event = "utterance" if url == TRANSCRIPT_URL else "segment"
@@ -83,7 +83,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
         if url in _remover:
-            logger.info("Unsubscribing from resource: %s", url)
+            logger.debug("Unsubscribing from resource: %s", url)
             _remover[url]()
             _remover.pop(url)
 

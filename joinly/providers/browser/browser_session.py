@@ -9,6 +9,8 @@ from typing import Self
 from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
 
+from joinly.utils.logging import LOGGING_TRACE
+
 logger = logging.getLogger(__name__)
 
 _CDP_RE = re.compile(r"DevTools listening on (ws://.*)")
@@ -41,17 +43,16 @@ class BrowserSession:
         self._pw = await async_playwright().start()
 
         bin_path = Path(self._pw.chromium.executable_path)
-        logger.info("Chromium binary path: %s", bin_path)
+        logger.debug("Chromium binary path: %s", bin_path)
         if not bin_path.exists():
             msg = "Chromium binary not found"
             logger.error(msg)
             raise RuntimeError(msg)
 
         self._profile_dir = tempfile.TemporaryDirectory(prefix="pw-profile_")
-        logger.info("Profile directory created at: %s", self._profile_dir.name)
+        logger.debug("Profile directory created at: %s", self._profile_dir.name)
 
-        logger.info("Launching Chromium browser.")
-        logger.debug("Environment variables: %s", self._env)
+        logger.debug("Launching Chromium browser.")
         self._proc = await asyncio.create_subprocess_exec(
             str(bin_path),
             f"--remote-debugging-port={self._cdp_port}",
@@ -84,10 +85,10 @@ class BrowserSession:
             env=self._env,
             start_new_session=True,
         )
-        logger.info("Chromium browser launched.")
+        logger.debug("Chromium browser launched.")
 
         while line := await self._proc.stderr.readline():  # type: ignore[attr-defined]
-            logger.debug("[chromium] %s", line.decode().strip())
+            logger.log(LOGGING_TRACE, "[chromium] %s", line.decode().strip())
             m = _CDP_RE.search(line.decode())
             if m:
                 cdp_endpoint = m.group(1)
@@ -97,7 +98,7 @@ class BrowserSession:
             msg = "Could not find DevTools URL in stderr"
             logger.error(msg)
             raise RuntimeError(msg)
-        logger.info("DevTools URL: %s", cdp_endpoint)
+        logger.debug("DevTools URL: %s", cdp_endpoint)
         self.cdp_url = cdp_endpoint
 
         self._pw_browser = await self._pw.chromium.connect_over_cdp(cdp_endpoint)
@@ -106,13 +107,13 @@ class BrowserSession:
             self._pw_context.pages[0] if self._pw_context.pages else None
         )
 
-        logger.info("Playwright started.")
+        logger.debug("Playwright started.")
 
         return self
 
     async def __aexit__(self, *exc: object) -> None:
         """Stop the browser."""
-        logger.info("Stopping browser.")
+        logger.debug("Stopping browser.")
 
         for page in self._pages:
             if page is not self._default_page and not page.is_closed():
@@ -121,7 +122,7 @@ class BrowserSession:
             await self._playwright.stop()
 
         if self._proc and self._proc.returncode is None:
-            logger.info("Terminating browser process.")
+            logger.debug("Terminating browser process.")
             self._proc.terminate()
             try:
                 await asyncio.wait_for(self._proc.wait(), timeout=1)
@@ -129,11 +130,11 @@ class BrowserSession:
                 logger.warning("Browser process did not terminate, killing it.")
                 self._proc.kill()
                 await self._proc.wait()
-        logger.info("Browser stopped.")
+        logger.debug("Browser stopped.")
 
         if self._profile_dir is not None:
             self._profile_dir.cleanup()
-            logger.info("Profile directory removed: %s", self._profile_dir.name)
+            logger.debug("Profile directory removed: %s", self._profile_dir.name)
 
         self._pw_context = None
         self._pw_browser = None
@@ -151,10 +152,13 @@ class BrowserSession:
             raise RuntimeError(msg)
 
         page = await self._pw_context.new_page()
-        logger.info("New page created in the browser context.")
+        logger.debug("New page created in the browser context.")
 
         page.on(
-            "console", lambda msg: logger.debug("[console][%s] %s", msg.type, msg.text)
+            "console",
+            lambda msg: logger.log(
+                LOGGING_TRACE, "[console][%s] %s", msg.type, msg.text
+            ),
         )
         self._pages.append(page)
 

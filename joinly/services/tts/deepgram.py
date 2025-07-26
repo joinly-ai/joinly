@@ -92,13 +92,13 @@ class DeepgramTTS(TTS):
             msg = "Failed to connect to Deepgram TTS service."
             logger.error(msg)
             raise RuntimeError(msg)
-        logger.info("Connected to Deepgram TTS service")
+        logger.debug("Connected to Deepgram TTS service")
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the asynchronous context manager."""
-        logger.info("Closing Deepgram TTS service connection")
+        logger.debug("Closing Deepgram TTS service connection")
         await self._client.finish()
         self._queue = None
 
