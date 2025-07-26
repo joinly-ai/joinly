@@ -13,7 +13,6 @@ from joinly.providers.browser.devices.pulse_module_manager import (
     PulseModuleManager,
 )
 from joinly.types import AudioFormat
-from joinly.utils.logging import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
 
@@ -197,24 +196,11 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
 
         view = memoryview(data)
         while len(view) >= self.chunk_size:
-            logger.log(
-                LOGGING_TRACE,
-                "Queueing %d bytes to virtual microphone",
-                self.chunk_size,
-            )
             await self._queue.put(bytes(view[: self.chunk_size]))
             view = view[self.chunk_size :]
 
         if view:
             pad_len = self.chunk_size - len(view)
-            logger.log(
-                LOGGING_TRACE,
-                "Queueing %d bytes with %d bytes (total %d) of padding to "
-                "virtual microphone",
-                len(view),
-                pad_len,
-                self.chunk_size,
-            )
             await self._queue.put(bytes(view) + b"\x00" * pad_len)
 
     async def _pace_loop(self) -> None:
@@ -236,7 +222,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
                 missed = (now - next_deadline) / period
                 if missed >= self.max_missed_chunks:
                     logger.warning(
-                        "Missed %d pacing intervals, adjusting next deadline",
+                        "Missed %d mic pacing intervals, adjusting next deadline",
                         int(missed),
                     )
                     next_deadline = now
@@ -244,16 +230,8 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
 
             try:
                 chunk = self._queue.get_nowait()
-                logger.log(
-                    LOGGING_TRACE, "Writing %d bytes to virtual microphone", len(chunk)
-                )
             except asyncio.QueueEmpty:
                 chunk = silence
-                logger.log(
-                    LOGGING_TRACE,
-                    "Writing %d bytes of silence to virtual microphone",
-                    len(chunk),
-                )
 
             self._writer.write(chunk)
             await self._writer.drain()
