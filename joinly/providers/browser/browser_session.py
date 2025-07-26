@@ -53,7 +53,6 @@ class BrowserSession:
         logger.debug("Profile directory created at: %s", self._profile_dir.name)
 
         logger.debug("Launching Chromium browser.")
-        logger.debug("Environment variables: %s", self._env)
         self._proc = await asyncio.create_subprocess_exec(
             str(bin_path),
             f"--remote-debugging-port={self._cdp_port}",
@@ -89,7 +88,7 @@ class BrowserSession:
         logger.debug("Chromium browser launched.")
 
         while line := await self._proc.stderr.readline():  # type: ignore[attr-defined]
-            logger.debug("[chromium] %s", line.decode().strip())
+            logger.log(LOGGING_TRACE, "[chromium] %s", line.decode().strip())
             m = _CDP_RE.search(line.decode())
             if m:
                 cdp_endpoint = m.group(1)
