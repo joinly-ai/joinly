@@ -88,7 +88,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             logger.error(msg)
             raise RuntimeError(msg)
 
-        logger.info("Creating virtual audio source: %s", self.source_name)
+        logger.debug("Creating virtual audio source: %s", self.source_name)
         self._module_id = await self._load_module(
             "module-pipe-source",
             f"source_name={self.source_name}",
@@ -98,13 +98,13 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             "channels=1",
             env=self._env,
         )
-        logger.info(
+        logger.debug(
             "Created virtual audio source: %s (id: %s)",
             self.source_name,
             self._module_id,
         )
 
-        logger.info("Setting up FIFO file for writing: %s", self.fifo_path)
+        logger.debug("Setting up FIFO file for writing: %s", self.fifo_path)
         fd = os.open(self.fifo_path, os.O_WRONLY)
         fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, self.pipe_size)
 
@@ -119,7 +119,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
 
         self._env[_ENV_VAR] = self.source_name
 
-        logger.info(
+        logger.debug(
             "Virtual microphone is ready (source: %s, id: %s, fifo: %s, rate: %s)",
             self.source_name,
             self._module_id,
@@ -147,7 +147,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         if self._writer is None:
             logger.warning("No fifo file to close")
         else:
-            logger.info("Closing FIFO file: %s", self.fifo_path)
+            logger.debug("Closing FIFO file: %s", self.fifo_path)
             with contextlib.suppress(Exception):
                 self._writer.transport.close()
             self._writer = None
@@ -155,7 +155,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         if self._module_id is None:
             logger.warning("No module ID found, skipping unload.")
         else:
-            logger.info(
+            logger.debug(
                 "Unloading virtual audio source: %s (id: %s)",
                 self.source_name,
                 self._module_id,
@@ -166,7 +166,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             if self._env.get(_ENV_VAR) == self.source_name:
                 self._env.pop(_ENV_VAR)
 
-            logger.info(
+            logger.debug(
                 "Unloaded virtual audio source: %s (id: %s)",
                 self.source_name,
                 self._module_id,
@@ -175,11 +175,11 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
 
         if self._dir is not None:
             self._dir.cleanup()
-            logger.info("Temporary directory removed: %s", self._dir.name)
+            logger.debug("Temporary directory removed: %s", self._dir.name)
             self._dir = None
         elif self.fifo_path is not None:
             self.fifo_path.unlink()
-            logger.info("FIFO file removed: %s", self.fifo_path)
+            logger.debug("FIFO file removed: %s", self.fifo_path)
             self.fifo_path = None
         else:
             logger.warning("No FIFO file to remove")

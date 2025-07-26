@@ -116,7 +116,7 @@ class DefaultTranscriptionController(TranscriptionController):
         for listener in self._listeners:
             asyncio.create_task(listener(event))  # noqa: RUF006
 
-    async def _vad_worker(self) -> None:  # noqa: C901, PLR0915
+    async def _vad_worker(self) -> None:  # noqa: C901
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
         last_speech: int | None = None
@@ -147,7 +147,7 @@ class DefaultTranscriptionController(TranscriptionController):
 
             if window.is_speech and self._window_queue is None:
                 # utterance start
-                logger.info("Utterance start: %.2fs", window.time_ns / 1e9)
+                logger.debug("Utterance start: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.clear()
                 if len(self._stt_tasks) >= self.max_stt_tasks:
                     logger.warning(
@@ -169,7 +169,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 and (window.time_ns - last_speech) / 1e9 >= self.utterance_tail_seconds
             ):
                 # utterance end
-                logger.info("Utterance end: %.2fs", window.time_ns / 1e9)
+                logger.debug("Utterance end: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.set()
                 last_speech = None
                 if self._window_queue is not None:
@@ -190,8 +190,6 @@ class DefaultTranscriptionController(TranscriptionController):
                     self._window_queue.put_nowait(window)
                 except asyncio.QueueFull:
                     dropped_windows += 1
-                    if dropped_windows == 1:
-                        logger.info("Window queue is full, dropping audio windows")
                 else:
                     if dropped_windows > 0:
                         logger.warning(
@@ -248,7 +246,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 self._transcript.add_segment(segment)
                 logger.info(
                     "%s: %s (%.2fs-%.2fs)",
-                    segment.speaker if segment.speaker else "Unknown",
+                    segment.speaker if segment.speaker else "Participant",
                     segment.text,
                     segment.start,
                     segment.end,
