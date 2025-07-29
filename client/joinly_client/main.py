@@ -275,7 +275,7 @@ async def run(  # noqa: PLR0913
     *,
     prompt: str | None = None,
     name: str | None = None,
-    name_trigger: bool = False,  # noqa: ARG001
+    name_trigger: bool = False,
     mcp_config: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
 ) -> None:
@@ -296,6 +296,7 @@ async def run(  # noqa: PLR0913
     client = JoinlyClient(
         joinly_url,
         name=name,
+        name_trigger=name_trigger,
         settings=settings,
     )
     mcp_client = Client(mcp_config) if mcp_config else None
@@ -314,7 +315,7 @@ async def run(  # noqa: PLR0913
         client.add_utterance_callback(agent.on_utterance)
         async with agent:
             await client.join_meeting(meeting_url)
-            await asyncio.Event().wait()  # change to wait until left
+            await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
