@@ -26,8 +26,11 @@ Make sure you have a running joinly server. You can start it with:
 ```bash
 docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
 ```
+For more details on joinly, see the GitHub repository: [joinly-ai/joinly](https://github.com/joinly-ai/joinly).
 
 ## Command line usage
+
+We recommend using `uv` for running the client, you can install it using the [command in their repository](https://github.com/astral-sh/uv#Installation).
 
 Connect to a running joinly server and join a meeting:
 ```bash
