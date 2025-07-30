@@ -1,6 +1,32 @@
 
 # joinly-client: Client for a conversational meeting agent used with joinly
 
+## Prerequisites
+
+### Set LLM API key
+
+Export a valid API key for the LLM provider you want to use, e.g. OpenAI:
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+Or, create a `.env` file in the current directory with the following content:
+```dotenv
+OPENAI_API_KEY="sk-..."
+```
+
+For other providers, export the corresponding environment variable(s) and set provider and model with the command:
+```bash
+uvx joinly-client --llm-provider <provider> --llm-model <model> <MeetingUrl>
+```
+
+### Start joinly server
+
+Make sure you have a running joinly server. You can start it with:
+```bash
+docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
+```
+
 ## Command line usage
 
 Connect to a running joinly server and join a meeting:
@@ -28,13 +54,24 @@ Add other MCP servers using a [configuration file](https://gofastmcp.com/clients
 uvx joinly-client --mcp-config config.json <MeetingUrl>
 ```
 
+You can also set other session-specific settings for the joinly server, e.g.:
+```bash
+uvx joinly-client --tts elevenlabs --tts-arg voice_id=EXAVITQu4vr4xnSDxMa6 --lang de <MeetingUrl>
+```
+
+For a full list of command line options, run:
+```bash
+uvx joinly-client --help
+```
+
 ## Code usage
 
 Direct use of run function:
 ```python
+import asyncio
 import joinly_client.run
 
-async def main():
+async def run():
     await joinly_client.run(
         joinly_url="http://localhost:8000/mcp/",
         meeting_url="<MeetingUrl>",
@@ -46,6 +83,9 @@ async def main():
         mcp_config=None,  # MCP servers configuration (dict)
         settings=None,  # settings propagated to joinly server (dict)
     )
+
+if __name__ == "__main__":
+    asyncio.run(run())
 ```
 
 Or with only the client and a custom agent:
@@ -55,15 +95,13 @@ from joinly_client import JoinlyClient
 from joinly_client.types import TranscriptSegment
 
 
-async def main():
+async def run():
     client = JoinlyClient(
-        joinly_url="http://localhost:8000/mcp/",
+        url="http://localhost:8000/mcp/",
         name="joinly",
         name_trigger=False,
         settings=None,
     )
-    # optionally, load all tools from the server
-    tool_list = await client.client.list_tools()
 
     async def on_utterance(segments: list[TranscriptSegment]) -> None:
         for segment in segments:
@@ -73,6 +111,12 @@ async def main():
     client.add_utterance_callback(on_utterance)
 
     async with client:
+        # optionally, load all tools from the server
+        tool_list = await client.client.list_tools()
+
         await client.join_meeting("<MeetingUrl>")
         await asyncio.Event().wait()  # wait until cancelled
+        
+if __name__ == "__main__":
+    asyncio.run(run())
 ```
