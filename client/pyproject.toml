@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1.8",
     "fastmcp>=2.10.5",
-    "pydantic-ai>=0.4.3",
+    "pydantic-ai-slim[anthropic,openai]>=0.4.9",
     "python-dotenv>=1.1.0",
     "rich>=14.0.0",
 ]
