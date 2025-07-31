@@ -2,14 +2,12 @@
 __pycache__
 .gitignore
 .git
-Dockerfile
+docker/
 docker-compose.yml
 .vscode
 .devcontainer
-ruff.toml
 .pre-commit-config.yaml
 .ruff_cache
 node_modules
-pytest.ini
 pytest_cache
 .env
