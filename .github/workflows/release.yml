@@ -19,13 +19,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - dockerfile: Dockerfile
+          - dockerfile: docker/Dockerfile
             suffix: ''
             platforms: linux/amd64,linux/arm64
-          - dockerfile: Dockerfile.lite
+          - dockerfile: docker/Dockerfile.lite
             suffix: '-lite'
             platforms: linux/amd64,linux/arm64
-          - dockerfile: Dockerfile.cuda
+          - dockerfile: docker/Dockerfile.cuda
             suffix: '-cuda'
             platforms: linux/amd64
 
