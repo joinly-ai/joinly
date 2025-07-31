@@ -61,3 +61,95 @@ packages = ["joinly", "joinly_shared"]
 members = [
     "client",
 ]
+
+[tool.ruff]
+exclude = [
+    ".git",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".vscode",
+    "__pycache__",
+    ".venv",
+]
+line-length = 88
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "COM819",
+    "D100",
+    "D104",
+    "D203",
+    "D213",
+    "D300",
+    "E111",
+    "E114",
+    "E117",
+    "ISC001",
+    "ISC002",
+    "Q000",
+    "Q001",
+    "Q002",
+    "Q003",
+    "W191",
+    "EXE002",
+]
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = [
+    "S101",
+]
+"scripts/**/*.py" = [
+    "INP001",
+]
+"shared/**/*.py" = [
+    "INP001",
+]
+"examples/**/*.py" = [
+    "INP001",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pyright]
+pythonVersion = "3.12"
+pythonPlatform = "All"
+venv = ".venv"
+typeCheckingMode = "standard"
+include = [
+    "joinly",
+    "client",
+    "shared",
+    "tests"
+]
+exclude = [
+    "**/__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+log_level = "INFO"
+log_cli_level = "INFO"
+log_cli = true
