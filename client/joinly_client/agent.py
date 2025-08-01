@@ -74,6 +74,15 @@ class ConversationalToolAgent:
             self._run_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._run_task
+        self._run_task = None
+
+        logger.info(
+            "Agent LLM usage: %d requests, %d tokens (%d request, %d response)",
+            self.usage.requests,
+            self.usage.total_tokens or 0,
+            self.usage.request_tokens or 0,
+            self.usage.response_tokens or 0,
+        )
 
     async def on_utterance(self, segments: list[TranscriptSegment]) -> None:
         """Handle an utterance event.
