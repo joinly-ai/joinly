@@ -225,4 +225,5 @@ class ConversationalToolAgent:
                 for p in tool_responses
                 if "Interrupted by detected speech" in str(p.content)
             )
+            or any(p for p in tool_responses if str(p.content) == "Request cancelled")
         )
