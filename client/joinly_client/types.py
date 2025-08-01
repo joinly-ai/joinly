@@ -20,3 +20,4 @@ class McpClientConfig:
 
     client: Client
     exclude: list[str] = field(default_factory=list)
+    cancel_notification: bool = False

@@ -108,26 +108,29 @@ async def load_tools(
         """Execute a tool with the given name and arguments."""
         if isinstance(clients, McpClientConfig):
             client = clients.client
+            config = clients
         else:
             prefix, tool_name = tool_name.split("_", 1)
             if prefix not in clients:
                 msg = f"MCP '{prefix}' not found"
                 raise ValueError(msg)
             client = clients[prefix].client
+            config = clients[prefix]
 
         request_id = client.session._request_id  # noqa: SLF001
         try:
             result = await client.call_tool_mcp(tool_name, args)
         except asyncio.CancelledError:
-            await client.session.send_notification(
-                ClientNotification(
-                    CancelledNotification(
-                        method="notifications/cancelled",
-                        params=CancelledNotificationParams(requestId=request_id),
-                    )
-                ),
-                related_request_id=request_id,
-            )
+            if config.cancel_notification:
+                await client.session.send_notification(
+                    ClientNotification(
+                        CancelledNotification(
+                            method="notifications/cancelled",
+                            params=CancelledNotificationParams(requestId=request_id),
+                        )
+                    ),
+                    related_request_id=request_id,
+                )
             return "Request cancelled"
 
         if result.structuredContent:

@@ -304,7 +304,9 @@ async def run(  # noqa: PLR0913
     llm = get_llm(llm_provider, llm_model)
 
     async with client, mcp_client or contextlib.nullcontext():
-        joinly_config = McpClientConfig(client=client.client, exclude=["join_meeting"])
+        joinly_config = McpClientConfig(
+            client=client.client, exclude=["join_meeting"], cancel_notification=True
+        )
         tools, tool_executor = await load_tools(
             joinly_config
             if mcp_client is None
