@@ -15,6 +15,7 @@ dependencies = [
     "fastmcp>=2.10.5",
     "joinly-client",
     "kokoro-onnx>=0.4.8",
+    "mcp>=1.12.3",
     "numpy>=2.2.4",
     "onnxruntime>=1.21.1",
     "playwright>=1.51.0",
