@@ -124,13 +124,13 @@ class DeepgramSTT(STT):
             msg = "Failed to connect to Deepgram STT service."
             logger.error(msg)
             raise RuntimeError(msg)
-        logger.info("Connected to Deepgram STT service")
+        logger.debug("Connected to Deepgram STT service")
 
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
         """Exit the context."""
-        logger.info("Closing Deepgram STT service connection")
+        logger.debug("Closing Deepgram STT service connection")
         await self._client.finish()
         self._queue = None
 

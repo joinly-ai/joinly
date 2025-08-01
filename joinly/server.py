@@ -8,6 +8,8 @@ from typing import Annotated, Literal
 from fastmcp import Context, FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from pydantic import AnyUrl, Field, ValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from joinly.container import SessionContainer
 from joinly.session import MeetingSession
@@ -67,22 +69,21 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     async def _handle_subscribe_resource(url: AnyUrl) -> None:
         if url not in (TRANSCRIPT_URL, SEGMENTS_URL) or url in _remover:
             return
-        logger.info("Subscribing to resource: %s", url)
+        logger.debug("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
 
         _event = "utterance" if url == TRANSCRIPT_URL else "segment"
 
-        async def _push(event: str) -> None:
-            if event == _event:
-                logger.debug("Sending %s notification", _event)
-                await session.send_resource_updated(url)
+        async def _push() -> None:
+            logger.debug("Sending %s notification", _event)
+            await session.send_resource_updated(url)
 
-        _remover[url] = meeting_session.add_transcription_listener(_push)
+        _remover[url] = meeting_session.subscribe(_event, _push)
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
         if url in _remover:
-            logger.info("Unsubscribing from resource: %s", url)
+            logger.debug("Unsubscribing from resource: %s", url)
             _remover[url]()
             _remover.pop(url)
 
@@ -281,6 +282,12 @@ async def unmute_yourself(
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     await ms.unmute()
     return "Unmuted yourself."
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(_req: Request) -> JSONResponse:
+    """Health check endpoint."""
+    return JSONResponse({"status": "healthy"})
 
 
 if __name__ == "__main__":

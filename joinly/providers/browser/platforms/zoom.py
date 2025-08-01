@@ -51,7 +51,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         # convert standard join URL to the web client format
         if re.search(r"/j/\d+", url):
             url = re.sub(r"/j/(\d+)", r"/wc/join/\1", url)
-            logger.info("Rewrote Zoom join URL to web client format: %s", url)
+            logger.debug("Rewrote Zoom join URL to web client format: %s", url)
 
         await page.goto(url, wait_until="load", timeout=20000)
         if await page.get_by_text("invalid").is_visible():
@@ -273,6 +273,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         """
         locators = [
             page.locator("span >> text=/joining/i"),
+            page.locator("span >> text=/we've let them know you're here/i"),
             page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
         ]
 

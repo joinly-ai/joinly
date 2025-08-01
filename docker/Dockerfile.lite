@@ -13,7 +13,6 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    --mount=type=bind,source=client/pyproject.toml,target=client/pyproject.toml \
     uv sync --locked --no-install-project --no-dev --no-editable
 
 # Copy app source code
@@ -50,7 +49,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio \
     pulseaudio-utils \
     xvfb \
-    x11vnc \
     && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
@@ -65,13 +63,11 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 USER app
 WORKDIR /app
 
-# Run download assets script to package all required assets
-# Note: this makes the image size very large, but has all assets on startup
+# Run download assets script, here only for browser and VAD
 RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.py \
     PATH="/app/.venv/bin:${PATH}" \
     /app/.venv/bin/python download_assets.py \
-    --assets playwright whisper silero kokoro \
-    --whisper-model base
+    --assets playwright silero
 
 # Set entrypoint
 ENTRYPOINT ["/app/.venv/bin/joinly"]

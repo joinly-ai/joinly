@@ -1,5 +1,8 @@
 import asyncio
 import os
+import re
+import unicodedata
+from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import Client
@@ -11,7 +14,22 @@ from mcp.types import (
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.tools import ToolDefinition
 
-from joinly_client.agent import ToolExecutor
+from joinly_client.types import ToolExecutor, Transcript
+
+DEFAULT_PROMPT_TEMPLATE = (
+    "Today is {date}. "
+    "You are {name}, a professional and knowledgeable meeting assistant. "
+    "Provide concise, valuable contributions in the meeting. "
+    "You are only with one other participant in the meeting, therefore "
+    "respond to all messages and questions. "
+    "When you are greeted, respond politely in spoken language. "
+    "Give information, answer questions, and fullfill tasks as needed. "
+    "You receive real-time transcripts from the ongoing meeting. "
+    "Respond interactively and use available tools to assist participants. "
+    "Always finish your response with the 'finish' tool. "
+    "Never directly use the 'finish' tool, always respond first and then use it. "
+    "If interrupted mid-response, use 'finish'."
+)
 
 
 def get_llm(llm_provider: str, model_name: str) -> Model:
@@ -45,6 +63,20 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
         llm_provider = "azure"
 
     return infer_model(f"{llm_provider}:{model_name}")
+
+
+def get_prompt(template: str = DEFAULT_PROMPT_TEMPLATE, name: str = "joinly") -> str:
+    """Get the prompt template for the agent.
+
+    Args:
+        template (str): The prompt template to use. Defaults to DEFAULT_PROMPT_TEMPLATE.
+        name (str): The name of the agent. Defaults to 'joinly'.
+
+    Returns:
+        str: The formatted prompt template.
+    """
+    today = datetime.now(tz=UTC).strftime("%d.%m.%Y")
+    return template.format(name=name, date=today)
 
 
 async def load_tools(
@@ -110,3 +142,45 @@ async def load_tools(
         return texts[0] if len(texts) == 1 else texts
 
     return tools, _tool_executor
+
+
+def normalize(s: str) -> str:
+    """Normalize a string.
+
+    Args:
+        s: The string to normalize.
+
+    Returns:
+        The normalized string.
+    """
+    normalized = unicodedata.normalize("NFKD", s.casefold().strip())
+    chars = (c for c in normalized if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^\w\s]", "", "".join(chars))
+
+
+def name_in_transcript(transcript: Transcript, name: str) -> bool:
+    """Check if the name is mentioned in the transcript.
+
+    Args:
+        transcript: The transcript to check.
+        name: The name to look for.
+
+    Returns:
+        True if the name is mentioned in the transcript, False otherwise.
+    """
+    pattern = rf"\b{re.escape(normalize(name))}\b"
+    return bool(re.search(pattern, normalize(transcript.text)))
+
+
+def is_async_context() -> bool:
+    """Check if the current context is asynchronous.
+
+    Returns:
+        bool: True if the current context is asynchronous, False otherwise.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    else:
+        return True

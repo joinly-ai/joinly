@@ -11,7 +11,7 @@ from fastmcp import Client, FastMCP
 
 from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
-from joinly_client.utils import get_llm, load_tools
+from joinly_client.utils import get_llm, get_prompt, load_tools
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +275,7 @@ async def run(  # noqa: PLR0913
     *,
     prompt: str | None = None,
     name: str | None = None,
-    name_trigger: bool = False,  # noqa: ARG001
+    name_trigger: bool = False,
     mcp_config: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
 ) -> None:
@@ -296,6 +296,7 @@ async def run(  # noqa: PLR0913
     client = JoinlyClient(
         joinly_url,
         name=name,
+        name_trigger=name_trigger,
         settings=settings,
     )
     mcp_client = Client(mcp_config) if mcp_config else None
@@ -308,11 +309,13 @@ async def run(  # noqa: PLR0913
             else {"joinly": client.client, "mcp": mcp_client},
             exclude=["joinly_join_meeting"],
         )
-        agent = ConversationalToolAgent(llm, tools, tool_executor, prompt=prompt)
-        client.set_utterance_callback(agent.on_utterance)
+        agent = ConversationalToolAgent(
+            llm, tools, tool_executor, prompt=prompt or get_prompt(name=client.name)
+        )
+        client.add_utterance_callback(agent.on_utterance)
         async with agent:
             await client.join_meeting(meeting_url)
-            await asyncio.Event().wait()  # change to wait until left
+            await asyncio.Event().wait()
 
 
 if __name__ == "__main__":

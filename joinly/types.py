@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 
+from joinly_shared.types import SpeakerRole, Transcript, TranscriptSegment
 from pydantic import BaseModel, ConfigDict, Field
-
-from shared.types import SpeakerRole, Transcript, TranscriptSegment
 
 __all__ = [
     "SpeakerRole",

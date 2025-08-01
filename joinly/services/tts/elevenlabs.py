@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections import defaultdict
 from collections.abc import AsyncIterator
 
 from elevenlabs.client import AsyncElevenLabs
@@ -9,6 +10,14 @@ from joinly.settings import get_settings
 from joinly.types import AudioFormat
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_VOICES = defaultdict(
+    lambda: "XrExE9yKIg1WjnnlVkGX",
+    {
+        "de": "1iF3vHdwHKuVKSPDK23Z",
+        "en": "XrExE9yKIg1WjnnlVkGX",
+    },
+)
 
 
 class ElevenlabsTTS(TTS):
@@ -28,7 +37,7 @@ class ElevenlabsTTS(TTS):
             model_id: The ElevenLabs model ID to use (default is "eleven_flash_v2_5").
             sample_rate: The sample rate of the audio (default is 24000).
         """
-        self._voice_id = voice_id or "XrExE9yKIg1WjnnlVkGX"
+        self._voice_id = voice_id or DEFAULT_VOICES[get_settings().language]
         self._model_id = model_id
         self._output_format = f"pcm_{sample_rate}"
         self._client = AsyncElevenLabs()

@@ -45,7 +45,7 @@ class PulseServer(PulseModuleManager):
         self._env[_SERVER_ENV_VAR] = f"unix:{self.socket_path}"
         self._env[_AUTOSPAWN_ENV_VAR] = "1"
 
-        logger.info("Starting PulseAudio server under %s", self._dir.name)
+        logger.debug("Starting PulseAudio server under %s", self._dir.name)
         self._proc = await asyncio.create_subprocess_exec(
             "/usr/bin/pulseaudio",
             "--daemonize=no",
@@ -67,7 +67,7 @@ class PulseServer(PulseModuleManager):
             self._dir.cleanup()
             raise RuntimeError(msg) from e
 
-        logger.info("PulseAudio server started")
+        logger.debug("PulseAudio server started")
 
         return self
 
@@ -76,7 +76,7 @@ class PulseServer(PulseModuleManager):
         if self._proc is None or self._proc.returncode is not None:
             logger.warning("No PulseAudio server to stop")
         else:
-            logger.info("Stopping PulseAudio server")
+            logger.debug("Stopping PulseAudio server")
             self._proc.terminate()
             try:
                 await asyncio.wait_for(self._proc.wait(), timeout=5)
@@ -88,11 +88,11 @@ class PulseServer(PulseModuleManager):
             self._env.pop(_RUNTIME_ENV_VAR, None)
             self._env.pop(_SERVER_ENV_VAR, None)
             self._env.pop(_AUTOSPAWN_ENV_VAR, None)
-            logger.info("PulseAudio server stopped")
+            logger.debug("PulseAudio server stopped")
 
         if self._dir is not None:
             self._dir.cleanup()
-            logger.info("Temporary directory removed: %s", self._dir.name)
+            logger.debug("Temporary directory removed: %s", self._dir.name)
             self._dir = None
 
 

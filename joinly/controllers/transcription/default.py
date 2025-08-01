@@ -2,13 +2,14 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator
 from typing import Self
 
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
 from joinly.types import AudioChunk, SpeechWindow, Transcript, TranscriptSegment
 from joinly.utils.audio import calculate_audio_duration, convert_audio_format
 from joinly.utils.clock import Clock
+from joinly.utils.events import EventBus, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,9 @@ class DefaultTranscriptionController(TranscriptionController):
         self._window_queue: asyncio.Queue[SpeechWindow | None] | None = None
         self._stt_tasks: set[asyncio.Task] = set()
         self._no_speech_event = asyncio.Event()
-        self._listeners: set[Callable[[str], Coroutine[None, None, None]]] = set()
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
+        self._event_bus: EventBus | None = None
 
     @property
     def no_speech_event(self) -> asyncio.Event:
@@ -62,12 +63,15 @@ class DefaultTranscriptionController(TranscriptionController):
         """Clean up the transcription controller."""
         await self.stop()
 
-    async def start(self, clock: Clock, transcript: Transcript) -> None:
+    async def start(
+        self, clock: Clock, transcript: Transcript, event_bus: EventBus
+    ) -> None:
         """Start the transcription controller with the given reader, vad, and stt.
 
         Args:
             clock (Clock): The clock to use for timing.
             transcript (Transcript): The transcript to use for storing segments.
+            event_bus (EventBus): The event bus to publish events to.
         """
         if self._vad_task is not None:
             msg = "Transcription controller already started"
@@ -76,6 +80,7 @@ class DefaultTranscriptionController(TranscriptionController):
         self._no_speech_event.set()
         self._clock = clock
         self._transcript = transcript
+        self._event_bus = event_bus
         self._vad_task = asyncio.create_task(self._vad_worker())
 
     async def stop(self) -> None:
@@ -96,27 +101,21 @@ class DefaultTranscriptionController(TranscriptionController):
 
         self._clock = None
         self._transcript = None
+        self._event_bus = None
         self._window_queue = None
 
-    def add_listener(
-        self, listener: Callable[[str], Coroutine[None, None, None]]
-    ) -> Callable[[], None]:
-        """Add a listener."""
-        self._listeners.add(listener)
-        return lambda: self._listeners.discard(listener)
-
-    def _notify(self, event: str) -> None:
-        """Notify all listeners in a fire and forget manner.
+    def _notify(self, event_type: EventType) -> None:
+        """Notify event bus of an event.
 
         Args:
-            event (str): The event to notify listeners about.
-
-        TODO: improve event handling
+            event_type (EventType): The event type to publish.
         """
-        for listener in self._listeners:
-            asyncio.create_task(listener(event))  # noqa: RUF006
+        if self._event_bus is None:
+            return
 
-    async def _vad_worker(self) -> None:  # noqa: C901, PLR0915
+        self._event_bus.publish(event_type)
+
+    async def _vad_worker(self) -> None:  # noqa: C901
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
         last_speech: int | None = None
@@ -147,7 +146,7 @@ class DefaultTranscriptionController(TranscriptionController):
 
             if window.is_speech and self._window_queue is None:
                 # utterance start
-                logger.info("Utterance start: %.2fs", window.time_ns / 1e9)
+                logger.debug("Utterance start: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.clear()
                 if len(self._stt_tasks) >= self.max_stt_tasks:
                     logger.warning(
@@ -169,7 +168,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 and (window.time_ns - last_speech) / 1e9 >= self.utterance_tail_seconds
             ):
                 # utterance end
-                logger.info("Utterance end: %.2fs", window.time_ns / 1e9)
+                logger.debug("Utterance end: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.set()
                 last_speech = None
                 if self._window_queue is not None:
@@ -190,8 +189,6 @@ class DefaultTranscriptionController(TranscriptionController):
                     self._window_queue.put_nowait(window)
                 except asyncio.QueueFull:
                     dropped_windows += 1
-                    if dropped_windows == 1:
-                        logger.info("Window queue is full, dropping audio windows")
                 else:
                     if dropped_windows > 0:
                         logger.warning(
@@ -248,7 +245,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 self._transcript.add_segment(segment)
                 logger.info(
                     "%s: %s (%.2fs-%.2fs)",
-                    segment.speaker if segment.speaker else "Unknown",
+                    segment.speaker if segment.speaker else "Participant",
                     segment.text,
                     segment.start,
                     segment.end,

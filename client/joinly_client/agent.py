@@ -1,8 +1,7 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable
-from typing import Any, Self
+from typing import Self
 
 from pydantic_ai.direct import model_request
 from pydantic_ai.messages import (
@@ -18,25 +17,10 @@ from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 
-from joinly_client.types import TranscriptSegment
+from joinly_client.types import ToolExecutor, TranscriptSegment
+from joinly_client.utils import get_prompt
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_PROMPT = (
-    "You are joinly, a professional and knowledgeable meeting assistant. "
-    "Provide concise, valuable contributions in the meeting. "
-    "You are only with one other participant in the meeting, therefore "
-    "respond to all messages and questions. "
-    "When you are greeted, respond politely in spoken language. "
-    "Give information, answer questions, and fullfill tasks as needed. "
-    "You receive real-time transcripts from the ongoing meeting. "
-    "Respond interactively and use available tools to assist participants. "
-    "Always finish your response with the 'finish' tool. "
-    "Never directly use the 'finish' tool, always respond first and then use it. "
-    "If interrupted mid-response, use 'finish'."
-)
-
-ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
 
 
 class ConversationalToolAgent:
@@ -65,7 +49,7 @@ class ConversationalToolAgent:
             raise ValueError(msg)
 
         self._llm = llm
-        self._prompt = prompt or DEFAULT_PROMPT
+        self._prompt = prompt or get_prompt()
         self._tools = tools
         self._tool_executor = tool_executor
         self._messages: list[ModelMessage] = []
@@ -117,7 +101,7 @@ class ConversationalToolAgent:
             self._messages.append(response)
             if request:
                 self._messages.append(request)
-            if self._check_finished(response):
+            if self._check_finished(response, request):
                 break
 
     async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
@@ -211,17 +195,34 @@ class ConversationalToolAgent:
             tool_call_id=tool_call.tool_call_id,
         )
 
-    def _check_finished(self, response: ModelResponse) -> bool:
+    def _check_finished(
+        self, response: ModelResponse, request: ModelRequest | None
+    ) -> bool:
         """Check if the response indicates that the agent has finished.
 
-        Returns True if the agent called the 'finish' tool or if there are no tool
-        calls.
+        Returns True if the agent called the 'finish' tool, if there are no tool
+        calls, or if tool response includes speech interruption.
 
         Args:
             response (ModelResponse): The response from the LLM.
+            request (ModelRequest): The request sent to the LLM.
 
         Returns:
             bool: True if the agent has finished, False otherwise.
         """
         tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
-        return not tool_calls or any(p.tool_name == "finish" for p in tool_calls)
+        tool_responses = (
+            [p for p in request.parts if isinstance(p, ToolReturnPart)]
+            if request
+            else []
+        )
+
+        return (
+            not tool_calls
+            or any(p.tool_name == "finish" for p in tool_calls)
+            or any(
+                p
+                for p in tool_responses
+                if "Interrupted by detected speech" in str(p.content)
+            )
+        )

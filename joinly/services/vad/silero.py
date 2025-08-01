@@ -65,7 +65,7 @@ class SileroVAD(BasePaddedVAD):
             providers=["CPUExecutionProvider"],
         )
         self._state = np.zeros((2, 1, 128), dtype=np.float32)
-        logger.info("Loaded VAD model")
+        logger.debug("Loaded VAD model")
 
         return self
 

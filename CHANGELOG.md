@@ -1,6 +1,20 @@
 
 # Changelog
 
+## v0.3.3 - 2025-07-31
+
+### Improvements
+
+- add health check endpoint to MCP server (#66)
+- improve default voice selection for ElevenLabs TTS (#68)
+- adapt logging levels for less noise in the logs (#69)
+- update release workflow pipeline and update cuda image tag (#70)
+- add lite image variant without local model weights (#71)
+
+### Fixed
+
+- mark zoom waiting room as a successful join to fix potential timeouts (#67)
+
 ## v0.3.2 - 2025-07-14
 
 ### Improvements
