@@ -16,6 +16,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
+from pydantic_ai.usage import Usage
 
 from joinly_client.types import ToolExecutor, TranscriptSegment
 from joinly_client.utils import get_prompt
@@ -53,10 +54,18 @@ class ConversationalToolAgent:
         self._tools = tools
         self._tool_executor = tool_executor
         self._messages: list[ModelMessage] = []
+        self._usage = Usage()
         self._run_task: asyncio.Task | None = None
+
+    @property
+    def usage(self) -> Usage:
+        """Get the usage statistics for the agent."""
+        return self._usage
 
     async def __aenter__(self) -> Self:
         """Enter the agent context."""
+        self._messages = []
+        self._usage = Usage()
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -65,6 +74,15 @@ class ConversationalToolAgent:
             self._run_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._run_task
+        self._run_task = None
+
+        logger.info(
+            "Agent LLM usage: %d requests, %d tokens (%d request, %d response)",
+            self.usage.requests,
+            self.usage.total_tokens or 0,
+            self.usage.request_tokens or 0,
+            self.usage.response_tokens or 0,
+        )
 
     async def on_utterance(self, segments: list[TranscriptSegment]) -> None:
         """Handle an utterance event.
@@ -113,7 +131,7 @@ class ConversationalToolAgent:
         Returns:
             ModelResponse: The response from the LLM.
         """
-        return await model_request(
+        response = await model_request(
             self._llm,
             [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
             model_settings=ModelSettings(
@@ -135,6 +153,8 @@ class ConversationalToolAgent:
                 allow_text_output=False,
             ),
         )
+        self._usage += response.usage
+        return response
 
     async def _call_tools(self, response: ModelResponse) -> ModelRequest | None:
         """Handle the response from the LLM and call tools.
