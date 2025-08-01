@@ -32,9 +32,9 @@ For more details on joinly, see the GitHub repository: [joinly-ai/joinly](https:
 
 We recommend using `uv` for running the client, you can install it using the [command in their repository](https://github.com/astral-sh/uv#Installation).
 
-Connect to a running joinly server and join a meeting:
+Connect to a running joinly server and join a meeting, here loading environment variables from a `.env` file:
 ```bash
-uvx joinly-client --joinly-url http://localhost:8000/mcp/ <MeetingUrl>
+uvx joinly-client --joinly-url http://localhost:8000/mcp/ --env-file .env <MeetingUrl>
 ```
 
 Add other MCP servers using a [configuration file](https://gofastmcp.com/clients/client#configuration-based-clients):
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     asyncio.run(run())
 ```
 
-Or with only the client and a custom agent:
+Or only using the client and a custom agent:
 ```python
 import asyncio
 from joinly_client import JoinlyClient
