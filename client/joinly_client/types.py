@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastmcp import Client
-from joinly_shared.types import SpeakerRole, Transcript, TranscriptSegment
+from joinly_common.types import SpeakerRole, Transcript, TranscriptSegment
 
 __all__ = [
     "SpeakerRole",
