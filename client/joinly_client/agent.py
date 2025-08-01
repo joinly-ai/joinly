@@ -64,6 +64,8 @@ class ConversationalToolAgent:
 
     async def __aenter__(self) -> Self:
         """Enter the agent context."""
+        self._messages = []
+        self._usage = Usage()
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
