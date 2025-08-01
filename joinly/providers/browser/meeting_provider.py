@@ -214,7 +214,12 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             raise RuntimeError(msg)
 
         self._page = await self._browser_session.get_page()
-        self._platform_controller = await self._get_platform_controller(url)
+        try:
+            self._platform_controller = await self._get_platform_controller(url)
+        except RuntimeError:
+            await self._page.close()
+            self._page = None
+            raise
 
         if name is None:
             name = get_settings().name
@@ -233,7 +238,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         async with self._action_guard("leave") as (page, controller):
             try:
                 await controller.leave(page)
-            except Exception:  # noqa: BLE001
+            except RuntimeError:
                 logger.warning(
                     "Failed to leave the meeting, forcing page close.", exc_info=True
                 )
