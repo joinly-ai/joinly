@@ -8,16 +8,17 @@ from typing import Any, Self
 
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp import ResourceUpdatedNotification, ServerNotification
+from mcp import McpError, ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
-from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment
+from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment, Usage
 from joinly_client.utils import is_async_context, name_in_transcript
 
 logger = logging.getLogger(__name__)
 
 TRANSCRIPT_URL = AnyUrl("transcript://live")
 SEGMENTS_URL = AnyUrl("transcript://live/segments")
+USAGE_URL = AnyUrl("usage://current")
 
 
 class JoinlyClient:
@@ -299,3 +300,17 @@ class JoinlyClient:
 
         result = await self.client.call_tool("get_transcript")
         return Transcript.model_validate_json(result.content[0].text)  # type: ignore[attr-defined]
+
+    async def get_usage(self) -> Usage:
+        """Get the current usage statistics from the server.
+
+        Returns:
+            Usage: The current usage statistics.
+        """
+        try:
+            result = await self.client.read_resource(USAGE_URL)
+        except McpError:
+            logger.warning("Failed to get usage statistics")
+            return Usage()
+        else:
+            return Usage.model_validate_json(result[0].text)  # type: ignore[attr-defined]

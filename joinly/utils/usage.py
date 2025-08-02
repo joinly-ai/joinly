@@ -1,7 +1,7 @@
 import logging
 from contextvars import ContextVar, Token
 
-from joinly.types import ServiceUsage, Usage
+from joinly.types import Usage
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,4 @@ def add_usage(
         meta: Additional metadata about the usage.
     """
     current_usage = get_usage()
-    current_usage.add(
-        service,
-        ServiceUsage(usage=usage, meta=meta) if meta else ServiceUsage(usage=usage),
-    )
+    current_usage.add(service, usage=usage, meta=meta)

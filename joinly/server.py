@@ -103,7 +103,6 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
         with CancelScope(shield=True):
             await session_container.__aexit__()
 
-        logger.info("Usage report:\n%s", usage)
         reset_settings(settings_token)
         reset_usage(usage_token)
 
