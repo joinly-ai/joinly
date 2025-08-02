@@ -23,18 +23,20 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
             from rich.logging import RichHandler
 
             logging.basicConfig(
-                level=log_level,
+                level=logging.WARNING if not quiet else logging.ERROR,
                 format="%(message)s",
                 datefmt="[%X]",
                 handlers=[RichHandler(rich_tracebacks=True)],
             )
+            logging.getLogger("joinly").setLevel(log_level)
         except ImportError:
             pass
         else:
             return
 
     logging.basicConfig(
-        level=log_level,
+        level=logging.WARNING if not quiet else logging.ERROR,
         format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    logging.getLogger("joinly").setLevel(log_level)
