@@ -23,7 +23,8 @@ class ServiceUsage(BaseModel):
     def __str__(self) -> str:
         """Return a string representation of the ServiceUsage instance."""
         usage_str = ", ".join(
-            f"{v} {k.replace('_', ' ')}" for k, v in self.usage.items()
+            f"{(v if isinstance(v, int) else f'{v:.4f}')} {k.replace('_', ' ')}"
+            for k, v in self.usage.items()
         )
         meta_str = ", ".join(f"{k}={v}" for k, v in self.meta.items())
         return f"{usage_str} [{meta_str}]"
