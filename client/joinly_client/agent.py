@@ -16,9 +16,8 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
-from pydantic_ai.usage import Usage
 
-from joinly_client.types import ToolExecutor, TranscriptSegment
+from joinly_client.types import ToolExecutor, TranscriptSegment, Usage
 from joinly_client.utils import get_prompt
 
 logger = logging.getLogger(__name__)
@@ -75,14 +74,6 @@ class ConversationalToolAgent:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._run_task
         self._run_task = None
-
-        logger.info(
-            "Agent LLM usage: %d requests, %d tokens (%d request, %d response)",
-            self.usage.requests,
-            self.usage.total_tokens or 0,
-            self.usage.request_tokens or 0,
-            self.usage.response_tokens or 0,
-        )
 
     async def on_utterance(self, segments: list[TranscriptSegment]) -> None:
         """Handle an utterance event.
@@ -153,7 +144,14 @@ class ConversationalToolAgent:
                 allow_text_output=False,
             ),
         )
-        self._usage += response.usage
+        self._usage.add(
+            "llm",
+            usage={
+                "input_tokens": response.usage.request_tokens or 0,
+                "output_tokens": response.usage.response_tokens or 0,
+            },
+            meta={"model": self._llm.model_name},
+        )
         return response
 
     async def _call_tools(self, response: ModelResponse) -> ModelRequest | None:

@@ -8,6 +8,7 @@ from elevenlabs.client import AsyncElevenLabs
 from joinly.core import TTS
 from joinly.settings import get_settings
 from joinly.types import AudioFormat
+from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,12 @@ class ElevenlabsTTS(TTS):
         language_code = None
         if self._model_id in ("eleven_flash_v2_5", "eleven_turbo_v2_5"):
             language_code = get_settings().language
+
+        add_usage(
+            service="elevenlabs_tts",
+            usage={"characters": len(text)},
+            meta={"model": self._model_id, "voice": self._voice_id},
+        )
 
         return self._client.text_to_speech.stream(
             text=text,

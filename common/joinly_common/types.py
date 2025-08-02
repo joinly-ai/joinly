@@ -1,7 +1,14 @@
 from collections.abc import Iterable
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    RootModel,
+    computed_field,
+)
 
 
 class SpeakerRole(str, Enum):
@@ -150,3 +157,79 @@ class Transcript(BaseModel):
                 compacted.append(segment)
 
         return Transcript(segments=compacted)
+
+
+class ServiceUsage(BaseModel):
+    """Dataclass to hold usage statistics for a service."""
+
+    usage: dict[str, int | float]
+    meta: dict[str, str | int | float] = Field(default_factory=dict)
+
+    def add(self, usage: "ServiceUsage") -> None:
+        """Add usage statistics from another ServiceUsage instance.
+
+        Args:
+            usage: Another ServiceUsage instance containing usage statistics to add.
+        """
+        for key, value in usage.usage.items():
+            self.usage[key] = self.usage.get(key, 0) + value
+        for key, value in usage.meta.items():
+            self.meta[key] = value
+
+    def __str__(self) -> str:
+        """Return a string representation of the ServiceUsage instance."""
+        usage_str = ", ".join(
+            f"{(v if isinstance(v, int) else f'{v:.4f}')} {k.replace('_', ' ')}"
+            for k, v in self.usage.items()
+        )
+        meta_str = ", ".join(f"{k}={v}" for k, v in self.meta.items())
+        return f"{usage_str} [{meta_str}]"
+
+
+class Usage(RootModel):
+    """Dataclass to hold the overall usage statistics."""
+
+    root: dict[str, ServiceUsage] = Field(default_factory=dict)
+
+    def add(
+        self,
+        service: str,
+        usage: ServiceUsage | dict[str, int | float],
+        meta: dict[str, str | int | float] | None = None,
+    ) -> None:
+        """Add usage statistics for a specific service.
+
+        Args:
+            service: The name of the service.
+            usage: A ServiceUsage instance or a dictionary containing usage statistics.
+            meta: Optional metadata associated with the usage statistics.
+        """
+        service_usage = (
+            ServiceUsage(usage=usage, meta=meta or {})
+            if isinstance(usage, dict)
+            else usage
+        )
+        if service not in self.root:
+            self.root[service] = service_usage
+        else:
+            self.root[service].add(service_usage)
+
+    def merge(self, other: "Usage") -> "Usage":
+        """Merge another Usage instance into this one, creating a copy.
+
+        Args:
+            other: Another Usage instance to merge.
+
+        Returns:
+            Usage: A new Usage instance containing the merged statistics.
+        """
+        merged = Usage()
+        for service, usage in self.root.items():
+            merged.add(service, usage)
+        for service, usage in other.root.items():
+            merged.add(service, usage)
+        return merged
+
+    def __str__(self) -> str:
+        """Return a string representation of the Usage instance."""
+        return "\n".join(f"{service}: {usage}" for service, usage in self.root.items())
