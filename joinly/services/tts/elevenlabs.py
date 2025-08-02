@@ -61,7 +61,7 @@ class ElevenlabsTTS(TTS):
         add_usage(
             service="elevenlabs_tts",
             usage={"characters": len(text)},
-            meta={"voice_id": self._voice_id, "model_id": self._model_id},
+            meta={"model": self._model_id, "voice": self._voice_id},
         )
 
         return self._client.text_to_speech.stream(
