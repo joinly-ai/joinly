@@ -134,6 +134,11 @@ class DeepgramSTT(STT):
         await self._client.finish()
         self._queue = None
 
+        logger.info(
+            "STT Deepgram usage: %.4f minutes",
+            self._sent_seconds / 60.0,
+        )
+
     async def stream(  # noqa: C901
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
