@@ -20,13 +20,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy app source code
 COPY . /app
 
+# Remove packages
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv remove --no-sync faster-whisper kokoro-onnx webrtcvad-wheels joinly-client
+
 # Install application into .venv (non-editable mode)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
-
-# Remove packages
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv remove faster-whisper kokoro-onnx webrtcvad-wheels
 
 # Stage 2: Runtime image
 FROM python:3.12-slim

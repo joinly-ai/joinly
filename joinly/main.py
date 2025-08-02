@@ -4,7 +4,6 @@ import logging
 from typing import Any
 
 import click
-import joinly_client
 from dotenv import load_dotenv
 
 from joinly.server import mcp
@@ -290,6 +289,8 @@ def cli(  # noqa: PLR0913
     if server:
         mcp.run(transport="streamable-http", host=host, port=port, show_banner=False)
     else:
+        import joinly_client
+
         if not meeting_url:
             msg = (
                 "Meeting URL is required when running as a client. "
