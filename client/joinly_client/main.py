@@ -235,11 +235,12 @@ def cli(  # noqa: PLR0913
         log_level = logging.DEBUG
 
     logging.basicConfig(
-        level=log_level,
+        level=logging.WARNING,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
+    logging.getLogger("joinly_client").setLevel(log_level)
 
     if prompt_file and not prompt:
         try:

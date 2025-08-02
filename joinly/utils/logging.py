@@ -29,6 +29,7 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
                 handlers=[RichHandler(rich_tracebacks=True)],
             )
             logging.getLogger("joinly").setLevel(log_level)
+            logging.getLogger("joinly_client").setLevel(log_level)
         except ImportError:
             pass
         else:
@@ -40,3 +41,4 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     logging.getLogger("joinly").setLevel(log_level)
+    logging.getLogger("joinly_client").setLevel(log_level)
