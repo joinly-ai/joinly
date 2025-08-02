@@ -13,8 +13,6 @@ from joinly.utils.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
 
 def _parse_kv(
     _ctx: click.Context, _param: click.Parameter, value: tuple[str]
@@ -111,6 +109,16 @@ def _parse_kv(
     show_default=True,
     show_envvar=True,
     envvar=["JOINLY_LLM_MODEL", "JOINLY_MODEL_NAME"],
+)
+@click.option(
+    "--env-file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help="Path to a .env file to load environment variables from.",
+    default=None,
+    show_default=True,
+    is_eager=True,
+    expose_value=False,
+    callback=lambda _ctx, _param, value: load_dotenv(value),
 )
 @click.option(
     "--name-trigger",
