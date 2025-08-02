@@ -2,7 +2,7 @@ import logging
 from contextvars import ContextVar, Token
 from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,11 @@ class ServiceUsage(BaseModel):
     meta: dict[str, str | int | float] = Field(default_factory=dict)
 
     def add(self, usage: Self) -> None:
-        """Add usage statistics from another ServiceUsage instance."""
+        """Add usage statistics from another ServiceUsage instance.
+
+        Args:
+            usage: Another ServiceUsage instance containing usage statistics to add.
+        """
         for key, value in usage.usage.items():
             self.usage[key] = self.usage.get(key, 0) + value
         for key, value in usage.meta.items():
@@ -30,7 +34,27 @@ class ServiceUsage(BaseModel):
         return f"{usage_str} [{meta_str}]"
 
 
-Usage = dict[str, ServiceUsage]
+class Usage(RootModel):
+    """Dataclass to hold the overall usage statistics."""
+
+    root: dict[str, ServiceUsage] = Field(default_factory=dict)
+
+    def add(self, service: str, usage: ServiceUsage) -> None:
+        """Add usage statistics for a specific service.
+
+        Args:
+            service: The name of the service.
+            usage: A ServiceUsage instance containing the usage statistics.
+        """
+        if service not in self.root:
+            self.root[service] = usage
+        else:
+            self.root[service].add(usage)
+
+    def __str__(self) -> str:
+        """Return a string representation of the Usage instance."""
+        return "\n".join(f"{service}: {usage}" for service, usage in self.root.items())
+
 
 _current_usage: ContextVar[Usage] = ContextVar("current_usage", default=Usage())  # noqa: B039
 
@@ -78,17 +102,7 @@ def add_usage(
         meta: Additional metadata about the usage.
     """
     current_usage = get_usage()
-    service_usage = (
-        ServiceUsage(usage=usage, meta=meta) if meta else ServiceUsage(usage=usage)
+    current_usage.add(
+        service,
+        ServiceUsage(usage=usage, meta=meta) if meta else ServiceUsage(usage=usage),
     )
-    if service not in current_usage:
-        current_usage[service] = service_usage
-    else:
-        current_usage[service].add(service_usage)
-
-
-def log_usage() -> None:
-    """Log the current usage statistics."""
-    current_usage = get_usage()
-    for service, usage in current_usage.items():
-        logger.info("%s: %s", service, usage)
