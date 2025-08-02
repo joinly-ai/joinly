@@ -20,8 +20,9 @@ from joinly.types import (
     SpeakerRole,
     SpeechInterruptedError,
     Transcript,
+    Usage,
 )
-from joinly.utils.usage import Usage, get_usage, reset_usage, set_usage
+from joinly.utils.usage import get_usage, reset_usage, set_usage
 
 logger = logging.getLogger(__name__)
 
