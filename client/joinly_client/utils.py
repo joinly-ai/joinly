@@ -44,7 +44,7 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
         if not ollama_url:
             ollama_url = (
                 f"http://{os.getenv('OLLAMA_HOST', 'localhost')}:"
-                f"{os.getenv('OLLAMA_PORT', '11434')}"
+                f"{os.getenv('OLLAMA_PORT', '11434')}/v1"
             )
         return OpenAIModel(
             model_name,
