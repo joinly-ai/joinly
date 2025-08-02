@@ -122,7 +122,6 @@ class DeepgramTTS(TTS):
                 _ = self._queue.get_nowait()
 
             try:
-                self._usage_characters += len(text)
                 await self._client.send_text(text)
                 await self._client.flush()
                 add_usage(
