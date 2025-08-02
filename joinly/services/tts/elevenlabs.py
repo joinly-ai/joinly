@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import AsyncIterator
+from typing import Self
 
 from elevenlabs.client import AsyncElevenLabs
 
@@ -43,6 +44,18 @@ class ElevenlabsTTS(TTS):
         self._client = AsyncElevenLabs()
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
+        self._usage_characters: int = 0
+
+    async def __aenter__(self) -> Self:
+        """Enter the asynchronous context manager."""
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        """Exit the asynchronous context manager."""
+        logger.info(
+            "TTS ElevenLabs usage: %d characters",
+            self._usage_characters,
+        )
 
     def stream(self, text: str) -> AsyncIterator[bytes]:
         """Convert text to speech and stream the audio data.
@@ -56,6 +69,8 @@ class ElevenlabsTTS(TTS):
         language_code = None
         if self._model_id in ("eleven_flash_v2_5", "eleven_turbo_v2_5"):
             language_code = get_settings().language
+
+        self._usage_characters += len(text)
 
         return self._client.text_to_speech.stream(
             text=text,

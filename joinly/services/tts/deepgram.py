@@ -57,6 +57,7 @@ class DeepgramTTS(TTS):
         self._queue: asyncio.Queue[bytes | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
+        self._usage_characters: int = 0
 
     async def __aenter__(self) -> Self:
         """Enter the asynchronous context manager."""
@@ -94,6 +95,8 @@ class DeepgramTTS(TTS):
             raise RuntimeError(msg)
         logger.debug("Connected to Deepgram TTS service")
 
+        self._usage_characters = 0
+
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -101,6 +104,11 @@ class DeepgramTTS(TTS):
         logger.debug("Closing Deepgram TTS service connection")
         await self._client.finish()
         self._queue = None
+
+        logger.info(
+            "TTS Deepgram usage: %d characters",
+            self._usage_characters,
+        )
 
     async def stream(self, text: str) -> AsyncIterator[bytes]:
         """Convert text to speech and stream the audio data.
@@ -121,6 +129,7 @@ class DeepgramTTS(TTS):
                 _ = self._queue.get_nowait()
 
             try:
+                self._usage_characters += len(text)
                 await self._client.send_text(text)
                 await self._client.flush()
 
