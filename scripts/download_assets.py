@@ -6,8 +6,6 @@ import subprocess
 import sys
 import urllib.request
 
-from faster_whisper import WhisperModel
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -22,6 +20,8 @@ def download_playwright() -> None:
 
 def download_whisper(model_name: str) -> None:
     """Download Whisper model."""
+    from faster_whisper import WhisperModel
+
     logger.info("Downloading Whisper model %s", model_name)
     _ = WhisperModel(model_name)
     logger.info("Whisper model downloaded successfully")
