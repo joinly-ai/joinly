@@ -22,6 +22,7 @@ from joinly.types import (
     TranscriptSegment,
 )
 from joinly.utils.audio import calculate_audio_duration
+from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,11 @@ class DeepgramSTT(STT):
         config = DeepgramClientOptions(options={"keep_alive": True})
         dg = DeepgramClient(config=config)
         self._client: AsyncListenWebSocketClient = dg.listen.asyncwebsocket.v("1")  # type: ignore[attr-type]
-        model_name = model_name or (
+        self.model_name = model_name or (
             "nova-3-general" if get_settings().language == "en" else "nova-2-general"
         )
         self._live_options = LiveOptions(
-            model=model_name,
+            model=self.model_name,
             encoding="linear16",
             sample_rate=sample_rate,
             language=get_settings().language,
@@ -70,7 +71,7 @@ class DeepgramSTT(STT):
             vad_events=False,
             keyterm=(
                 (hotwords or []) + [get_settings().name]
-                if model_name.startswith("nova-3")
+                if self.model_name.startswith("nova-3")
                 else None
             ),
         )
@@ -134,12 +135,7 @@ class DeepgramSTT(STT):
         await self._client.finish()
         self._queue = None
 
-        logger.info(
-            "STT Deepgram usage: %.4f minutes",
-            self._sent_seconds / 60.0,
-        )
-
-    async def stream(  # noqa: C901
+    async def stream(  # noqa: C901, PLR0915
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
         """Stream audio windows and yield transcribed segments.
@@ -164,6 +160,11 @@ class DeepgramSTT(STT):
             if self._padding_silence:
                 self._sent_seconds += self._padding_silence_dur
                 await self._client.send(self._padding_silence)
+                add_usage(
+                    service="deepgram_stt",
+                    usage={"minutes": self._padding_silence_dur / 60},
+                    meta={"model": self.model_name},
+                )
             async for window in windows:
                 if stream_start is None:
                     stream_start = window.time_ns / 1e9
@@ -175,6 +176,11 @@ class DeepgramSTT(STT):
                         (cur - stream_start, cur - stream_start + dur, window.speaker)
                     )
                 await self._client.send(window.data)
+                add_usage(
+                    service="deepgram_stt",
+                    usage={"minutes": dur / 60},
+                    meta={"model": self.model_name},
+                )
             await self._client.finalize()
 
         async with self._lock:

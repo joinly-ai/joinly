@@ -2,13 +2,13 @@ import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import AsyncIterator
-from typing import Self
 
 from elevenlabs.client import AsyncElevenLabs
 
 from joinly.core import TTS
 from joinly.settings import get_settings
 from joinly.types import AudioFormat
+from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
 
@@ -44,18 +44,6 @@ class ElevenlabsTTS(TTS):
         self._client = AsyncElevenLabs()
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
-        self._usage_characters: int = 0
-
-    async def __aenter__(self) -> Self:
-        """Enter the asynchronous context manager."""
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        """Exit the asynchronous context manager."""
-        logger.info(
-            "TTS ElevenLabs usage: %d characters",
-            self._usage_characters,
-        )
 
     def stream(self, text: str) -> AsyncIterator[bytes]:
         """Convert text to speech and stream the audio data.
@@ -70,7 +58,11 @@ class ElevenlabsTTS(TTS):
         if self._model_id in ("eleven_flash_v2_5", "eleven_turbo_v2_5"):
             language_code = get_settings().language
 
-        self._usage_characters += len(text)
+        add_usage(
+            service="elevenlabs_tts",
+            usage={"characters": len(text)},
+            meta={"voice_id": self._voice_id, "model_id": self._model_id},
+        )
 
         return self._client.text_to_speech.stream(
             text=text,

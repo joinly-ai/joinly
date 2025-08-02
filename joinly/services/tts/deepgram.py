@@ -14,6 +14,7 @@ from deepgram import (
 from joinly.core import TTS
 from joinly.settings import get_settings
 from joinly.types import AudioFormat
+from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
 
@@ -44,20 +45,19 @@ class DeepgramTTS(TTS):
                 "Unsupported language %s for Deepgram TTS, falling back to English.",
                 get_settings().language,
             )
+        self.model_name = model_name or (
+            "aura-2-estrella-es"
+            if get_settings().language == "es"
+            else "aura-2-andromeda-en"
+        )
         self._speak_options = SpeakWSOptions(
-            model=model_name
-            or (
-                "aura-2-estrella-es"
-                if get_settings().language == "es"
-                else "aura-2-andromeda-en"
-            ),
+            model=self.model_name,
             encoding="linear16",
             sample_rate=sample_rate,
         )
         self._queue: asyncio.Queue[bytes | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
-        self._usage_characters: int = 0
 
     async def __aenter__(self) -> Self:
         """Enter the asynchronous context manager."""
@@ -95,8 +95,6 @@ class DeepgramTTS(TTS):
             raise RuntimeError(msg)
         logger.debug("Connected to Deepgram TTS service")
 
-        self._usage_characters = 0
-
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -104,11 +102,6 @@ class DeepgramTTS(TTS):
         logger.debug("Closing Deepgram TTS service connection")
         await self._client.finish()
         self._queue = None
-
-        logger.info(
-            "TTS Deepgram usage: %d characters",
-            self._usage_characters,
-        )
 
     async def stream(self, text: str) -> AsyncIterator[bytes]:
         """Convert text to speech and stream the audio data.
@@ -132,6 +125,11 @@ class DeepgramTTS(TTS):
                 self._usage_characters += len(text)
                 await self._client.send_text(text)
                 await self._client.flush()
+                add_usage(
+                    service="deepgram_tts",
+                    usage={"characters": len(text)},
+                    meta={"model": self.model_name},
+                )
 
                 while (chunk := await self._queue.get()) is not None:
                     yield chunk
