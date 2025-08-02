@@ -14,6 +14,7 @@ from deepgram import (
 from joinly.core import TTS
 from joinly.settings import get_settings
 from joinly.types import AudioFormat
+from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +45,13 @@ class DeepgramTTS(TTS):
                 "Unsupported language %s for Deepgram TTS, falling back to English.",
                 get_settings().language,
             )
+        self.model_name = model_name or (
+            "aura-2-estrella-es"
+            if get_settings().language == "es"
+            else "aura-2-andromeda-en"
+        )
         self._speak_options = SpeakWSOptions(
-            model=model_name
-            or (
-                "aura-2-estrella-es"
-                if get_settings().language == "es"
-                else "aura-2-andromeda-en"
-            ),
+            model=self.model_name,
             encoding="linear16",
             sample_rate=sample_rate,
         )
@@ -123,6 +124,11 @@ class DeepgramTTS(TTS):
             try:
                 await self._client.send_text(text)
                 await self._client.flush()
+                add_usage(
+                    service="deepgram_tts",
+                    usage={"characters": len(text)},
+                    meta={"model": self.model_name},
+                )
 
                 while (chunk := await self._queue.get()) is not None:
                     yield chunk

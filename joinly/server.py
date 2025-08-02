@@ -21,6 +21,7 @@ from joinly.types import (
     SpeechInterruptedError,
     Transcript,
 )
+from joinly.utils.usage import Usage, get_usage, reset_usage, set_usage
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,8 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     logger.info("Creating meeting session")
     settings = _extract_settings()
     settings_token = set_settings(settings)
+    usage = Usage()
+    usage_token = set_usage(usage)
     session_container = SessionContainer()
     meeting_session = await session_container.__aenter__()
 
@@ -99,7 +102,9 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
         with CancelScope(shield=True):
             await session_container.__aexit__()
 
+        logger.info("Usage report:\n%s", usage)
         reset_settings(settings_token)
+        reset_usage(usage_token)
 
 
 mcp = FastMCP("joinly", lifespan=session_lifespan)
@@ -125,6 +130,16 @@ async def get_transcript_segments(ctx: Context) -> Transcript:
     """Get the live transcript segments of the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     return ms.transcript
+
+
+@mcp.resource(
+    "usage://current",
+    description="Current usage statistics of services",
+    mime_type="application/json",
+)
+async def get_usage_report(_ctx: Context) -> Usage:
+    """Get the current usage statistics."""
+    return get_usage()
 
 
 @mcp.tool(
