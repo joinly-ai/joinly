@@ -51,16 +51,10 @@ Run joinly via Docker with a basic conversational agent client.
 > [!IMPORTANT]
 > **Prerequisites**: [Docker installation](https://docs.docker.com/engine/install/)
 
-Clone this repository:
-```bash
-git clone https://github.com/joinly-ai/joinly
-cd joinly
-```
+Create a new `.env` file in the current directory with a valid API key for the LLM provider you want to use, e.g. OpenAI:
 
-Create a new `.env` file in the project root with your API keys. See [.env.example](.env.example) for complete configuration options including Anthropic (Claude) and Ollama setups. Replace the placeholder values with your actual API keys and adjust the model name as needed.
-
-> [!NOTE]
-> Remember not to copy the [.env.example](.env.example) exactly. Instead, delete the placeholder values of the providers you don't use.
+> [!TIP]
+> You can find the OpenAI API key [here](https://platform.openai.com/api-keys)
 
 ```Dotenv
 # .env
@@ -70,8 +64,10 @@ JOINLY_LLM_MODEL=gpt-4o
 JOINLY_LLM_PROVIDER=openai
 OPENAI_API_KEY=your-openai-api-key
 ```
-> [!TIP]
-> You can find the OpenAI API key [here](https://platform.openai.com/api-keys)
+
+> [!NOTE]
+> See [.env.example](.env.example) for complete configuration options including Anthropic (Claude) and Ollama setups. Replace the placeholder values with your actual API keys and adjust the model name as needed. Delete the placeholder values of the providers you don't use.
+
 
 Pull the Docker image (~2.3GB since it packages browser and models):
 ```bash
@@ -80,47 +76,48 @@ docker pull ghcr.io/joinly-ai/joinly:latest
 
 Launch your meeting in [Zoom](https://www.zoom.com), [Google Meet](https://meet.google.com) or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`:
 ```bash  
-docker run --env-file .env ghcr.io/joinly-ai/joinly:latest -v --client <MeetingURL>
+docker run --env-file .env ghcr.io/joinly-ai/joinly:latest --client <MeetingURL>
 ```
 > :red_circle: Having trouble getting started? Let's figure it out together on our [discord](https://discord.com/invite/AN5NEBkS4d)! 
 
 # :technologist: Run an external client
-In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to control the entire logic of our agent. Here, we run an external client implementation and connect it to the joinly MCP server.
+In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to control the entire logic of our agent. Here, we run an external client using the [joinly-client package](https://pypi.org/project/joinly-client/) and connect it to the joinly MCP server.
 
 > [!IMPORTANT]
 > **Prerequisites**: do the [Quickstart](#zap-quickstart) (except the last command), [install uv](https://github.com/astral-sh/uv), and open two terminals
 
 Start the joinly server in the first terminal (note, we are not using `--client` here and forward port `8000`):
 ```bash  
-docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:latest -v
+docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
 ```
 
 While the server is running, start the example client implementation in the second terminal window to connect to it and join a meeting:
 ```bash  
-uv run examples/client_example.py --mcp-url http://127.0.0.1:8000/mcp/ <MeetingUrl>
+uvx joinly-client --joinly-url http://localhost:8000/mcp/ --env-file .env <MeetingUrl>
 ```
 
 ## Add MCP servers to the client
-Add the tools of any MCP server to the example client by providing a JSON configuration. In [config_tavily.json](examples/config_tavily.json), we add the Tavily MCP server for web search functionality (requires `TAVILY_API_KEY` in `.env`):
+Add the tools of any MCP server to the example client by providing a JSON configuration. The configuration file can contain multiple entries under `"mcpServers"` which will all be available as tools in the meeting (see [fastmcp client docs](https://gofastmcp.com/clients/client) for config syntax):
 
 ```json
 {
     "mcpServers": {
-        "tavily": {
+        "localServer": {
             "command": "npx",
-            "args": ["-y", "tavily-mcp@0.2.2"]
+            "args": ["-y", "package@0.1.0"]
+        },
+        "remoteServer": {
+            "url": "http://mcp.example.com",
+            "auth": "oauth"
         }
     }
 }
 ```
 
-You can also add multiple entries under `"mcpServers"` which will all be available as tools in the meeting (see [fastmcp client docs](https://gofastmcp.com/clients/client) for config syntax). Then, run the client using the config file (`--config <file>`):
+Run the client using the config file:
 
-> [!IMPORTANT]
-> Make sure the joinly server is running in the other terminal
-
-```bash  
-uv run examples/client_example.py --mcp-url http://127.0.0.1:8000/mcp/ --config examples/config_tavily.json <MeetingUrl>
+```bash
+uvx joinly-client --mcp-config config.json <MeetingUrl>
 ```
 
 # :wrench: Configurations
@@ -209,7 +206,7 @@ By default, the `joinly` image uses the Whisper model `base` for transcription, 
 
 # :test_tube: Create your own client
 
-You can also write your own client from scratch and connect it to our joinly MCP server. See [client_example.py](examples/client_example.py) for a starting point.
+You can also write your own client from scratch and connect it to our joinly MCP server. See the [code examples](https://github.com/joinly-ai/joinly/client/README.md#code-usage) for the joinly-client package or the [client_example.py](examples/client_example.py) if you want a starting poin that doesn't depend on our framework.
 
 The joinly MCP server provides following tools and resources:
 
