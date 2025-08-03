@@ -177,6 +177,7 @@ class JoinlyClient:
         """
         if participant_name is not None:
             self.name = participant_name
+        logger.info("Joining meeting at %s", meeting_url)
         await self.client.call_tool(
             "join_meeting",
             arguments={
@@ -185,6 +186,7 @@ class JoinlyClient:
                 "participant_name": self.name,
             },
         )
+        logger.info("Joined meeting successfully")
         self.joined = True
         self._last_utterance = 0.0
         self._last_segment = 0.0
@@ -237,7 +239,7 @@ class JoinlyClient:
             await self._stack.aclose()
             raise
         else:
-            logger.info("Connected to joinly server")
+            logger.debug("Connected to joinly server")
 
         if self._utterance_callbacks:
             await self._client.session.subscribe_resource(TRANSCRIPT_URL)
