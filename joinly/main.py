@@ -267,7 +267,7 @@ def cli(  # noqa: PLR0913
     verbose: int,
     quiet: bool,
     logging_plain: bool,
-    **cli_settings: dict[str, Any],
+    **cli_settings: Any,  # noqa: ANN401
 ) -> None:
     """Start joinly MCP server or server + client to join meetings."""
     if cli_settings.get("meeting_provider") == "browser" and vnc_server:

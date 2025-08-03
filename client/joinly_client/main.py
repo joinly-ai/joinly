@@ -223,7 +223,7 @@ def cli(  # noqa: PLR0913
     mcp_config: str | None,
     meeting_url: str,
     verbose: int,
-    **settings: dict[str, Any],
+    **settings: Any,  # noqa: ANN401
 ) -> None:
     """Run the joinly client."""
     from rich.logging import RichHandler
