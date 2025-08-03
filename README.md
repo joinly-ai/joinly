@@ -81,7 +81,7 @@ docker run --env-file .env ghcr.io/joinly-ai/joinly:latest --client <MeetingURL>
 > :red_circle: Having trouble getting started? Let's figure it out together on our [discord](https://discord.com/invite/AN5NEBkS4d)! 
 
 # :technologist: Run an external client
-In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to control the entire logic of our agent. Here, we run an external client using the [joinly-client package](https://pypi.org/project/joinly-client/) and connect it to the joinly MCP server.
+In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to connect other MCP servers. Here, we run an external client using the [joinly-client package](https://pypi.org/project/joinly-client/) and connect it to the joinly MCP server.
 
 > [!IMPORTANT]
 > **Prerequisites**: do the [Quickstart](#zap-quickstart) (except the last command), [install uv](https://github.com/astral-sh/uv), and open two terminals
@@ -97,7 +97,7 @@ uvx joinly-client --env-file .env <MeetingUrl>
 ```
 
 ## Add MCP servers to the client
-Add the tools of any MCP server to the example client by providing a JSON configuration. The configuration file can contain multiple entries under `"mcpServers"` which will all be available as tools in the meeting (see [fastmcp client docs](https://gofastmcp.com/clients/client) for config syntax):
+Add the tools of any MCP server to the agent by providing a JSON configuration. The configuration file can contain multiple entries under `"mcpServers"` which will all be available as tools in the meeting (see [fastmcp client docs](https://gofastmcp.com/clients/client) for config syntax):
 
 ```json
 {
@@ -209,9 +209,9 @@ docker run --gpus all --env-file .env ghcr.io/joinly-ai/joinly:latest-cuda -v --
 
 By default, the `joinly` image uses the Whisper model `base` for transcription, since it still runs reasonably fast on CPU. For `cuda`, it automatically defaults to `distil-large-v3` for significantly better transcription quality. You can change the model by setting `--stt-arg model_name=<model_name>` (e.g., `--stt-arg model_name=large-v3`). However, only the respective default models are packaged in the docker image, so it will start to download the model weights on container start.
 
-# :test_tube: Create your own client
+# :test_tube: Create your own agent
 
-You can also write your own client from scratch and connect it to our joinly MCP server. See the [code examples](https://github.com/joinly-ai/joinly/client/README.md#code-usage) for the joinly-client package or the [client_example.py](examples/client_example.py) if you want a starting point that doesn't depend on our framework.
+You can also write your own agent and connect it to our joinly MCP server. See the [code examples](https://github.com/joinly-ai/joinly/client/README.md#code-usage) for the joinly-client package or the [client_example.py](examples/client_example.py) if you want a starting point that doesn't depend on our framework.
 
 The joinly MCP server provides following tools and resources:
 
@@ -226,7 +226,6 @@ The joinly MCP server provides following tools and resources:
 - **`get_chat_history`** - Get current meeting chat history in JSON format
 - **`get_participants`** - Get current meeting participants in JSON format
 - **`get_transcript`** - Get current meeting transcript in JSON format, optionally filtered by minutes
-- *more soon...*
 
 ### Resources
 
