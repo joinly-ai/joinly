@@ -72,10 +72,15 @@ uvx joinly-client --help
 Direct use of run function:
 ```python
 import asyncio
-import joinly_client.run
 
-async def run():
-    await joinly_client.run(
+from dotenv import load_dotenv
+from joinly_client import run
+
+load_dotenv()
+
+
+async def async_run():
+    await run(
         joinly_url="http://localhost:8000/mcp/",
         meeting_url="<MeetingUrl>",
         llm_provider="openai",
@@ -87,13 +92,15 @@ async def run():
         settings=None,  # settings propagated to joinly server (dict)
     )
 
+
 if __name__ == "__main__":
-    asyncio.run(run())
+    asyncio.run(async_run())
 ```
 
 Or only using the client and a custom agent:
 ```python
 import asyncio
+
 from joinly_client import JoinlyClient
 from joinly_client.types import TranscriptSegment
 
@@ -111,6 +118,7 @@ async def run():
             print(f"Received utterance: {segment.text}")
             if "marco" in segment.text.lower():
                 await client.client.call_tool("speak_text", {"text": "Polo!"})
+
     client.add_utterance_callback(on_utterance)
 
     async with client:
@@ -118,8 +126,12 @@ async def run():
         tool_list = await client.client.list_tools()
 
         await client.join_meeting("<MeetingUrl>")
-        await asyncio.Event().wait()  # wait until cancelled
-        
+        try:
+            await asyncio.Event().wait()  # wait until cancelled
+        finally:
+            print(await client.get_transcript())  # print the final transcript
+
+
 if __name__ == "__main__":
     asyncio.run(run())
 ```
