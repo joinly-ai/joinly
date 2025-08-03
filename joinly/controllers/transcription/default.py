@@ -243,14 +243,14 @@ class DefaultTranscriptionController(TranscriptionController):
                     speaker=s.speaker,
                 )
                 self._transcript.add_segment(segment)
-                logger.info(
+                self._notify("segment")
+                logger.debug(
                     "%s: %s (%.2fs-%.2fs)",
                     segment.speaker if segment.speaker else "Participant",
                     segment.text,
                     segment.start,
                     segment.end,
                 )
-                self._notify("segment")
                 seg_count += 1
         except Exception:
             logger.exception("Error during STT processing")
@@ -259,6 +259,6 @@ class DefaultTranscriptionController(TranscriptionController):
         if seg_count > 0:
             if end_ts is not None:
                 latency = time.monotonic() - end_ts
-                log_level = logging.WARNING if latency > 0.5 else logging.INFO  # noqa: PLR2004
+                log_level = logging.WARNING if latency > 0.3 else logging.DEBUG  # noqa: PLR2004
                 logger.log(log_level, "STT utterance latency: %.3fs", latency)
             self._notify("utterance")
