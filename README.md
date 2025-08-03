@@ -51,7 +51,7 @@ Run joinly via Docker with a basic conversational agent client.
 > [!IMPORTANT]
 > **Prerequisites**: [Docker installation](https://docs.docker.com/engine/install/)
 
-Create a new `.env` file in the current directory with a valid API key for the LLM provider you want to use, e.g. OpenAI:
+Create a new folder `joinly` or clone this repository (not mandatory for the following steps). In this directory, create a new `.env` file with a valid API key for the LLM provider you want to use, e.g. OpenAI:
 
 > [!TIP]
 > You can find the OpenAI API key [here](https://platform.openai.com/api-keys)
@@ -74,7 +74,7 @@ Pull the Docker image (~2.3GB since it packages browser and models):
 docker pull ghcr.io/joinly-ai/joinly:latest
 ```
 
-Launch your meeting in [Zoom](https://www.zoom.com), [Google Meet](https://meet.google.com) or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`:
+Launch your meeting in [Zoom](https://www.zoom.com), [Google Meet](https://meet.google.com) or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`. Run the following command from the folder where you created the `.env` file:
 ```bash  
 docker run --env-file .env ghcr.io/joinly-ai/joinly:latest --client <MeetingURL>
 ```
@@ -114,7 +114,7 @@ Add the tools of any MCP server to the example client by providing a JSON config
 }
 ```
 
-Run the client using the config file:
+Run the client using the config file, here `config.json`:
 
 ```bash
 uvx joinly-client --mcp-config config.json <MeetingUrl>
@@ -125,6 +125,11 @@ uvx joinly-client --mcp-config config.json <MeetingUrl>
 Configurations can be given via env variables and/or command line args. Here is a list of common configuration options, which can be used when starting the docker container:
 ```bash
 docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:latest <MyOptionArgs>
+```
+
+Alternatively, you can pass `--name`, `--lang`, and [provider settings](#providers) as command line arguments using `joinly-client`, which will override settings of the server:
+```bash
+uvx joinly-client <MyOptionArgs> <MeetingUrl>
 ```
 
 ## Basic Settings
