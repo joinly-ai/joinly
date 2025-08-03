@@ -301,8 +301,9 @@ def cli(  # noqa: PLR0913
             joinly_client.run(
                 joinly_url=mcp,
                 meeting_url=meeting_url,
-                llm_model=llm_model,
                 llm_provider=llm_provider,
+                llm_model=llm_model,
+                name=settings.name,
                 name_trigger=name_trigger,
             )
         )
