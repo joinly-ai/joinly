@@ -74,7 +74,7 @@ Pull the Docker image (~2.3GB since it packages browser and models):
 docker pull ghcr.io/joinly-ai/joinly:latest
 ```
 
-Launch your meeting in [Zoom](https://www.zoom.com), [Google Meet](https://meet.google.com) or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`. Run the following command from the folder where you created the `.env` file:
+Launch your meeting in [Zoom](https://www.zoom.com), [Google Meet](https://meet.google.com) or Teams and let joinly join the meeting using the meeting link as `<MeetingURL>`. Then, run the following command from the folder where you created the `.env` file:
 ```bash  
 docker run --env-file .env ghcr.io/joinly-ai/joinly:latest --client <MeetingURL>
 ```
@@ -93,7 +93,7 @@ docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
 
 While the server is running, start the example client implementation in the second terminal window to connect to it and join a meeting:
 ```bash  
-uvx joinly-client --joinly-url http://localhost:8000/mcp/ --env-file .env <MeetingUrl>
+uvx joinly-client --env-file .env <MeetingUrl>
 ```
 
 ## Add MCP servers to the client
@@ -114,10 +114,10 @@ Add the tools of any MCP server to the example client by providing a JSON config
 }
 ```
 
-Run the client using the config file, here `config.json`:
+Add for example a [Tavily config](examples/config_tavily.json) for web searching, then run the client using the config file, here named `config.json`:
 
 ```bash
-uvx joinly-client --mcp-config config.json <MeetingUrl>
+uvx joinly-client --env-file .env --mcp-config config.json <MeetingUrl>
 ```
 
 # :wrench: Configurations
