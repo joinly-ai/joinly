@@ -211,7 +211,7 @@ By default, the `joinly` image uses the Whisper model `base` for transcription, 
 
 # :test_tube: Create your own client
 
-You can also write your own client from scratch and connect it to our joinly MCP server. See the [code examples](https://github.com/joinly-ai/joinly/client/README.md#code-usage) for the joinly-client package or the [client_example.py](examples/client_example.py) if you want a starting poin that doesn't depend on our framework.
+You can also write your own client from scratch and connect it to our joinly MCP server. See the [code examples](https://github.com/joinly-ai/joinly/client/README.md#code-usage) for the joinly-client package or the [client_example.py](examples/client_example.py) if you want a starting point that doesn't depend on our framework.
 
 The joinly MCP server provides following tools and resources:
 
