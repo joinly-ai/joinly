@@ -11,7 +11,7 @@ from fastmcp import Client, FastMCP
 
 from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
-from joinly_client.types import McpClientConfig
+from joinly_client.types import McpClientConfig, TranscriptSegment
 from joinly_client.utils import get_llm, get_prompt, load_tools
 
 logger = logging.getLogger(__name__)
@@ -311,6 +311,13 @@ async def run(  # noqa: PLR0913
     )
     mcp_client = Client(mcp_config) if mcp_config else None
     llm = get_llm(llm_provider, llm_model)
+
+    async def log_segments(segments: list[TranscriptSegment]) -> None:
+        """Log segments received from the client."""
+        for segment in segments:
+            logger.info('%s: "%s"', segment.speaker or "Participant", segment.text)
+
+    client.add_segment_callback(log_segments)
 
     async with client, mcp_client or contextlib.nullcontext():
         joinly_config = McpClientConfig(client=client.client, exclude=["join_meeting"])

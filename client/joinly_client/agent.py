@@ -96,11 +96,6 @@ class ConversationalToolAgent:
                 process.
         """
         for segment in segments:
-            logger.info(
-                '%s: "%s"',
-                segment.speaker or "Participant",
-                segment.text,
-            )
             prompt = f"{segment.speaker or 'Participant'}: {segment.text}"
             self._messages.append(ModelRequest.user_text_prompt(prompt))
 

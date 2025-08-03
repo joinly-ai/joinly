@@ -208,7 +208,7 @@ class DefaultSpeechController(SpeechController):
                 )
                 self._notify("segment")
                 prefetch_sem.release()
-                logger.info(
+                logger.debug(
                     'Spoken (%d/%d): "%s"',
                     chunk_idx + 1,
                     len(chunks),
@@ -232,7 +232,7 @@ class DefaultSpeechController(SpeechController):
                     estimated_text = await self._estimate_spoken_text(
                         chunks[chunk_idx], byte_size, self.writer.audio_format
                     )
-                    logger.info(
+                    logger.debug(
                         'Spoken (%d/%d): "%s" (interrupted)',
                         chunk_idx + 1,
                         len(chunks),
