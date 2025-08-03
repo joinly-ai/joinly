@@ -335,7 +335,8 @@ async def run(  # noqa: PLR0913
                 await asyncio.Event().wait()
             finally:
                 usage = agent.usage.merge(await client.get_usage())
-                logger.info("Usage:\n%s", usage)
+                if usage.root:
+                    logger.info("Usage:\n%s", usage)
 
 
 if __name__ == "__main__":
