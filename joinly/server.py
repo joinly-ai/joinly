@@ -45,8 +45,13 @@ def _extract_settings() -> Settings:
         return current
 
     try:
-        patch: Settings = Settings.model_validate(json.loads(header))
-        settings = current.model_copy(update=patch.model_dump(exclude_unset=True))
+        base = current.model_copy(deep=True).model_dump()
+        patch = Settings.model_validate(json.loads(header)).model_dump(
+            exclude_unset=True
+        )
+        for k, v in patch.items():
+            base[k] = (base.get(k, {}) | v) if isinstance(v, dict) else v
+        settings = Settings.model_validate(base)
     except (json.JSONDecodeError, ValidationError):
         msg = "Invalid joinly-settings."
         logger.exception(msg)
