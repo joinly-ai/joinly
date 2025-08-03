@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def _parse_kv(
     _ctx: click.Context, _param: click.Parameter, value: tuple[str]
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     """Convert (--foo-arg key=value) repeated tuples to dict."""
     out: dict[str, object] = {}
     for item in value:
@@ -33,7 +33,7 @@ def _parse_kv(
             out[k] = json.loads(v)
         except json.JSONDecodeError:
             out[k] = v
-    return out
+    return out or None
 
 
 @click.command()
@@ -55,16 +55,6 @@ def _parse_kv(
     show_default=True,
     show_envvar=True,
     envvar="JOINLY_NAME",
-)
-@click.option(
-    "--language",
-    "--lang",
-    type=str,
-    help="The language to use for transcription and text-to-speech.",
-    default="en",
-    show_default=True,
-    show_envvar=True,
-    envvar="JOINLY_LANGUAGE",
 )
 @click.option(
     "--llm-provider",
@@ -128,11 +118,19 @@ def _parse_kv(
     help="Trigger the agent only when the name is mentioned in the transcript.",
 )
 @click.option(
+    "--language",
+    "--lang",
+    type=str,
+    help="The language to use for transcription and text-to-speech.",
+    default=None,
+    show_envvar=True,
+    envvar="JOINLY_LANGUAGE",
+)
+@click.option(
     "--vad",
     type=str,
     help='Voice Activity Detection service to use. Options are: "silero", "webrtc".',
-    default="silero",
-    show_default=True,
+    default=None,
     show_envvar=True,
     envvar="JOINLY_VAD",
 )
@@ -140,8 +138,7 @@ def _parse_kv(
     "--stt",
     type=str,
     help='Speech-to-Text service to use. Options are: "whisper" (local), "deepgram".',
-    default="whisper",
-    show_default=True,
+    default=None,
     show_envvar=True,
     envvar="JOINLY_STT",
 )
@@ -150,8 +147,7 @@ def _parse_kv(
     type=str,
     help='Text-to-Speech service to use. Options are: "kokoro" (local), '
     '"elevenlabs", "deepgram".',
-    default="kokoro",
-    show_default=True,
+    default=None,
     show_envvar=True,
     envvar="JOINLY_TTS",
 )
@@ -270,7 +266,7 @@ def cli(  # noqa: PLR0913
                 name=name,
                 name_trigger=name_trigger,
                 mcp_config=mcp_config_dict,
-                settings=settings,
+                settings={k: v for k, v in settings.items() if v is not None},
             )
         )
     except KeyboardInterrupt:
