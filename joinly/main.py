@@ -6,7 +6,6 @@ from typing import Any
 import click
 from dotenv import load_dotenv
 
-from joinly import client
 from joinly.server import mcp
 from joinly.settings import Settings, set_settings
 from joinly.utils.logging import configure_logging
@@ -46,6 +45,7 @@ def _parse_kv(
     help="The meeting participant name.",
     default="joinly",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_NAME",
 )
 @click.option(
@@ -55,6 +55,7 @@ def _parse_kv(
     help="The language to use for transcription and text-to-speech.",
     default="en",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_LANGUAGE",
 )
 @click.option(
@@ -65,6 +66,7 @@ def _parse_kv(
     "Note that 'cuda' requires the extra cuda dependencies to be installed.",
     default="cpu",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_DEVICE",
 )
 @click.option(
@@ -74,6 +76,7 @@ def _parse_kv(
     help="The host to bind the server to. Only applicable with --server.",
     default="127.0.0.1",
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_SERVER_HOST",
 )
 @click.option(
@@ -83,24 +86,28 @@ def _parse_kv(
     help="The port to bind the server to. Only applicable with --server.",
     default=8000,
     show_default=True,
+    show_envvar=True,
     envvar="JOINLY_SERVER_PORT",
 )
 @click.option(
-    "--model-name",
-    type=str,
-    help="The name of the model to use in the client.",
-    default="gpt-4o",
-    show_default=True,
-    envvar="JOINLY_MODEL_NAME",
-)
-@click.option(
+    "--llm-provider",
     "--model-provider",
     type=str,
-    help="The provider of the model to use in the client. "
-    "Automatically determined by the model name, "
-    'but e.g. for Azure OpenAI use "azure_openai".',
-    default=None,
-    envvar="JOINLY_MODEL_PROVIDER",
+    help="The provider of the LLM model to use in the client.",
+    default="openai",
+    show_default=True,
+    show_envvar=True,
+    envvar=["JOINLY_LLM_PROVIDER", "JOINLY_MODEL_PROVIDER"],
+)
+@click.option(
+    "--llm-model",
+    "--model-name",
+    type=str,
+    help="The name of the LLM model to use in the client.",
+    default="gpt-4o",
+    show_default=True,
+    show_envvar=True,
+    envvar=["JOINLY_LLM_MODEL", "JOINLY_MODEL_NAME"],
 )
 @click.option(
     "--env-file",
@@ -148,6 +155,8 @@ def _parse_kv(
     help='Voice Activity Detection service to use. Options are: "webrtc", "silero".',
     default="silero",
     show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_VAD",
 )
 @click.option(
     "--stt",
@@ -155,6 +164,8 @@ def _parse_kv(
     help='Speech-to-Text service to use. Options are: "whisper" (local), "deepgram".',
     default="whisper",
     show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_STT",
 )
 @click.option(
     "--tts",
@@ -163,6 +174,8 @@ def _parse_kv(
     '"elevenlabs", "deepgram".',
     default="kokoro",
     show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_TTS",
 )
 @click.option(
     "--meeting-provider-arg",
@@ -231,6 +244,7 @@ def _parse_kv(
     "--logging-plain",
     is_flag=True,
     help="Use plain logging format.",
+    show_envvar=True,
     envvar="JOINLY_LOGGING_PLAIN",
 )
 @click.argument(
@@ -238,15 +252,14 @@ def _parse_kv(
     default=None,
     type=str,
     required=False,
-    envvar="JOINLY_MEETING_URL",
 )
 def cli(  # noqa: PLR0913
     *,
     server: bool,
     host: str,
     port: int,
-    model_name: str,
-    model_provider: str | None,
+    llm_provider: str,
+    llm_model: str,
     vnc_server: bool,
     vnc_server_port: int,
     name_trigger: bool,
@@ -254,7 +267,7 @@ def cli(  # noqa: PLR0913
     verbose: int,
     quiet: bool,
     logging_plain: bool,
-    **cli_settings: dict[str, Any],
+    **cli_settings: Any,  # noqa: ANN401
 ) -> None:
     """Start joinly MCP server or server + client to join meetings."""
     if cli_settings.get("meeting_provider") == "browser" and vnc_server:
@@ -274,13 +287,23 @@ def cli(  # noqa: PLR0913
     )
 
     if server:
-        mcp.run(transport="streamable-http", host=host, port=port)
+        mcp.run(transport="streamable-http", host=host, port=port, show_banner=False)
     else:
+        import joinly_client
+
+        if not meeting_url:
+            msg = (
+                "Meeting URL is required when running as a client. "
+                "Please provide it as an argument."
+            )
+            raise click.UsageError(msg)
         asyncio.run(
-            client.run(
+            joinly_client.run(
+                joinly_url=mcp,
                 meeting_url=meeting_url,
-                model_name=model_name,
-                model_provider=model_provider,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                name=settings.name,
                 name_trigger=name_trigger,
             )
         )

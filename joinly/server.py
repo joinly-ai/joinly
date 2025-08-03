@@ -20,12 +20,14 @@ from joinly.types import (
     SpeakerRole,
     SpeechInterruptedError,
     Transcript,
+    Usage,
 )
-from joinly.utils.usage import Usage, get_usage, reset_usage, set_usage
+from joinly.utils.usage import get_usage, reset_usage, set_usage
 
 logger = logging.getLogger(__name__)
 
-transcript_url = AnyUrl("transcript://live")
+TRANSCRIPT_URL = AnyUrl("transcript://live")
+SEGMENTS_URL = AnyUrl("transcript://live/segments")
 
 
 @dataclass
@@ -43,8 +45,13 @@ def _extract_settings() -> Settings:
         return current
 
     try:
-        patch: Settings = Settings.model_validate(json.loads(header))
-        settings = current.model_copy(update=patch.model_dump(exclude_unset=True))
+        base = current.model_copy(deep=True).model_dump()
+        patch = Settings.model_validate(json.loads(header)).model_dump(
+            exclude_unset=True
+        )
+        for k, v in patch.items():
+            base[k] = (base.get(k, {}) | v) if isinstance(v, dict) else v
+        settings = Settings.model_validate(base)
     except (json.JSONDecodeError, ValidationError):
         msg = "Invalid joinly-settings."
         logger.exception(msg)
@@ -65,36 +72,35 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
     session_container = SessionContainer()
     meeting_session = await session_container.__aenter__()
 
-    _remover: Callable[[], None] | None = None
+    _remover: dict[AnyUrl, Callable[[], None]] = {}
 
     @server._mcp_server.subscribe_resource()  # noqa: SLF001
     async def _handle_subscribe_resource(url: AnyUrl) -> None:
-        nonlocal _remover
-        if url != transcript_url or _remover is not None:
+        if url not in (TRANSCRIPT_URL, SEGMENTS_URL) or url in _remover:
             return
         logger.debug("Subscribing to resource: %s", url)
         session = server._mcp_server.request_context.session  # noqa: SLF001
 
-        async def _push(event: str) -> None:
-            if event == "utterance":
-                logger.debug("Sending transcription update notification")
-                await session.send_resource_updated(transcript_url)
+        _event = "utterance" if url == TRANSCRIPT_URL else "segment"
 
-        _remover = meeting_session.add_transcription_listener(_push)
+        async def _push() -> None:
+            logger.debug("Sending %s notification", _event)
+            await session.send_resource_updated(url)
+
+        _remover[url] = meeting_session.subscribe(_event, _push)
 
     @server._mcp_server.unsubscribe_resource()  # noqa: SLF001
     async def _handle_unsubscribe_resource(url: AnyUrl) -> None:
-        nonlocal _remover
-        if url == transcript_url and _remover is not None:
+        if url in _remover:
             logger.debug("Unsubscribing from resource: %s", url)
-            _remover()
-            _remover = None
+            _remover[url]()
+            _remover.pop(url)
 
     try:
         yield SessionContext(meeting_session=meeting_session)
     finally:
-        if _remover is not None:
-            _remover()
+        for _rem in _remover.values():
+            _rem()
 
         # ensure proper cleanup
         from anyio import CancelScope
@@ -102,7 +108,6 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
         with CancelScope(shield=True):
             await session_container.__aexit__()
 
-        logger.info("Usage report:\n%s", usage)
         reset_settings(settings_token)
         reset_usage(usage_token)
 
@@ -111,14 +116,25 @@ mcp = FastMCP("joinly", lifespan=session_lifespan)
 
 
 @mcp.resource(
-    "transcript://live",
-    description="Live transcript of the meeting",
+    str(TRANSCRIPT_URL),
+    description="Live transcript of the meeting participant utterances.",
     mime_type="application/json",
 )
 async def get_transcript(ctx: Context) -> Transcript:
     """Get the live transcript of the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     return ms.transcript.with_role(SpeakerRole.participant)
+
+
+@mcp.resource(
+    str(SEGMENTS_URL),
+    description="Live transcript segments.",
+    mime_type="application/json",
+)
+async def get_transcript_segments(ctx: Context) -> Transcript:
+    """Get the live transcript segments of the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    return ms.transcript
 
 
 @mcp.resource(

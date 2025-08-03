@@ -15,6 +15,7 @@ from joinly.types import (
 )
 from joinly.utils.audio import calculate_audio_duration, convert_audio_format
 from joinly.utils.clock import Clock
+from joinly.utils.events import EventBus, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class DefaultSpeechController(SpeechController):
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
         self._lock = asyncio.Lock()
+        self._event_bus: EventBus | None = None
 
     async def __aenter__(self) -> Self:
         """Enter the audio stream context."""
@@ -53,12 +55,15 @@ class DefaultSpeechController(SpeechController):
         """Stop the audio stream and clean up resources."""
         await self.stop()
 
-    async def start(self, clock: Clock, transcript: Transcript) -> None:
+    async def start(
+        self, clock: Clock, transcript: Transcript, event_bus: EventBus
+    ) -> None:
         """Start the speech controller.
 
         Args:
             clock (Clock): The clock to use for timing.
             transcript (Transcript): The transcript to be speech written to.
+            event_bus (EventBus): The event bus to publish events to.
         """
         if self._clock is not None or self._transcript is not None:
             msg = "Speech controller already active"
@@ -66,11 +71,24 @@ class DefaultSpeechController(SpeechController):
 
         self._clock = clock
         self._transcript = transcript
+        self._event_bus = event_bus
 
     async def stop(self) -> None:
         """Stop the speech controller."""
         self._clock = None
         self._transcript = None
+        self._event_bus = None
+
+    def _notify(self, event_type: EventType) -> None:
+        """Notify event bus of an event.
+
+        Args:
+            event_type (EventType): The event type to publish.
+        """
+        if self._event_bus is None:
+            return
+
+        self._event_bus.publish(event_type)
 
     async def speak_text(self, text: str) -> None:
         """Speak the given text using the virtual microphone.
@@ -188,8 +206,9 @@ class DefaultSpeechController(SpeechController):
                         role=SpeakerRole.assistant,
                     )
                 )
+                self._notify("segment")
                 prefetch_sem.release()
-                logger.info(
+                logger.debug(
                     'Spoken (%d/%d): "%s"',
                     chunk_idx + 1,
                     len(chunks),
@@ -213,7 +232,7 @@ class DefaultSpeechController(SpeechController):
                     estimated_text = await self._estimate_spoken_text(
                         chunks[chunk_idx], byte_size, self.writer.audio_format
                     )
-                    logger.info(
+                    logger.debug(
                         'Spoken (%d/%d): "%s" (interrupted)',
                         chunk_idx + 1,
                         len(chunks),
@@ -230,6 +249,7 @@ class DefaultSpeechController(SpeechController):
                                 role=SpeakerRole.assistant,
                             )
                         )
+                        self._notify("segment")
                     raise SpeechInterruptedError(spoken_text=spoken_text)
 
                 await self.writer.write(bytes(buffer[: self.writer.chunk_size]))

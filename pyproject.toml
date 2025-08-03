@@ -12,14 +12,10 @@ dependencies = [
     "deepgram-sdk>=4.1.1",
     "elevenlabs>=2.5.0",
     "faster-whisper>=1.1.1",
-    "fastmcp>=2.10.1",
+    "fastmcp>=2.10.5",
+    "joinly-client>=0.1.3",
+    "joinly-common>=0.1.0",
     "kokoro-onnx>=0.4.8",
-    "langchain>=0.3.25",
-    "langchain-anthropic>=0.3.15",
-    "langchain-mcp-adapters>=0.0.3",
-    "langchain-ollama>=0.3.3",
-    "langchain-openai>=0.3.16",
-    "langgraph>=0.4.1",
     "numpy>=2.2.4",
     "onnxruntime>=1.21.1",
     "playwright>=1.51.0",
@@ -36,10 +32,6 @@ cuda = [
     "onnxruntime-gpu>=1.22.0",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [dependency-groups]
 dev = [
     "aiofiles>=24.1.0",
@@ -53,8 +45,22 @@ dev = [
     "ruff>=0.11.6",
 ]
 
+[tool.uv.sources]
+joinly-client = { workspace = true }
+joinly-common = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.hatch.build.targets.wheel]
 packages = ["joinly"]
+
+[tool.uv.workspace]
+members = [
+    "client",
+    "common",
+]
 
 [tool.ruff]
 exclude = [
@@ -122,6 +128,8 @@ venv = ".venv"
 typeCheckingMode = "standard"
 include = [
     "joinly",
+    "client",
+    "common",
     "tests"
 ]
 exclude = [

@@ -1,0 +1,36 @@
+name: Release Client
+
+on:
+  push:
+    tags:
+      - client-v[0-9]+.*
+
+jobs:
+
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  publish:
+    needs: lint
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/joinly-client/
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --locked --all-groups --package joinly-client
+
+      - name: Build package
+        run: uv build --package joinly-client
+
+      - name: Publish package
+        run: uv publish

@@ -8,6 +8,7 @@ from joinly.core import (
 )
 from joinly.types import MeetingChatHistory, MeetingParticipant, Transcript
 from joinly.utils.clock import Clock
+from joinly.utils.events import EventBus, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class MeetingSession:
         self._speech_controller = speech_controller
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
+        self._event_bus = EventBus()
 
     @property
     def transcript(self) -> Transcript:
@@ -52,18 +54,19 @@ class MeetingSession:
             raise RuntimeError(msg)
         return self._clock.now_s
 
-    def add_transcription_listener(
-        self, listener: Callable[[str], Coroutine[None, None, None]]
+    def subscribe(
+        self, event_type: EventType, handler: Callable[[], Coroutine[None, None, None]]
     ) -> Callable[[], None]:
         """Add a listener for transcription events.
 
         Args:
-            listener: A callable that takes an event as argument.
+            event_type (EventType): The type of event to listen for.
+            handler: A callable.
 
         Returns:
-            A callable to remove the listener.
+            A callable to remove the handler.
         """
-        return self._transcription_controller.add_listener(listener)
+        return self._event_bus.subscribe(event_type, handler)
 
     async def join_meeting(
         self,
@@ -84,8 +87,13 @@ class MeetingSession:
         await self._meeting_provider.join(meeting_url, participant_name, passcode)
         self._clock = Clock()
         self._transcript = Transcript()
-        await self._transcription_controller.start(self._clock, self._transcript)
-        await self._speech_controller.start(self._clock, self._transcript)
+
+        await self._transcription_controller.start(
+            self._clock, self._transcript, self._event_bus
+        )
+        await self._speech_controller.start(
+            self._clock, self._transcript, self._event_bus
+        )
 
     async def leave_meeting(self) -> None:
         """Leave the current meeting."""

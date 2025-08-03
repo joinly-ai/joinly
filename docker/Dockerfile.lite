@@ -13,18 +13,20 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev --no-editable
+    --mount=type=bind,source=client/pyproject.toml,target=client/pyproject.toml \
+    --mount=type=bind,source=common/pyproject.toml,target=common/pyproject.toml \
+    uv sync --locked --no-install-project --no-install-workspace --no-dev --no-editable
 
 # Copy app source code
 COPY . /app
 
+# Remove packages
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv remove --no-sync faster-whisper kokoro-onnx webrtcvad-wheels joinly-client
+
 # Install application into .venv (non-editable mode)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
-
-# Remove packages
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv remove faster-whisper kokoro-onnx webrtcvad-wheels
 
 # Stage 2: Runtime image
 FROM python:3.12-slim
