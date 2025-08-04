@@ -30,12 +30,13 @@ logger = logging.getLogger(__name__)
 class DeepgramSTT(STT):
     """A class to transcribe audio using Deepgram."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         model_name: str | None = None,
         sample_rate: int = 16000,
         hotwords: list[str] | None = None,
+        finalize_silence: float = 0.4,
         padding_silence: float = 0.5,
         stream_idle_timeout: float = 2.0,
     ) -> None:
@@ -46,6 +47,8 @@ class DeepgramSTT(STT):
                 English and "nova-2-general" otherwise).
             sample_rate: The sample rate of the audio (default is 16000).
             hotwords: A list of hotwords to improve transcription accuracy.
+            finalize_silence: The duration of silence to wait before finalizing the
+                stream (default is 0.4 seconds).
             padding_silence: The duration of silence to pad at the start of each audio
                 window (default is 0.2 seconds).
             stream_idle_timeout: The duration to wait after finalizing the stream before
@@ -58,6 +61,7 @@ class DeepgramSTT(STT):
         self.model_name = model_name or (
             "nova-3-general" if get_settings().language == "en" else "nova-2-general"
         )
+        self.finalize_silence = finalize_silence
         self._live_options = LiveOptions(
             model=self.model_name,
             encoding="linear16",
