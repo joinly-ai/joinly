@@ -1,6 +1,39 @@
 
 # Changelog
 
+## v0.4.0 - 2025-08-04
+
+### New: joinly-client (v0.1.5)
+
+- complete rewrite of all client functionality, now using a single `joinly-client` package (#84)
+- support for usage in code and via cli
+
+### Added
+
+- LLM token usage tracking for a session (#75)
+- STT/TTS API usage tracking, characters or audio minutes (#80)
+- setting session configurations via `joinly-client`
+
+### Improvements
+
+- event bus for transcript updates (#65)
+- live segment transcription at segment level (#63)
+- improve lite image by removing unnecessary dependencies (#79)
+- unify logging of live segments (#82)
+- `--env-file` cli option to specify a custom environment file (#74)
+
+### Fixed
+
+- set explicit logging level only for own logger (#78)
+- correctly fail on unsupported meeting platforms (#77)
+- fix fatal server crash on session errors (#64)
+
+### Others
+
+- add docker-outside-of-docker to devcontainer (#76)
+- improve release workflow (#70, #73)
+- cleanup repository root files (#72)
+
 ## v0.3.3 - 2025-07-31
 
 ### Improvements
