@@ -14,7 +14,7 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: joinly-common
       url: https://pypi.org/p/joinly-common/
     permissions:
       id-token: write
