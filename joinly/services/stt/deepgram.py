@@ -38,7 +38,7 @@ class DeepgramSTT(STT):
         hotwords: list[str] | None = None,
         finalize_silence: float = 0.4,
         padding_silence: float = 0.5,
-        stream_idle_timeout: float = 2.0,
+        stream_idle_timeout: float = 1.0,
         mip_opt_out: bool = True,
     ) -> None:
         """Initialize the DeepgramSTT.
@@ -53,7 +53,7 @@ class DeepgramSTT(STT):
             padding_silence: The duration of silence to pad at the start of each audio
                 window (default is 0.2 seconds).
             stream_idle_timeout: The duration to wait after finalizing the stream before
-                closing it (default is 2.0 seconds). Normally, this should never
+                closing it (default is 1.0 seconds). Normally, this should never
                 trigger as the stream is finalized.
             mip_opt_out: Whether to opt out of the model improvement program
                 (default is True). See more at https://developers.deepgram.com/docs/the-deepgram-model-improvement-partnership-program.
