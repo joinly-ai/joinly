@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
-from fastmcp.server.dependencies import get_http_headers
 from pydantic import AnyUrl, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -40,7 +39,15 @@ class SessionContext:
 def _extract_settings() -> Settings:
     """Extract settings from the HTTP headers."""
     current = get_settings()
-    header = get_http_headers().get("joinly-settings")
+    try:
+        from fastmcp.server.http import _current_http_request
+
+        request = _current_http_request.get()
+        header = request.headers.get("joinly-settings") if request is not None else None
+    except RuntimeError:
+        logger.exception("Failed to get HTTP headers")
+        header = None
+
     if not header:
         return current
 
