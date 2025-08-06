@@ -35,8 +35,9 @@ def _parse_kv(
 @click.command()
 @click.option(
     "--server/--client",
-    help="Run joinly as server or client.",
-    default=True,
+    help="Run joinly as server or client. Default is server without a meeting URL "
+    ", client otherwise.",
+    default=None,
 )
 @click.option(
     "-n",
@@ -255,7 +256,7 @@ def _parse_kv(
 )
 def cli(  # noqa: PLR0913
     *,
-    server: bool,
+    server: bool | None,
     host: str,
     port: int,
     llm_provider: str,
@@ -286,7 +287,7 @@ def cli(  # noqa: PLR0913
         plain=logging_plain,
     )
 
-    if server:
+    if server is True or (server is None and meeting_url is None):
         mcp.run(transport="streamable-http", host=host, port=port, show_banner=False)
     else:
         import joinly_client
