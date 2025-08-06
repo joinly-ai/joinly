@@ -1025,7 +1025,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.10.5" },
     { name = "joinly-client", editable = "client" },
     { name = "joinly-common", editable = "common" },
-    { name = "kokoro-onnx", specifier = ">=0.4.8" },
+    { name = "kokoro-onnx", specifier = ">=0.4.9" },
     { name = "numpy", specifier = ">=2.2.4" },
     { name = "onnxruntime", specifier = ">=1.21.1" },
     { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.22.0" },
@@ -1112,7 +1112,7 @@ wheels = [
 
 [[package]]
 name = "kokoro-onnx"
-version = "0.4.8"
+version = "0.4.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorlog" },
@@ -1121,9 +1121,9 @@ dependencies = [
     { name = "onnxruntime" },
     { name = "phonemizer-fork" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/0e/9501d935c5761e46c43c614e6eee5319a76092586f350d5ef3aac972a3d7/kokoro_onnx-0.4.8.tar.gz", hash = "sha256:68bd87f26912d268541bc32a0303ff88f00b826e0038eb16bece16644b73a251", size = 80762, upload-time = "2025-04-08T18:09:24.523Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/7c/4d74f7243f546716003bd0cfaae8f562f5d75672142f23fa731f69069efd/kokoro_onnx-0.4.9.tar.gz", hash = "sha256:08682138939f61548a7186ef5cdae79180a5dff6fa23781910eddb1583dcf30b", size = 81209, upload-time = "2025-05-10T22:49:04.758Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/20/41d3abdef931934948eb49179fa61f9ab384f83c04c0550945e76d7e8dfd/kokoro_onnx-0.4.8-py3-none-any.whl", hash = "sha256:de571d2610d50681627d57749d7c3770c93d27b2ca01dfd32f240b8c15aa3fdf", size = 17661, upload-time = "2025-04-08T18:09:23.545Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/00/48311d88757b160634af7626324fe8a95cae186952bf25baad831381d50f/kokoro_onnx-0.4.9-py3-none-any.whl", hash = "sha256:e0b51d62525166af795db715c7f0efb80233621b5ddc0766ed68995545589d9e", size = 17794, upload-time = "2025-05-10T22:49:03.156Z" },
 ]
 
 [[package]]
@@ -1460,7 +1460,7 @@ wheels = [
 
 [[package]]
 name = "phonemizer-fork"
-version = "3.3.1"
+version = "3.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -1469,9 +1469,9 @@ dependencies = [
     { name = "segments" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/bc/6d626024573810fdf54925670f4798456ef56c764878f50cf3bc397085bd/phonemizer_fork-3.3.1.tar.gz", hash = "sha256:483a2751ea435b9859e2ddca7d4ec817e54a82f3d2ad5ad2fd8fbd40e3bdf89e", size = 210609, upload-time = "2025-01-05T03:16:29.035Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/fa/9294d2f11890ca49d0bdac7a4da60cbe5686629bfd4987cae0ad75e051cc/phonemizer_fork-3.3.2.tar.gz", hash = "sha256:10e16e827d0443b087062e21b55e805c00989cf1343b2e81e734cae5f6c0cf69", size = 300989, upload-time = "2025-01-30T13:02:31.201Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/36/b6700c86bd268ab867c3d0ee4b905fbd3f1954fbfa5cb991c12289727bb8/phonemizer_fork-3.3.1-py3-none-any.whl", hash = "sha256:452e4b3f4fe4724a4c46c55eb6926c2b0a7abefd72a893549de139f80874162c", size = 82533, upload-time = "2025-01-05T03:16:26.301Z" },
+    { url = "https://files.pythonhosted.org/packages/64/f1/0dcce21b0ae16a82df4b6583f8f3ad8e55b35f7e98b6bf536a4dd225fa08/phonemizer_fork-3.3.2-py3-none-any.whl", hash = "sha256:97305c76f4183b3825dae8f4c032265fe78c9946ce58c47d4b62161349264b74", size = 82700, upload-time = "2025-01-30T13:02:28.667Z" },
 ]
 
 [[package]]
