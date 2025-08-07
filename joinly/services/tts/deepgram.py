@@ -23,7 +23,11 @@ class DeepgramTTS(TTS):
     """Text-to-Speech (TTS) service for converting text to speech."""
 
     def __init__(
-        self, *, model_name: str | None = None, sample_rate: int = 24000
+        self,
+        *,
+        model_name: str | None = None,
+        sample_rate: int = 24000,
+        mip_opt_out: bool = True,
     ) -> None:
         """Initialize the TTS service.
 
@@ -31,6 +35,8 @@ class DeepgramTTS(TTS):
             model_name: The Deepgram TTS model to use (default is "aura-2-andromeda-en"
                 for English and "aura-2-estrella-es" for Spanish).
             sample_rate: The sample rate of the audio (default is 24000).
+            mip_opt_out: Whether to opt out of the model improvement program
+                (default is True). See more at https://developers.deepgram.com/docs/the-deepgram-model-improvement-partnership-program.
         """
         config = DeepgramClientOptions(
             options={
@@ -55,6 +61,7 @@ class DeepgramTTS(TTS):
             encoding="linear16",
             sample_rate=sample_rate,
         )
+        self._mip_opt_out = bool(mip_opt_out)
         self._queue: asyncio.Queue[bytes | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
@@ -88,7 +95,9 @@ class DeepgramTTS(TTS):
             "Connecting to Deepgram TTS service with model: %s",
             self._speak_options.model,
         )
-        await self._client.start(self._speak_options)
+        await self._client.start(
+            self._speak_options, addons={"mip_opt_out": self._mip_opt_out}
+        )
         if not await self._client.is_connected():
             msg = "Failed to connect to Deepgram TTS service."
             logger.error(msg)
