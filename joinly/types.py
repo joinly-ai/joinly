@@ -1,15 +1,20 @@
 from dataclasses import dataclass
 
 from joinly_common.types import (
+    MeetingChatHistory,
+    MeetingChatMessage,
+    MeetingParticipant,
     ServiceUsage,
     SpeakerRole,
     Transcript,
     TranscriptSegment,
     Usage,
 )
-from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "MeetingChatHistory",
+    "MeetingChatMessage",
+    "MeetingParticipant",
     "ServiceUsage",
     "SpeakerRole",
     "Transcript",
@@ -84,41 +89,3 @@ class SpeechWindow:
     time_ns: int
     is_speech: bool
     speaker: str | None = None
-
-
-class MeetingChatMessage(BaseModel):
-    """A class to represent a chat message in a meeting.
-
-    Attributes:
-        text (str): The content of the chat message.
-        timestamp (str | None): The timestamp of when the message was sent.
-        sender (str | None): The sender of the message, if available.
-    """
-
-    text: str
-    timestamp: str | None = None
-    sender: str | None = None
-
-    model_config = ConfigDict(frozen=True)
-
-
-class MeetingChatHistory(BaseModel):
-    """A class to represent the chat history of a meeting."""
-
-    messages: list[MeetingChatMessage] = Field(default_factory=list)
-
-
-class MeetingParticipant(BaseModel):
-    """A class to represent a participant in a meeting.
-
-    Attributes:
-        name (str): The name of the participant.
-        email (str | None): The email address of the participant.
-        infos (list[str]): Additional information about the participant.
-    """
-
-    name: str
-    email: str | None = None
-    infos: list[str] = Field(default_factory=list)
-
-    model_config = ConfigDict(frozen=True)
