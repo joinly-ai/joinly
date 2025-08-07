@@ -15,7 +15,7 @@ from joinly.session import MeetingSession
 from joinly.settings import Settings, get_settings, reset_settings, set_settings
 from joinly.types import (
     MeetingChatHistory,
-    MeetingParticipant,
+    MeetingParticipantList,
     SpeakerRole,
     SpeechInterruptedError,
     Transcript,
@@ -279,10 +279,10 @@ async def get_transcript_tool(
 )
 async def get_participants(
     ctx: Context,
-) -> list[MeetingParticipant]:
+) -> MeetingParticipantList:
     """Get the list of participants in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    return await ms.get_participants()
+    return MeetingParticipantList(await ms.get_participants())
 
 
 @mcp.tool(

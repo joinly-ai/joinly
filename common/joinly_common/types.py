@@ -197,6 +197,16 @@ class MeetingParticipant(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class MeetingParticipantList(RootModel):
+    """A class to represent a list of participants in a meeting.
+
+    Attributes:
+        root (list[MeetingParticipant]): A list of MeetingParticipant objects.
+    """
+
+    root: list[MeetingParticipant] = Field(default_factory=list)
+
+
 class ServiceUsage(BaseModel):
     """Dataclass to hold usage statistics for a service."""
 
