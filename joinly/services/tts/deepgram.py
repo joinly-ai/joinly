@@ -136,7 +136,7 @@ class DeepgramTTS(TTS):
                 add_usage(
                     service="deepgram_tts",
                     usage={"characters": len(text)},
-                    meta={"model": self.model_name},
+                    meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
 
                 while (chunk := await self._queue.get()) is not None:
