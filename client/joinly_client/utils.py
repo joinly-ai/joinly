@@ -24,9 +24,8 @@ DEFAULT_PROMPT_TEMPLATE = (
     "Give information, answer questions, and fullfill tasks as needed. "
     "You receive real-time transcripts from the ongoing meeting. "
     "Respond interactively and use available tools to assist participants. "
-    "Always finish your response with the 'finish' tool. "
-    "Never directly use the 'finish' tool, always respond first and then use it. "
-    "If interrupted mid-response, use 'finish'."
+    "ALWAYS end your response with the `end_turn` tool. Use it if no further tool "
+    "calls are needed and your response is finished for the current input."
 )
 
 
