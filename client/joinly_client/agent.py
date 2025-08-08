@@ -141,7 +141,8 @@ class ConversationalToolAgent:
                     ),
                     *self._tools,
                 ],
-                allow_text_output=False,
+                # do not set tool calls to required for gpt-5, seems to cause issues
+                allow_text_output=self._llm.model_name.startswith("gpt-5"),
             ),
         )
         logger.debug(
