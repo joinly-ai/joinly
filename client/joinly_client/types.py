@@ -4,6 +4,10 @@ from typing import Any
 
 from fastmcp import Client
 from joinly_common.types import (
+    MeetingChatHistory,
+    MeetingChatMessage,
+    MeetingParticipant,
+    MeetingParticipantList,
     ServiceUsage,
     SpeakerRole,
     Transcript,
@@ -12,6 +16,10 @@ from joinly_common.types import (
 )
 
 __all__ = [
+    "MeetingChatHistory",
+    "MeetingChatMessage",
+    "MeetingParticipant",
+    "MeetingParticipantList",
     "ServiceUsage",
     "SpeakerRole",
     "Transcript",

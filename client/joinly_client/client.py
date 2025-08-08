@@ -11,7 +11,14 @@ from fastmcp.client.transports import StreamableHttpTransport
 from mcp import McpError, ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
-from joinly_client.types import SpeakerRole, Transcript, TranscriptSegment, Usage
+from joinly_client.types import (
+    MeetingChatHistory,
+    MeetingParticipantList,
+    SpeakerRole,
+    Transcript,
+    TranscriptSegment,
+    Usage,
+)
 from joinly_client.utils import is_async_context, name_in_transcript
 
 logger = logging.getLogger(__name__)
@@ -162,35 +169,6 @@ class JoinlyClient:
 
         return remove_callback
 
-    async def join_meeting(
-        self,
-        meeting_url: str | None,
-        passcode: str | None = None,
-        participant_name: str | None = None,
-    ) -> None:
-        """Join a meeting on the joinly server.
-
-        Args:
-            meeting_url (str | None): The URL of the meeting to join.
-            passcode (str | None): The passcode for the meeting, if required.
-            participant_name (str | None): The name of the participant.
-        """
-        if participant_name is not None:
-            self.name = participant_name
-        logger.info("Joining meeting at %s", meeting_url)
-        await self.client.call_tool(
-            "join_meeting",
-            arguments={
-                "meeting_url": meeting_url,
-                "passcode": passcode,
-                "participant_name": self.name,
-            },
-        )
-        logger.info("Joined meeting successfully")
-        self.joined = True
-        self._last_utterance = 0.0
-        self._last_segment = 0.0
-
     async def __aenter__(self) -> Self:
         """Connect to the joinly server."""
         await self._connect()
@@ -291,6 +269,46 @@ class JoinlyClient:
             for callback in self._segment_callbacks:
                 self._track_task(asyncio.create_task(callback(new_transcript.segments)))
 
+    async def join_meeting(
+        self,
+        meeting_url: str | None,
+        passcode: str | None = None,
+        participant_name: str | None = None,
+    ) -> None:
+        """Join a meeting on the joinly server.
+
+        Args:
+            meeting_url (str | None): The URL of the meeting to join.
+            passcode (str | None): The passcode for the meeting, if required.
+            participant_name (str | None): The name of the participant.
+        """
+        if participant_name is not None:
+            self.name = participant_name
+        logger.info("Joining meeting at %s", meeting_url)
+        await self.client.call_tool(
+            "join_meeting",
+            arguments={
+                "meeting_url": meeting_url,
+                "passcode": passcode,
+                "participant_name": self.name,
+            },
+        )
+        logger.info("Joined meeting successfully")
+        self.joined = True
+        self._last_utterance = 0.0
+        self._last_segment = 0.0
+
+    async def leave_meeting(self) -> None:
+        """Leave the current meeting."""
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool("leave_meeting")
+        self.joined = False
+        self._last_utterance = 0.0
+        self._last_segment = 0.0
+
     async def get_transcript(self) -> Transcript:
         """Get the full transcript from the server.
 
@@ -302,6 +320,30 @@ class JoinlyClient:
 
         result = await self.client.call_tool("get_transcript")
         return Transcript.model_validate_json(result.content[0].text)  # type: ignore[attr-defined]
+
+    async def get_chat_history(self) -> MeetingChatHistory:
+        """Get the chat history of the meeting.
+
+        Returns:
+            MeetingChatHistory: The chat history of the meeting.
+        """
+        if not self.joined:
+            return MeetingChatHistory(messages=[])
+
+        result = await self.client.call_tool("get_chat_history")
+        return MeetingChatHistory.model_validate_json(result.content[0].text)  # type: ignore[attr-defined]
+
+    async def get_participants(self) -> MeetingParticipantList:
+        """Get the list of participants in the meeting.
+
+        Returns:
+            MeetingParticipantList: The list of participants.
+        """
+        if not self.joined:
+            return MeetingParticipantList()
+
+        result = await self.client.call_tool("get_participants")
+        return MeetingParticipantList.model_validate_json(result.content[0].text)  # type: ignore[attr-defined]
 
     async def get_usage(self) -> Usage:
         """Get the current usage statistics from the server.
@@ -316,3 +358,49 @@ class JoinlyClient:
             return Usage()
         else:
             return Usage.model_validate_json(result[0].text)  # type: ignore[attr-defined]
+
+    async def speak_text(self, text: str) -> None:
+        """Speak the given text using the joinly server.
+
+        Args:
+            text (str): The text to speak.
+        """
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool(
+            "speak_text",
+            arguments={"text": text},
+        )
+
+    async def send_chat_message(self, message: str) -> None:
+        """Send a chat message in the meeting.
+
+        Args:
+            message (str): The chat message to send.
+        """
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool(
+            "send_chat_message",
+            arguments={"message": message},
+        )
+
+    async def mute(self) -> None:
+        """Mute the participant in the meeting."""
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool("mute_yourself")
+
+    async def unmute(self) -> None:
+        """Unmute the participant in the meeting."""
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool("unmute_yourself")

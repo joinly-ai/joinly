@@ -117,12 +117,14 @@ async def run():
         for segment in segments:
             print(f"Received utterance: {segment.text}")
             if "marco" in segment.text.lower():
-                await client.client.call_tool("speak_text", {"text": "Polo!"})
+                await client.speak_text("Polo!")
 
     client.add_utterance_callback(on_utterance)
 
     async with client:
         # optionally, load all tools from the server
+        # can be used to give all tools to the llm
+        # e.g., for langchain mcp adapter, use the client.client.session
         tool_list = await client.client.list_tools()
 
         await client.join_meeting("<MeetingUrl>")
