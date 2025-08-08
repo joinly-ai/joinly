@@ -14,7 +14,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 from pydantic_ai.models import Model, ModelRequestParameters
-from pydantic_ai.settings import ModelSettings
+from pydantic_ai.settings import ModelSettings, merge_model_settings
 from pydantic_ai.tools import ToolDefinition
 
 from joinly_client.types import ToolExecutor, TranscriptSegment, Usage
@@ -122,9 +122,12 @@ class ConversationalToolAgent:
         response = await model_request(
             self._llm,
             [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
-            model_settings=ModelSettings(
-                temperature=0.2,
-                parallel_tool_calls=True,
+            model_settings=merge_model_settings(
+                self._llm.settings,
+                ModelSettings(
+                    temperature=0.2,
+                    parallel_tool_calls=True,
+                ),
             ),
             model_request_parameters=ModelRequestParameters(
                 function_tools=[

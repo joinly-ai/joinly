@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic_ai.models import Model, infer_model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIModel, OpenAIResponsesModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
@@ -56,7 +57,24 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
     if llm_provider == "azure_openai":
         llm_provider = "azure"
 
-    model = infer_model(f"{llm_provider}:{model_name}")
+    # seems to fail with provider="azure"
+    if llm_provider == "openai" and model_name.startswith("gpt-5"):
+        model = OpenAIResponsesModel(
+            model_name,
+            provider=llm_provider,  # type: ignore[arg-type]
+            settings=ModelSettings(
+                extra_body={
+                    "reasoning": {
+                        "effort": "minimal",
+                    },
+                    "text": {
+                        "verbosity": "low",
+                    },
+                }
+            ),
+        )
+    else:
+        model = infer_model(f"{llm_provider}:{model_name}")
 
     if model_name.startswith("gpt-5"):
         model.profile = model.profile.update(
