@@ -134,7 +134,7 @@ class ConversationalToolAgent:
                     ToolDefinition(
                         name="end_turn",
                         description=(
-                            "End the current response cycle. "
+                            "End the current response turn. "
                             "Use this directly if no or no further response is needed."
                         ),
                         parameters_json_schema={"properties": {}, "type": "object"},
