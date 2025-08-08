@@ -201,6 +201,7 @@ def _parse_kv(
     "--verbose",
     count=True,
     help="Increase logging verbosity (can be used multiple times).",
+    default=1,
 )
 @click.argument(
     "meeting-url",

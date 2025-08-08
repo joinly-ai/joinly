@@ -237,6 +237,7 @@ def _parse_kv(
     "--verbose",
     count=True,
     help="Increase logging verbosity (can be used multiple times).",
+    default=1,
 )
 @click.option(
     "-q", "--quiet", is_flag=True, help="Suppress all but error and critical logging."
