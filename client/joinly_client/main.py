@@ -203,6 +203,9 @@ def _parse_kv(
     help="Increase logging verbosity (can be used multiple times).",
     default=1,
 )
+@click.option(
+    "-q", "--quiet", is_flag=True, help="Suppress all but error and critical logging."
+)
 @click.argument(
     "meeting-url",
     type=str,
@@ -220,19 +223,22 @@ def cli(  # noqa: PLR0913
     mcp_config: str | None,
     meeting_url: str,
     verbose: int,
+    quiet: bool,
     **settings: Any,  # noqa: ANN401
 ) -> None:
     """Run the joinly client."""
     from rich.logging import RichHandler
 
     log_level = logging.WARNING
-    if verbose == 1:
+    if quiet:
+        log_level = logging.ERROR
+    elif verbose == 1:
         log_level = logging.INFO
     elif verbose == 2:  # noqa: PLR2004
         log_level = logging.DEBUG
 
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.WARNING if not quiet else logging.ERROR,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
