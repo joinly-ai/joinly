@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic_ai.models import Model, infer_model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIModel, OpenAIResponsesModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
@@ -23,9 +24,8 @@ DEFAULT_PROMPT_TEMPLATE = (
     "Give information, answer questions, and fullfill tasks as needed. "
     "You receive real-time transcripts from the ongoing meeting. "
     "Respond interactively and use available tools to assist participants. "
-    "Always finish your response with the 'finish' tool. "
-    "Never directly use the 'finish' tool, always respond first and then use it. "
-    "If interrupted mid-response, use 'finish'."
+    "ALWAYS end your response with the `end_turn` tool. Use it if no further tool "
+    "calls are needed and your response is finished for the current input."
 )
 
 
@@ -56,7 +56,24 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
     if llm_provider == "azure_openai":
         llm_provider = "azure"
 
-    model = infer_model(f"{llm_provider}:{model_name}")
+    # seems to fail with provider="azure"
+    if llm_provider == "openai" and model_name.startswith("gpt-5"):
+        model = OpenAIResponsesModel(
+            model_name,
+            provider=llm_provider,  # type: ignore[arg-type]
+            settings=ModelSettings(
+                extra_body={
+                    "reasoning": {
+                        "effort": "minimal",
+                    },
+                    "text": {
+                        "verbosity": "low",
+                    },
+                }
+            ),
+        )
+    else:
+        model = infer_model(f"{llm_provider}:{model_name}")
 
     if model_name.startswith("gpt-5"):
         model.profile = model.profile.update(

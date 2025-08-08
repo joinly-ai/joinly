@@ -14,7 +14,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 from pydantic_ai.models import Model, ModelRequestParameters
-from pydantic_ai.settings import ModelSettings
+from pydantic_ai.settings import ModelSettings, merge_model_settings
 from pydantic_ai.tools import ToolDefinition
 
 from joinly_client.types import ToolExecutor, TranscriptSegment, Usage
@@ -106,7 +106,7 @@ class ConversationalToolAgent:
             self._messages.append(response)
             if request:
                 self._messages.append(request)
-            if self._check_finished(response, request):
+            if self._check_end_turn(response, request):
                 break
 
     async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
@@ -122,23 +122,27 @@ class ConversationalToolAgent:
         response = await model_request(
             self._llm,
             [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
-            model_settings=ModelSettings(
-                temperature=0.2,
-                parallel_tool_calls=True,
+            model_settings=merge_model_settings(
+                self._llm.settings,
+                ModelSettings(
+                    temperature=0.2,
+                    parallel_tool_calls=True,
+                ),
             ),
             model_request_parameters=ModelRequestParameters(
                 function_tools=[
                     ToolDefinition(
-                        name="finish",
+                        name="end_turn",
                         description=(
-                            "Finish the current response. "
-                            "Use this directly if no response is needed."
+                            "End the current response turn. "
+                            "Use this directly if no or no further response is needed."
                         ),
                         parameters_json_schema={"properties": {}, "type": "object"},
                     ),
                     *self._tools,
                 ],
-                allow_text_output=False,
+                # do not set tool calls to required for gpt-5, seems to cause issues
+                allow_text_output=self._llm.model_name.startswith("gpt-5"),
             ),
         )
         logger.debug(
@@ -186,9 +190,9 @@ class ConversationalToolAgent:
         Returns:
             ToolReturnPart: The result of the tool call.
         """
-        if tool_call.tool_name == "finish":
+        if tool_call.tool_name == "end_turn":
             return ToolReturnPart(
-                tool_name="finish",
+                tool_name="end_turn",
                 content="",
                 tool_call_id=tool_call.tool_call_id,
             )
@@ -216,12 +220,12 @@ class ConversationalToolAgent:
             tool_call_id=tool_call.tool_call_id,
         )
 
-    def _check_finished(
+    def _check_end_turn(
         self, response: ModelResponse, request: ModelRequest | None
     ) -> bool:
-        """Check if the response indicates that the agent has finished.
+        """Check if the response indicates that the agent has ended its turn.
 
-        Returns True if the agent called the 'finish' tool, if there are no tool
+        Returns True if the agent called the 'end_turn' tool, if there are no tool
         calls, or if tool response includes speech interruption.
 
         Args:
@@ -229,7 +233,7 @@ class ConversationalToolAgent:
             request (ModelRequest): The request sent to the LLM.
 
         Returns:
-            bool: True if the agent has finished, False otherwise.
+            bool: True if the agent has ended its turn, False otherwise.
         """
         tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
         tool_responses = (
@@ -238,19 +242,19 @@ class ConversationalToolAgent:
             else []
         )
 
-        finish_tool_called = any(p.tool_name == "finish" for p in tool_calls)
+        end_turn_tool_called = any(p.tool_name == "end_turn" for p in tool_calls)
         interrupted = any(
             "Interrupted by detected speech" in str(p.content) for p in tool_responses
         )
 
-        finished = not tool_calls or finish_tool_called or interrupted
+        finished = not tool_calls or end_turn_tool_called or interrupted
         if finished:
             logger.debug(
                 "Agent turn ended: %s",
                 "No tool calls"
                 if not tool_calls
-                else "Finish tool called"
-                if finish_tool_called
+                else "End turn tool called"
+                if end_turn_tool_called
                 else "Interrupted by speech",
             )
 
