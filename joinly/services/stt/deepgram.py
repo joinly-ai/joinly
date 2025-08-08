@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class DeepgramSTT(STT):
     """A class to transcribe audio using Deepgram."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         model_name: str | None = None,
@@ -38,6 +38,7 @@ class DeepgramSTT(STT):
         hotwords: list[str] | None = None,
         padding_silence: float = 0.5,
         stream_idle_timeout: float = 2.0,
+        mip_opt_out: bool = True,
     ) -> None:
         """Initialize the DeepgramSTT.
 
@@ -51,6 +52,8 @@ class DeepgramSTT(STT):
             stream_idle_timeout: The duration to wait after finalizing the stream before
                 closing it (default is 2.0 seconds). Normally, this should never
                 trigger as the stream is finalized.
+            mip_opt_out: Whether to opt out of the model improvement program
+                (default is True). See more at https://developers.deepgram.com/docs/the-deepgram-model-improvement-partnership-program.
         """
         config = DeepgramClientOptions(options={"keep_alive": True})
         dg = DeepgramClient(config=config)
@@ -75,6 +78,7 @@ class DeepgramSTT(STT):
                 else None
             ),
         )
+        self._mip_opt_out = bool(mip_opt_out)
         self._stream_idle_timeout = stream_idle_timeout
         self._sent_seconds = 0.0
         self._queue: asyncio.Queue[TranscriptSegment | None] | None = None
@@ -120,7 +124,9 @@ class DeepgramSTT(STT):
             "Connecting to Deepgram STT service with model: %s",
             self._live_options.model,
         )
-        await self._client.start(self._live_options)
+        await self._client.start(
+            self._live_options, addons={"mip_opt_out": self._mip_opt_out}
+        )
         if not await self._client.is_connected():
             msg = "Failed to connect to Deepgram STT service."
             logger.error(msg)
@@ -163,7 +169,7 @@ class DeepgramSTT(STT):
                 add_usage(
                     service="deepgram_stt",
                     usage={"minutes": self._padding_silence_dur / 60},
-                    meta={"model": self.model_name},
+                    meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
             async for window in windows:
                 if stream_start is None:
@@ -179,7 +185,7 @@ class DeepgramSTT(STT):
                 add_usage(
                     service="deepgram_stt",
                     usage={"minutes": dur / 60},
-                    meta={"model": self.model_name},
+                    meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
             await self._client.finalize()
 

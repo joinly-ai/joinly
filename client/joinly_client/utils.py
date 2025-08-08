@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic_ai.models import Model, infer_model
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.profiles.openai import OpenAIModelProfile
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import ToolDefinition
 
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
@@ -37,9 +40,6 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
         Model: An instance of the LLM model.
     """
     if llm_provider == "ollama":
-        from pydantic_ai.models.openai import OpenAIModel
-        from pydantic_ai.providers.openai import OpenAIProvider
-
         ollama_url = os.getenv("OLLAMA_URL")
         if not ollama_url:
             ollama_url = (
@@ -56,7 +56,14 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
     if llm_provider == "azure_openai":
         llm_provider = "azure"
 
-    return infer_model(f"{llm_provider}:{model_name}")
+    model = infer_model(f"{llm_provider}:{model_name}")
+
+    if model_name.startswith("gpt-5"):
+        model.profile = model.profile.update(
+            OpenAIModelProfile(openai_supports_sampling_settings=False)
+        )
+
+    return model
 
 
 def get_prompt(template: str = DEFAULT_PROMPT_TEMPLATE, name: str = "joinly") -> str:
