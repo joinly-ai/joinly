@@ -185,7 +185,12 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         msg = (
             f"No supported platform found for URL: {url}. "
             "Supported platforms: "
-            f"{', '.join(pc.__name__ for pc in PLATFORMS)}."
+            f"{
+                ', '.join(
+                    pc.__name__.removesuffix('BrowserPlatformController')
+                    for pc in PLATFORMS
+                )
+            }."
         )
         raise RuntimeError(msg)
 
