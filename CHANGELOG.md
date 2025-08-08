@@ -1,6 +1,33 @@
 
 # Changelog
 
+## v0.4.1 - 2025-08-08
+
+### Improvements
+
+- upgrade kokoro-onnx to 0.4.9 (#88)
+- add model improvemet program opt-out for deepgram (#90, #97)
+- default to `--client` if meeting url is given (#93)
+- set default logging to info level for cli (#96)
+- remove suffix for platform error messages (#98)
+
+### Fixed
+
+- fix missing links in google meet chat (#86)
+- get headers to load settings for fastmcp>=2.11 (#89)
+
+### joinly-client (v0.1.7)
+
+- fix openai issues with openai>=1.99.2 (#91)
+- fix gpt-5 usage by disabling sampling settings (#94)
+- wrap tool calls for direct usage with client (#99)
+- add debug logging for agent (#100)
+- improve agent for gpt-5 (#101)
+
+### Others
+
+- update environment names in release workflow (#87)
+
 ## v0.4.0 - 2025-08-04
 
 ### New: joinly-client (v0.1.5)
