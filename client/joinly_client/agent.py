@@ -83,6 +83,7 @@ class ConversationalToolAgent:
                 process.
         """
         if self._run_task and not self._run_task.done():
+            logger.debug("Cancelling current agent run task")
             self._run_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._run_task
@@ -117,6 +118,7 @@ class ConversationalToolAgent:
         Returns:
             ModelResponse: The response from the LLM.
         """
+        logger.debug("Calling LLM with %d messages", len(messages))
         response = await model_request(
             self._llm,
             [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
@@ -138,6 +140,12 @@ class ConversationalToolAgent:
                 ],
                 allow_text_output=False,
             ),
+        )
+        logger.debug(
+            "LLM response received with %d parts, %d input tokens and %d output tokens",
+            len(response.parts),
+            response.usage.request_tokens or 0,
+            response.usage.response_tokens or 0,
         )
         self._usage.add(
             "llm",
@@ -230,12 +238,20 @@ class ConversationalToolAgent:
             else []
         )
 
-        return (
-            not tool_calls
-            or any(p.tool_name == "finish" for p in tool_calls)
-            or any(
-                p
-                for p in tool_responses
-                if "Interrupted by detected speech" in str(p.content)
-            )
+        finish_tool_called = any(p.tool_name == "finish" for p in tool_calls)
+        interrupted = any(
+            "Interrupted by detected speech" in str(p.content) for p in tool_responses
         )
+
+        finished = not tool_calls or finish_tool_called or interrupted
+        if finished:
+            logger.debug(
+                "Agent turn ended: %s",
+                "No tool calls"
+                if not tool_calls
+                else "Finish tool called"
+                if finish_tool_called
+                else "Interrupted by speech",
+            )
+
+        return finished
