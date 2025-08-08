@@ -153,7 +153,7 @@ class ConversationalToolAgent:
                 "input_tokens": response.usage.request_tokens or 0,
                 "output_tokens": response.usage.response_tokens or 0,
             },
-            meta={"model": self._llm.model_name},
+            meta={"model": self._llm.model_name, "provider": self._llm.system},
         )
         return response
 
