@@ -169,7 +169,7 @@ class DeepgramSTT(STT):
                 add_usage(
                     service="deepgram_stt",
                     usage={"minutes": self._padding_silence_dur / 60},
-                    meta={"model": self.model_name},
+                    meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
             async for window in windows:
                 if stream_start is None:
@@ -185,7 +185,7 @@ class DeepgramSTT(STT):
                 add_usage(
                     service="deepgram_stt",
                     usage={"minutes": dur / 60},
-                    meta={"model": self.model_name},
+                    meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
             await self._client.finalize()
 
