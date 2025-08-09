@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
 from pydantic import (
@@ -8,6 +9,7 @@ from pydantic import (
     PrivateAttr,
     RootModel,
     computed_field,
+    field_validator,
 )
 
 
@@ -41,6 +43,12 @@ class TranscriptSegment(BaseModel):
     role: SpeakerRole = Field(default=SpeakerRole.participant)
 
     model_config = ConfigDict(frozen=True)
+
+    @field_validator("start", "end", mode="after")
+    @classmethod
+    def _round(cls, v: float) -> float:
+        """Round the start and end times to 3 decimal places."""
+        return float(Decimal(str(v)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
 
 
 class Transcript(BaseModel):
