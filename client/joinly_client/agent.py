@@ -33,6 +33,7 @@ class ConversationalToolAgent:
         tool_executor: ToolExecutor,
         *,
         prompt: str | None = None,
+        max_messages: int = 50,
     ) -> None:
         """Initialize the conversational agent with a model.
 
@@ -43,6 +44,8 @@ class ConversationalToolAgent:
             tool_executor (ToolExecutor | None): A function to execute a tool. Defaults
                 to None.
             prompt (str | None): An optional prompt to initialize the agent with.
+            max_messages (int): The maximum number of messages to keep in the agent's
+                history. Defaults to 50.
         """
         if not tools:
             msg = "At least one tool must be provided to the agent."
@@ -53,6 +56,7 @@ class ConversationalToolAgent:
         self._tools = tools
         self._tool_executor = tool_executor
         self._messages: list[ModelMessage] = []
+        self._max_messages = max_messages
         self._usage = Usage()
         self._run_task: asyncio.Task | None = None
 
@@ -101,6 +105,9 @@ class ConversationalToolAgent:
             self._messages.append(ModelRequest.user_text_prompt(prompt))
 
         while True:
+            self._messages = self._limit_messages(
+                self._messages, max_messages=self._max_messages
+            )
             response = await self._call_llm(self._messages)
             request = await self._call_tools(response)
             self._messages.append(response)
@@ -259,3 +266,34 @@ class ConversationalToolAgent:
             )
 
         return finished
+
+    def _limit_messages(
+        self, messages: list[ModelMessage], max_messages: int
+    ) -> list[ModelMessage]:
+        """Limit the number of messages stored in the agent.
+
+        Removes the oldest messages if the total exceeds max_messages. Does not
+        cut off at tool return parts to ensure matching tool calls and returns.
+
+        Args:
+            messages (list[ModelMessage]): The list of messages to limit.
+            max_messages (int): The maximum number of messages to keep in the agent's
+                history.
+
+        Returns:
+            list[ModelMessage]: The limited list of messages.
+        """
+        n = len(messages)
+        if n > max_messages:
+            start = n - max_messages
+            while start > 0 and any(
+                isinstance(p, ToolReturnPart) for p in messages[start].parts
+            ):
+                start -= 1
+            if start > 0:
+                logger.debug(
+                    "Limited messages by removing %d",
+                    start,
+                )
+                return messages[start:]
+        return messages[:]
