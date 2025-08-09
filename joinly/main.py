@@ -121,6 +121,14 @@ def _parse_kv(
     callback=lambda _ctx, _param, value: load_dotenv(value),
 )
 @click.option(
+    "--prompt",
+    type=str,
+    help="System prompt to use for the model. If not provided, the default "
+    "system prompt will be used.",
+    default=None,
+    envvar="JOINLY_PROMPT",
+)
+@click.option(
     "--name-trigger",
     is_flag=True,
     help="Trigger the agent only when the name is mentioned in the transcript. "
@@ -264,6 +272,7 @@ def cli(  # noqa: PLR0913
     llm_model: str,
     vnc_server: bool,
     vnc_server_port: int,
+    prompt: str | None,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -305,6 +314,7 @@ def cli(  # noqa: PLR0913
                 meeting_url=meeting_url,
                 llm_provider=llm_provider,
                 llm_model=llm_model,
+                prompt=prompt,
                 name=settings.name,
                 name_trigger=name_trigger,
             )

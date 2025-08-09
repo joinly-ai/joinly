@@ -92,7 +92,6 @@ def _parse_kv(
     help="System prompt to use for the model. If not provided, the default "
     "system prompt will be used.",
     default=None,
-    show_default=True,
     envvar="JOINLY_PROMPT",
 )
 @click.option(
