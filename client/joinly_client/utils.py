@@ -106,7 +106,7 @@ def get_prompt(
     """
     template = template if template is not None else DEFAULT_PROMPT_TEMPLATE
     instructions = instructions if instructions is not None else DEFAULT_INSTRUCTIONS
-    today = datetime.now(tz=UTC).strftime("%d.%m.%Y")
+    today = datetime.now(tz=UTC).date().isoformat()
     return template.format(date=today, name=name, instructions=instructions)
 
 
