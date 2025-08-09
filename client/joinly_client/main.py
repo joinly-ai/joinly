@@ -333,7 +333,10 @@ async def run(  # noqa: PLR0913
             }
         )
         agent = ConversationalToolAgent(
-            llm, tools, tool_executor, prompt=prompt or get_prompt(name=client.name)
+            llm,
+            tools,
+            tool_executor,
+            prompt=get_prompt(instructions=prompt, name=client.name),
         )
         client.add_utterance_callback(agent.on_utterance)
         async with agent:

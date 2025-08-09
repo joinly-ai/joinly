@@ -89,8 +89,8 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
 
 
 def get_prompt(
-    template: str = DEFAULT_PROMPT_TEMPLATE,
-    instructions: str = DEFAULT_INSTRUCTIONS,
+    template: str | None = None,
+    instructions: str | None = None,
     name: str = "joinly",
 ) -> str:
     """Get the prompt template for the agent.
@@ -104,6 +104,8 @@ def get_prompt(
     Returns:
         str: The formatted prompt template.
     """
+    template = template if template is not None else DEFAULT_PROMPT_TEMPLATE
+    instructions = instructions if instructions is not None else DEFAULT_INSTRUCTIONS
     today = datetime.now(tz=UTC).strftime("%d.%m.%Y")
     return template.format(date=today, name=name, instructions=instructions)
 
