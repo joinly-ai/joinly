@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
 from pydantic import (
@@ -47,7 +48,7 @@ class TranscriptSegment(BaseModel):
     @classmethod
     def _round(cls, v: float) -> float:
         """Round the start and end times to 3 decimal places."""
-        return round(float(v), 3)
+        return float(Decimal(str(v)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
 
 
 class Transcript(BaseModel):
