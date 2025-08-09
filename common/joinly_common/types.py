@@ -8,6 +8,7 @@ from pydantic import (
     PrivateAttr,
     RootModel,
     computed_field,
+    field_validator,
 )
 
 
@@ -41,6 +42,12 @@ class TranscriptSegment(BaseModel):
     role: SpeakerRole = Field(default=SpeakerRole.participant)
 
     model_config = ConfigDict(frozen=True)
+
+    @field_validator("start", "end", mode="after")
+    @classmethod
+    def _round(cls, v: float) -> float:
+        """Round the start and end times to 3 decimal places."""
+        return round(float(v), 3)
 
 
 class Transcript(BaseModel):
