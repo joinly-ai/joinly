@@ -15,17 +15,22 @@ from pydantic_ai.tools import ToolDefinition
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
 
 DEFAULT_PROMPT_TEMPLATE = (
-    "Today is {date}. "
-    "You are {name}, a professional and knowledgeable meeting assistant. "
+    "Today is {date}, you're name is {name}. "
+    "You are in a meeting and receive real-time transcripts. "
+    "{instructions} "
+    "ALWAYS end your response with the `end_turn` tool. Use it if no further tool "
+    "calls are needed and your response is finished for the current input."
+)
+
+DEFAULT_INSTRUCTIONS = (
+    "You are a professional and knowledgeable meeting assistant. "
     "Provide concise, valuable contributions in the meeting. "
     "You are only with one other participant in the meeting, therefore "
     "respond to all messages and questions. "
     "When you are greeted, respond politely in spoken language. "
-    "Give information, answer questions, and fullfill tasks as needed. "
+    "Give information, answer questions, and fulfill tasks as needed. "
     "You receive real-time transcripts from the ongoing meeting. "
-    "Respond interactively and use available tools to assist participants. "
-    "ALWAYS end your response with the `end_turn` tool. Use it if no further tool "
-    "calls are needed and your response is finished for the current input."
+    "Respond interactively and use available tools to assist participants."
 )
 
 
@@ -83,18 +88,24 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
     return model
 
 
-def get_prompt(template: str = DEFAULT_PROMPT_TEMPLATE, name: str = "joinly") -> str:
+def get_prompt(
+    template: str = DEFAULT_PROMPT_TEMPLATE,
+    instructions: str = DEFAULT_INSTRUCTIONS,
+    name: str = "joinly",
+) -> str:
     """Get the prompt template for the agent.
 
     Args:
         template (str): The prompt template to use. Defaults to DEFAULT_PROMPT_TEMPLATE.
+        instructions (str): Instructions for the agent. Defaults to
+            DEFAULT_INSTRUCTIONS.
         name (str): The name of the agent. Defaults to 'joinly'.
 
     Returns:
         str: The formatted prompt template.
     """
     today = datetime.now(tz=UTC).strftime("%d.%m.%Y")
-    return template.format(name=name, date=today)
+    return template.format(date=today, name=name, instructions=instructions)
 
 
 async def load_tools(
