@@ -27,7 +27,7 @@ __all__ = [
     "Usage",
 ]
 
-ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
+type ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
 
 
 @dataclass

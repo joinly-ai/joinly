@@ -5,7 +5,7 @@ from typing import Literal
 
 logger = logging.getLogger(__name__)
 
-EventType = Literal["segment", "utterance"]
+type EventType = Literal["segment", "utterance"]
 
 
 class EventBus:
