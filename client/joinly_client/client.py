@@ -8,7 +8,8 @@ from typing import Any, Self
 
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp import McpError, ResourceUpdatedNotification, ServerNotification
+from mcp import ClientSession, McpError, ResourceUpdatedNotification, ServerNotification
+from mcp.types import Tool
 from pydantic import AnyUrl
 
 from joinly_client.types import (
@@ -82,6 +83,18 @@ class JoinlyClient:
             msg = "Client is not connected"
             raise RuntimeError(msg)
         return self._client
+
+    @property
+    def session(self) -> ClientSession:
+        """Get the current session instance.
+
+        Returns:
+            Session: The current session instance.
+
+        Raises:
+            RuntimeError: If the client is not connected.
+        """
+        return self.client.session
 
     def add_utterance_callback(
         self, callback: Callable[[list[TranscriptSegment]], Coroutine[None, None, None]]
@@ -268,6 +281,14 @@ class JoinlyClient:
             self._last_segment = new_transcript.segments[-1].start
             for callback in self._segment_callbacks:
                 self._track_task(asyncio.create_task(callback(new_transcript.segments)))
+
+    async def list_tools(self) -> list[Tool]:
+        """List the available tools on the joinly server.
+
+        Returns:
+            list[Tool]: A list of available tools.
+        """
+        return await self.client.list_tools()
 
     async def join_meeting(
         self,
