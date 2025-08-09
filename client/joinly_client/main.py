@@ -1,7 +1,7 @@
 import asyncio
-import contextlib
 import json
 import logging
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
@@ -311,8 +311,24 @@ async def run(  # noqa: PLR0913
         name_trigger=name_trigger,
         settings=settings,
     )
-    mcp_client = Client(mcp_config) if mcp_config else None
-    llm = get_llm(llm_provider, llm_model)
+
+    if mcp_config and "mcpServers" not in mcp_config:
+        logger.warning(
+            "MCP configuration does not contain 'mcpServers'. "
+            "Using the main joinly client only."
+        )
+        mcp_config = None
+    elif mcp_config and "joinly" in mcp_config["mcpServers"]:
+        mcp_config["_joinly"] = mcp_config.pop("joinly")
+
+    additional_clients = (
+        {
+            name: Client({"mcpServers": {name: config}})
+            for name, config in mcp_config["mcpServers"].items()
+        }
+        if mcp_config
+        else {}
+    )
 
     async def log_segments(segments: list[TranscriptSegment]) -> None:
         """Log segments received from the client."""
@@ -320,15 +336,25 @@ async def run(  # noqa: PLR0913
             logger.info('%s: "%s"', segment.speaker or "Participant", segment.text)
 
     client.add_segment_callback(log_segments)
+    llm = get_llm(llm_provider, llm_model)
 
-    async with client, mcp_client or contextlib.nullcontext():
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(client)
+        for client_name, additional_client in additional_clients.items():
+            logger.info("Connecting to %s", client_name)
+            await stack.enter_async_context(additional_client)
+            logger.debug("Connected to %s", client_name)
+
         joinly_config = McpClientConfig(client=client.client, exclude=["join_meeting"])
         tools, tool_executor = await load_tools(
             joinly_config
-            if mcp_client is None
+            if not additional_clients
             else {
                 "joinly": joinly_config,
-                "mcp": McpClientConfig(client=mcp_client),
+                **{
+                    name: McpClientConfig(client)
+                    for name, client in additional_clients.items()
+                },
             }
         )
         agent = ConversationalToolAgent(
