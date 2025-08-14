@@ -22,7 +22,7 @@ COPY . /app
 
 # Remove packages
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv remove --no-sync faster-whisper kokoro-onnx webrtcvad-wheels joinly-client
+    uv remove --no-sync faster-whisper kokoro-onnx joinly-client
 
 # Install application into .venv (non-editable mode)
 RUN --mount=type=cache,target=/root/.cache/uv \
