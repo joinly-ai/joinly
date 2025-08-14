@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from collections.abc import Callable, Coroutine
 
@@ -87,6 +88,17 @@ class MeetingSession:
         await self._meeting_provider.join(meeting_url, participant_name, passcode)
         self._clock = Clock()
         self._transcript = Transcript()
+
+        _unsubscribe: Callable[[], None] | None = None
+
+        async def unmute_on_start() -> None:
+            """Unmute the participant when the meeting starts."""
+            if _unsubscribe is not None:
+                _unsubscribe()
+            with contextlib.suppress(Exception):
+                await self._meeting_provider.unmute()
+
+        _unsubscribe = self._event_bus.subscribe("segment", unmute_on_start)
 
         await self._transcription_controller.start(
             self._clock, self._transcript, self._event_bus
