@@ -68,7 +68,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         )
         self.queue_size = queue_size
         self.max_missed_chunks = max_missed_chunks
-        self._pulse_format = "float32le" if byte_depth == 4 else "int16le"  # noqa: PLR2004
+        self._pulse_format = "float32le" if byte_depth == 4 else "s16le"  # noqa: PLR2004
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None

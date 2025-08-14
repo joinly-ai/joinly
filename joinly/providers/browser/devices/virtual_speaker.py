@@ -54,7 +54,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             sink_name if sink_name is not None else f"virt.{uuid.uuid4()}"
         )
         self.chunk_size = frames_per_chunk * self.audio_format.byte_depth
-        self._pulse_format = "float32le" if byte_depth == 4 else "int16le"  # noqa: PLR2004
+        self._pulse_format = "float32le" if byte_depth == 4 else "s16le"  # noqa: PLR2004
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
