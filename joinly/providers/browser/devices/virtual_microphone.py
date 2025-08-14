@@ -53,7 +53,6 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             msg = f"Invalid byte depth: {byte_depth}. Must be 2 or 4."
             raise ValueError(msg)
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=byte_depth)
-        self.pipe_size = pipe_size if pipe_size is not None else byte_depth * 480
         self.fifo_path = fifo_path
         self.source_name: str = (
             source_name if source_name is not None else f"virtmic.{uuid.uuid4()}"
@@ -61,6 +60,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         self.chunk_size = (
             int(sample_rate * chunk_ms / 1000) * self.audio_format.byte_depth
         )
+        self.pipe_size = pipe_size if pipe_size is not None else self.chunk_size * 2
         self.chunk_ms = (
             self.chunk_size
             / (self.audio_format.byte_depth * self.audio_format.sample_rate)

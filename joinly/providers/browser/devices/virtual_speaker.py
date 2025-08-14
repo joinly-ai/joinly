@@ -48,12 +48,12 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             raise ValueError(msg)
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=byte_depth)
         self.frames_per_chunk = frames_per_chunk
-        self.pipe_size = pipe_size if pipe_size is not None else byte_depth * 1024
         self.fifo_path = fifo_path
         self.sink_name: str = (
             sink_name if sink_name is not None else f"virt.{uuid.uuid4()}"
         )
         self.chunk_size = frames_per_chunk * self.audio_format.byte_depth
+        self.pipe_size = pipe_size if pipe_size is not None else self.chunk_size * 2
         self._pulse_format = "float32le" if byte_depth == 4 else "s16le"  # noqa: PLR2004
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
