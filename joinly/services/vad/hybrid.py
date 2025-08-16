@@ -16,7 +16,12 @@ class HybridVAD(BasePaddedVAD):
     """
 
     def __init__(self, *, sample_rate: int = 16000) -> None:
-        """Hybrid VAD initialization."""
+        """Hybrid VAD initialization.
+
+        Args:
+            sample_rate (int, optional): The sample rate of the audio. Defaults
+                to 16000.
+        """
         self._silero = SileroVAD(sample_rate=sample_rate)
         self._webrtc = WebrtcVAD(
             sample_rate=sample_rate, window_duration=30, aggressiveness=3
