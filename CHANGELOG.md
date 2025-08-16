@@ -1,6 +1,31 @@
 
 # Changelog
 
+## v0.4.2 - 2025-08-16
+
+### Improvements
+
+- reduce audio format conversions in pipeline (#113)
+- hybrid VAD implementation between webrtc and silero (#114)
+
+### Fixed
+
+- unmute automatically on start (#112)
+- round start/end times in transcript for consistency (#109)
+- keep webrtc package in lite build (#111)
+
+### joiny-client (v0.1.8)
+
+- add direct `list_tools` and `session` access to joinly client (#104)
+- split system prompt and custom instructions (#105)
+- use one mcp cient per server, instead of stateless proxy (#106)
+- add message history limit to reduce token usage (#107)
+- change date formatting to ISO (#108)
+
+### Others
+
+- refactor to use type keyword (#103)
+
 ## v0.4.1 - 2025-08-08
 
 ### Improvements
