@@ -85,11 +85,25 @@ class SessionContainer:
                 "TTS",
                 self._settings.tts_args,
             )
+
+            provider_extra_args = (
+                {
+                    "reader_byte_depth": vad.audio_format.byte_depth,
+                    "writer_byte_depth": tts.audio_format.byte_depth,
+                }
+                if _resolve(
+                    self._settings.meeting_provider,
+                    base="joinly.providers",
+                    suffix="MeetingProvider",
+                ).__name__
+                == "BrowserMeetingProvider"
+                else {}
+            )
             meeting_provider = await self._build(
                 self._settings.meeting_provider,
                 "joinly.providers",
                 "MeetingProvider",
-                self._settings.meeting_provider_args,
+                provider_extra_args | self._settings.meeting_provider_args,
             )
 
             transcription_controller = await self._build(

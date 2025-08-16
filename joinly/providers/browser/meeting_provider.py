@@ -64,12 +64,18 @@ class BrowserMeetingProvider(BaseMeetingProvider):
     def __init__(
         self,
         *,
+        reader_byte_depth: int | None = None,
+        writer_byte_depth: int | None = None,
         vnc_server: bool = False,
         vnc_server_port: int = 5900,
     ) -> None:
         """Initialize the browser meeting provider.
 
         Args:
+            reader_byte_depth (int | None): The byte depth for the virtual speaker
+                (default is None).
+            writer_byte_depth (int | None): The byte depth for the virtual
+                microphone (default is None).
             vnc_server (bool): Whether to start a VNC server for the virtual display.
             vnc_server_port (int): The port to use for the VNC server.
         """
@@ -78,8 +84,16 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         virtual_display = VirtualDisplay(
             env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
         )
-        virtual_speaker = VirtualSpeaker(env=self._env)
-        self._virtual_microphone = VirtualMicrophone(env=self._env)
+        virtual_speaker = (
+            VirtualSpeaker(env=self._env)
+            if not reader_byte_depth
+            else VirtualSpeaker(env=self._env, byte_depth=reader_byte_depth)
+        )
+        self._virtual_microphone = (
+            VirtualMicrophone(env=self._env)
+            if not writer_byte_depth
+            else VirtualMicrophone(env=self._env, byte_depth=writer_byte_depth)
+        )
         self._browser_session = BrowserSession(env=self._env)
         self._services = [
             pulse_server,

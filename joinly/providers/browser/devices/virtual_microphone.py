@@ -26,7 +26,8 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         self,
         *,
         sample_rate: int = 24000,
-        pipe_size: int = 1920,
+        byte_depth: int = 4,
+        pipe_size: int | None = None,
         fifo_path: Path | None = None,
         source_name: str | None = None,
         chunk_ms: int = 10,
@@ -38,6 +39,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
 
         Args:
             sample_rate: Sample rate for the audio.
+            byte_depth: Depth for the audio.
             pipe_size: Size of the pipe for the audio.
             fifo_path: Path to the FIFO file for audio input.
             source_name: Name of the source.
@@ -47,8 +49,10 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
                 pacing.
             env: Optional environment dictionary to set the audio source name.
         """
-        self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
-        self.pipe_size = pipe_size
+        if byte_depth not in (2, 4):
+            msg = f"Invalid byte depth: {byte_depth}. Must be 2 or 4."
+            raise ValueError(msg)
+        self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=byte_depth)
         self.fifo_path = fifo_path
         self.source_name: str = (
             source_name if source_name is not None else f"virtmic.{uuid.uuid4()}"
@@ -56,6 +60,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         self.chunk_size = (
             int(sample_rate * chunk_ms / 1000) * self.audio_format.byte_depth
         )
+        self.pipe_size = pipe_size if pipe_size is not None else self.chunk_size * 2
         self.chunk_ms = (
             self.chunk_size
             / (self.audio_format.byte_depth * self.audio_format.sample_rate)
@@ -63,6 +68,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
         )
         self.queue_size = queue_size
         self.max_missed_chunks = max_missed_chunks
+        self._pulse_format = "float32le" if byte_depth == 4 else "s16le"  # noqa: PLR2004
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
@@ -94,7 +100,7 @@ class VirtualMicrophone(PulseModuleManager, AudioWriter):
             f"source_name={self.source_name}",
             f"file={self.fifo_path}",
             f"rate={self.audio_format.sample_rate}",
-            "format=float32le",
+            f"format={self._pulse_format}",
             "channels=1",
             env=self._env,
         )

@@ -26,7 +26,8 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         *,
         sample_rate: int = 16000,
         frames_per_chunk: int = 512,
-        pipe_size: int = 4096,
+        byte_depth: int = 4,
+        pipe_size: int | None = None,
         fifo_path: Path | None = None,
         sink_name: str | None = None,
         env: dict[str, str] | None = None,
@@ -36,19 +37,24 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
         Args:
             sample_rate (int): The sample rate for the audio stream (default is 16000).
             frames_per_chunk (int): The number of frames per chunk (default is 512).
+            byte_depth (int): The depth of the audio samples (default is 4).
             pipe_size (int): The size of the pipe for audio streaming (default is 4096).
             fifo_path (Path | None): The path to the FIFO file (default is None).
             sink_name (str | None): The name of the sink (default is None).
             env: Optional environment dictionary to set the sink name.
         """
-        self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=4)
+        if byte_depth not in (2, 4):
+            msg = f"Invalid byte depth: {byte_depth}. Must be 2 or 4."
+            raise ValueError(msg)
+        self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=byte_depth)
         self.frames_per_chunk = frames_per_chunk
-        self.pipe_size = pipe_size
         self.fifo_path = fifo_path
         self.sink_name: str = (
             sink_name if sink_name is not None else f"virt.{uuid.uuid4()}"
         )
         self.chunk_size = frames_per_chunk * self.audio_format.byte_depth
+        self.pipe_size = pipe_size if pipe_size is not None else self.chunk_size * 2
+        self._pulse_format = "float32le" if byte_depth == 4 else "s16le"  # noqa: PLR2004
         self._env: dict[str, str] = env if env is not None else {}
         self._dir: tempfile.TemporaryDirectory[str] | None = None
         self._module_id: int | None = None
@@ -87,7 +93,7 @@ class VirtualSpeaker(PulseModuleManager, AudioReader):
             f"sink_name={self.sink_name}",
             f"file={self.fifo_path}",
             f"rate={self.audio_format.sample_rate}",
-            "format=float32le",
+            f"format={self._pulse_format}",
             "channels=1",
             "use_system_clock_for_timing=yes",
             env=self._env,
