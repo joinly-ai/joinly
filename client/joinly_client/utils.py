@@ -12,26 +12,8 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 
+from joinly_client.prompts import DYADIC_INSTRUCTIONS, DYADIC_PROMPT_TEMPLATE
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
-
-DEFAULT_PROMPT_TEMPLATE = (
-    "Today is {date}, you're name is {name}. "
-    "You are in a meeting and receive real-time transcripts. "
-    "{instructions} "
-    "ALWAYS end your response with the `end_turn` tool. Use it if no further tool "
-    "calls are needed and your response is finished for the current input."
-)
-
-DEFAULT_INSTRUCTIONS = (
-    "You are a professional and knowledgeable meeting assistant. "
-    "Provide concise, valuable contributions in the meeting. "
-    "You are only with one other participant in the meeting, therefore "
-    "respond to all messages and questions. "
-    "When you are greeted, respond politely in spoken language. "
-    "Give information, answer questions, and fulfill tasks as needed. "
-    "You receive real-time transcripts from the ongoing meeting. "
-    "Respond interactively and use available tools to assist participants."
-)
 
 
 def get_llm(llm_provider: str, model_name: str) -> Model:
@@ -96,16 +78,15 @@ def get_prompt(
     """Get the prompt template for the agent.
 
     Args:
-        template (str): The prompt template to use. Defaults to DEFAULT_PROMPT_TEMPLATE.
-        instructions (str): Instructions for the agent. Defaults to
-            DEFAULT_INSTRUCTIONS.
+        template (str): The prompt template to use. Defaults to DYADIC_PROMPT_TEMPLATE.
+        instructions (str): Instructions for the agent. Defaults to DYADIC_INSTRUCTIONS.
         name (str): The name of the agent. Defaults to 'joinly'.
 
     Returns:
         str: The formatted prompt template.
     """
-    template = template if template is not None else DEFAULT_PROMPT_TEMPLATE
-    instructions = instructions if instructions is not None else DEFAULT_INSTRUCTIONS
+    template = template if template is not None else DYADIC_PROMPT_TEMPLATE
+    instructions = instructions if instructions is not None else DYADIC_INSTRUCTIONS
     today = datetime.now(tz=UTC).date().isoformat()
     return template.format(date=today, name=name, instructions=instructions)
 
