@@ -21,12 +21,14 @@ class SileroVAD(BasePaddedVAD):
         *,
         sample_rate: int = 16000,
         speech_threshold: float = 0.5,
+        use_state: bool = True,
     ) -> None:
         """Initialize the VADService.
 
         Args:
             sample_rate: The sample rate of the audio data (default is 16000).
             speech_threshold: The threshold for speech detection (default is 0.5).
+            use_state: Whether to use stateful VAD (default is True).
         """
         if sample_rate not in (8000, 16000):
             msg = (
@@ -37,6 +39,7 @@ class SileroVAD(BasePaddedVAD):
 
         self._sample_rate = sample_rate
         self._speech_threshold = speech_threshold
+        self._use_state = use_state
         self._session: ort.InferenceSession | None = None
         self._state: np.ndarray | None = None
         self._sr_tensor = np.array([self._sample_rate], dtype=np.int64)
@@ -112,6 +115,9 @@ class SileroVAD(BasePaddedVAD):
             },
         )
         speech_prob = float(outputs[0].flat[0])  # type: ignore[attr-defined]
-        self._state = np.array(outputs[1], dtype=np.float32)
+        new_state = np.array(outputs[1], dtype=np.float32)
+
+        if self._use_state:
+            self._state = new_state
 
         return speech_prob > self._speech_threshold
