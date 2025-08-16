@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Self
 
@@ -49,7 +48,6 @@ class WebrtcVAD(BasePaddedVAD):
         )
         self._vad: webrtcvad.Vad | None = None
         self.audio_format = AudioFormat(sample_rate=self._sample_rate, byte_depth=2)
-        self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> Self:
         """Initialize webrtc VAD."""
