@@ -22,9 +22,11 @@ class HybridVAD(BasePaddedVAD):
             sample_rate (int, optional): The sample rate of the audio. Defaults
                 to 16000.
         """
-        self._silero = SileroVAD(sample_rate=sample_rate)
         self._webrtc = WebrtcVAD(
             sample_rate=sample_rate, window_duration=30, aggressiveness=3
+        )
+        self._silero = SileroVAD(
+            sample_rate=sample_rate, speech_threshold=0.5, use_state=False
         )
         self.audio_format = AudioFormat(
             sample_rate=sample_rate, byte_depth=self._webrtc.audio_format.byte_depth
@@ -40,8 +42,8 @@ class HybridVAD(BasePaddedVAD):
     async def __aenter__(self) -> Self:
         """Initialize the hybrid VAD."""
         self._last_is_speech = False
-        await self._stack.enter_async_context(self._silero)
         await self._stack.enter_async_context(self._webrtc)
+        await self._stack.enter_async_context(self._silero)
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
