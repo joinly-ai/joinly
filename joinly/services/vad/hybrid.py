@@ -11,7 +11,7 @@ from joinly.utils.audio import convert_audio_format
 class HybridVAD(BasePaddedVAD):
     """Hybrid VAD combining Silero and Webrtc VADs.
 
-    Mainly utilizing Webrtc for higher computational efficiency. Confirms
+    Mainly utilizes Webrtc for higher computational efficiency. Confirms
     first speech detections using Silero to avoid false detections.
     """
 
