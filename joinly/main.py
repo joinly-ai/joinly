@@ -129,6 +129,16 @@ def _parse_kv(
     envvar="JOINLY_PROMPT",
 )
 @click.option(
+    "--prompt-style",
+    type=click.Choice(["dyadic", "mpc"], case_sensitive=False),
+    help="The type of default prompt to use if no custom prompt is provided."
+    "Options are 'dyadic' for one-on-one meetings or 'mpc' for group meetings.",
+    default="mpc",
+    show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_PROMPT_STYLE",
+)
+@click.option(
     "--name-trigger",
     is_flag=True,
     help="Trigger the agent only when the name is mentioned in the transcript. "
@@ -273,6 +283,7 @@ def cli(  # noqa: PLR0913
     vnc_server: bool,
     vnc_server_port: int,
     prompt: str | None,
+    prompt_style: str,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -315,6 +326,7 @@ def cli(  # noqa: PLR0913
                 llm_provider=llm_provider,
                 llm_model=llm_model,
                 prompt=prompt,
+                prompt_style=prompt_style,
                 name=settings.name,
                 name_trigger=name_trigger,
             )
