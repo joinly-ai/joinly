@@ -12,7 +12,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 
-from joinly_client.prompts import DYADIC_INSTRUCTIONS, DYADIC_PROMPT_TEMPLATE
+from joinly_client.prompts import DEFAULT_PROMPT_TEMPLATE, DYADIC_INSTRUCTIONS
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
 
 
@@ -78,14 +78,14 @@ def get_prompt(
     """Get the prompt template for the agent.
 
     Args:
-        template (str): The prompt template to use. Defaults to DYADIC_PROMPT_TEMPLATE.
+        template (str): The prompt template to use. Defaults to DEFAULT_PROMPT_TEMPLATE.
         instructions (str): Instructions for the agent. Defaults to DYADIC_INSTRUCTIONS.
         name (str): The name of the agent. Defaults to 'joinly'.
 
     Returns:
         str: The formatted prompt template.
     """
-    template = template if template is not None else DYADIC_PROMPT_TEMPLATE
+    template = template if template is not None else DEFAULT_PROMPT_TEMPLATE
     instructions = instructions if instructions is not None else DYADIC_INSTRUCTIONS
     today = datetime.now(tz=UTC).date().isoformat()
     return template.format(date=today, name=name, instructions=instructions)
