@@ -103,6 +103,16 @@ def _parse_kv(
     envvar="JOINLY_PROMPT_FILE",
 )
 @click.option(
+    "--prompt-style",
+    type=click.Choice(["dyadic", "mpc"], case_sensitive=False),
+    help="The type of default prompt to use if no custom prompt is provided."
+    "Options are 'dyadic' for one-on-one meetings or 'mpc' for group meetings.",
+    default="mpc",
+    show_default=True,
+    show_envvar=True,
+    envvar="JOINLY_PROMPT_STYLE",
+)
+@click.option(
     "--mcp-config",
     type=str,
     help="Path to a JSON configuration file for additional MCP servers. "
@@ -218,6 +228,7 @@ def cli(  # noqa: PLR0913
     llm_model: str,
     prompt: str | None,
     prompt_file: str | None,
+    prompt_style: str,
     name_trigger: bool,
     mcp_config: str | None,
     meeting_url: str,
@@ -269,6 +280,7 @@ def cli(  # noqa: PLR0913
                 llm_provider=llm_provider,
                 llm_model=llm_model,
                 prompt=prompt,
+                prompt_style=prompt_style,
                 name=name,
                 name_trigger=name_trigger,
                 mcp_config=mcp_config_dict,
@@ -286,6 +298,7 @@ async def run(  # noqa: PLR0913
     llm_model: str,
     *,
     prompt: str | None = None,
+    prompt_style: str | None = None,
     name: str | None = None,
     name_trigger: bool = False,
     mcp_config: dict[str, Any] | None = None,
@@ -299,6 +312,7 @@ async def run(  # noqa: PLR0913
         llm_provider (str): The provider of the LLM model to use.
         llm_model (str): The name of the LLM model to use.
         prompt (str | None): System prompt to use for the model.
+        prompt_style (str | None): Default prompt to use if no custom one is provided.
         name (str | None): The name of the participant.
         name_trigger (bool): Whether to trigger the agent only when the name is
             mentioned.
@@ -361,7 +375,11 @@ async def run(  # noqa: PLR0913
             llm,
             tools,
             tool_executor,
-            prompt=get_prompt(instructions=prompt, name=client.name),
+            prompt=get_prompt(
+                instructions=prompt,
+                prompt_style=prompt_style,
+                name=client.name,
+            ),
         )
         client.add_utterance_callback(agent.on_utterance)
         async with agent:
