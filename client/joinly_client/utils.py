@@ -47,6 +47,9 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
     if llm_provider == "azure_openai":
         llm_provider = "azure"
 
+    if llm_provider == "google":
+        llm_provider = "google-gla"
+
     # seems to fail with provider="azure"
     if llm_provider == "openai" and model_name.startswith("gpt-5"):
         model = OpenAIResponsesModel(
