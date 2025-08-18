@@ -12,7 +12,7 @@ dependencies = [
     "fastmcp>=2.10.5",
     "joinly-common>=0.1.3",
     "openai<=1.99.1",
-    "pydantic-ai-slim[anthropic,openai]>=0.4.9",
+    "pydantic-ai-slim[anthropic,openai,google]>=0.4.9",
     "python-dotenv>=1.1.0",
     "rich>=14.0.0",
 ]
