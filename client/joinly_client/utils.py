@@ -128,6 +128,7 @@ async def load_tools(
             )
             for tool in await config.client.list_tools()
             if tool.name not in config.exclude
+            and (not config.include or tool.name in config.include)
         )
 
     async def _tool_executor(tool_name: str, args: dict[str, Any]) -> Any:  # noqa: ANN401
