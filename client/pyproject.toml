@@ -1,6 +1,6 @@
 [project]
 name = "joinly-client"
-version = "0.1.10"
+version = "0.1.11"
 description = "Client for joinly: Make your meetings accessible to AI Agents"
 readme = "README.md"
 authors = [
