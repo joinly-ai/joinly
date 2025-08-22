@@ -36,3 +36,4 @@ class McpClientConfig:
 
     client: Client
     exclude: list[str] = field(default_factory=list)
+    include: list[str] = field(default_factory=list)
