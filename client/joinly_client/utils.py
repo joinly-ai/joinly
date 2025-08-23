@@ -135,14 +135,18 @@ async def load_tools(
         """Execute a tool with the given name and arguments."""
         if isinstance(clients, McpClientConfig):
             client = clients.client
+            post_callback = clients.post_callback
         else:
             prefix, tool_name = tool_name.split("_", 1)
             if prefix not in clients:
                 msg = f"MCP '{prefix}' not found"
                 raise ValueError(msg)
             client = clients[prefix].client
+            post_callback = clients[prefix].post_callback
 
         result = await client.call_tool_mcp(tool_name, args)
+        if post_callback:
+            result = await post_callback(tool_name, args, result)
         if result.structuredContent:
             return result.structuredContent
         texts = [p.text for p in result.content if p.type == "text"]
