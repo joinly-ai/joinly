@@ -14,6 +14,7 @@ from joinly_common.types import (
     TranscriptSegment,
     Usage,
 )
+from mcp.types import CallToolResult
 
 __all__ = [
     "MeetingChatHistory",
@@ -37,4 +38,7 @@ class McpClientConfig:
     client: Client
     exclude: list[str] = field(default_factory=list)
     include: list[str] = field(default_factory=list)
-    post_callback: Callable[[str, dict[str, Any], Any], Awaitable[Any]] | None = None
+    post_callback: (
+        Callable[[str, dict[str, Any], CallToolResult], Awaitable[CallToolResult]]
+        | None
+    ) = None
