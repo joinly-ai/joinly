@@ -1093,7 +1093,7 @@ dev = [
 
 [[package]]
 name = "joinly-client"
-version = "0.1.12"
+version = "0.1.13"
 source = { editable = "client" }
 dependencies = [
     { name = "click" },
