@@ -37,3 +37,4 @@ class McpClientConfig:
     client: Client
     exclude: list[str] = field(default_factory=list)
     include: list[str] = field(default_factory=list)
+    post_callback: Callable[[str, dict[str, Any], Any], Awaitable[Any]] | None = None
