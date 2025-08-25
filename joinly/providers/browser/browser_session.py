@@ -40,9 +40,9 @@ class BrowserSession:
 
     async def __aenter__(self) -> Self:
         """Start and connect to the Playwright browser."""
-        self._pw = await async_playwright().start()
+        self._playwright = await async_playwright().start()
 
-        bin_path = Path(self._pw.chromium.executable_path)
+        bin_path = Path(self._playwright.chromium.executable_path)
         logger.debug("Chromium binary path: %s", bin_path)
         if not bin_path.exists():
             msg = "Chromium binary not found"
@@ -101,7 +101,9 @@ class BrowserSession:
         logger.debug("DevTools URL: %s", cdp_endpoint)
         self.cdp_url = cdp_endpoint
 
-        self._pw_browser = await self._pw.chromium.connect_over_cdp(cdp_endpoint)
+        self._pw_browser = await self._playwright.chromium.connect_over_cdp(
+            cdp_endpoint
+        )
         self._pw_context = self._pw_browser.contexts[0]
         self._default_page = (
             self._pw_context.pages[0] if self._pw_context.pages else None
