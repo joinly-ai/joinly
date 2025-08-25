@@ -3,6 +3,7 @@ import contextlib
 import logging
 from typing import Self
 
+from pydantic_ai import BinaryContent
 from pydantic_ai.direct import model_request
 from pydantic_ai.messages import (
     ModelMessage,
@@ -204,15 +205,16 @@ class ConversationalToolAgent:
                 tool_call_id=tool_call.tool_call_id,
             )
 
+        logger.info(
+            "%s: %s",
+            tool_call.tool_name,
+            ", ".join(
+                f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                for k, v in tool_call.args_as_dict().items()
+            ),
+        )
+
         try:
-            logger.info(
-                "%s: %s",
-                tool_call.tool_name,
-                ", ".join(
-                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                    for k, v in tool_call.args_as_dict().items()
-                ),
-            )
             content = await self._tool_executor(
                 tool_call.tool_name, tool_call.args_as_dict()
             )
@@ -220,7 +222,14 @@ class ConversationalToolAgent:
             logger.exception("Error calling tool %s", tool_call.tool_name)
             content = f"Error calling tool {tool_call.tool_name}"
 
-        logger.info("%s: %s", tool_call.tool_name, content)
+        logger.info(
+            "%s: %s",
+            tool_call.tool_name,
+            content
+            if not isinstance(content, BinaryContent)
+            else f"BinaryContent(media_type='{content.media_type}')",
+        )
+
         return ToolReturnPart(
             tool_name=tool_call.tool_name,
             content=content,
