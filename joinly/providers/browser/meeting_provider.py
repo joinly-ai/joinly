@@ -69,7 +69,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         *,
         reader_byte_depth: int | None = None,
         writer_byte_depth: int | None = None,
-        snapshot_size: tuple[int, int] = (400, 244),
+        snapshot_size: tuple[int, int] = (512, 288),
         vnc_server: bool = False,
         vnc_server_port: int = 5900,
     ) -> None:
@@ -81,7 +81,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             writer_byte_depth (int | None): The byte depth for the virtual
                 microphone (default is None).
             snapshot_size (tuple[int, int]): The size of the video snapshot
-                (default is (400, 244)).
+                (default is (512, 288)).
             vnc_server (bool): Whether to start a VNC server for the virtual display.
             vnc_server_port (int): The port to use for the VNC server.
         """
@@ -329,6 +329,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
         raw = await self._page.screenshot(type="png")
         img = Image.open(io.BytesIO(raw)).convert("RGB")
+        img = ImageOps.crop(img, border=int(min(*img.size) * 0.1))
         img = ImageOps.fit(
             img,
             self.snapshot_size,
@@ -337,6 +338,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         )
 
         buf = io.BytesIO()
-        img.save(buf, format="jpeg", quality=85)
+        img.save(buf, format="jpeg", quality=90, optimize=True, progressive=True)
 
         return VideoSnapshot(data=buf.getvalue(), media_type="image/jpeg")
