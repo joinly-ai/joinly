@@ -3,8 +3,10 @@ import os
 import re
 import unicodedata
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Never
 
+from mcp import ClientSession
+from pydantic_ai.mcp import MCPServer
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.models.openai import OpenAIModel, OpenAIResponsesModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
@@ -104,6 +106,14 @@ def get_prompt(
     return template.format(date=today, name=name, instructions=instructions)
 
 
+class _Mapper(MCPServer):
+    def __init__(self, client: ClientSession) -> None:
+        self._client = client
+
+    async def client_streams(self) -> Never:  # type: ignore[override]
+        raise RuntimeError
+
+
 async def load_tools(
     clients: McpClientConfig | dict[str, McpClientConfig],
 ) -> tuple[list[ToolDefinition], ToolExecutor]:
@@ -147,10 +157,14 @@ async def load_tools(
         result = await client.call_tool_mcp(tool_name, args)
         if post_callback:
             result = await post_callback(tool_name, args, result)
-        if result.structuredContent:
-            return result.structuredContent
-        texts = [p.text for p in result.content if p.type == "text"]
-        return texts[0] if len(texts) == 1 else texts
+
+        mapper = _Mapper(client.session)
+        mapped = [await mapper._map_tool_result_part(p) for p in result.content]  # noqa: SLF001
+
+        if result.isError:
+            return f"[error] {'\n'.join(str(part) for part in mapped)}"
+
+        return mapped[0] if len(mapped) == 1 else mapped
 
     return tools, _tool_executor
 
