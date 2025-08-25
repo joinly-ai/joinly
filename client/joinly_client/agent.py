@@ -1,17 +1,18 @@
 import asyncio
 import contextlib
 import logging
-from typing import Self
+from typing import Any, Self
 
+from pydantic_ai import BinaryContent
 from pydantic_ai.direct import model_request
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
-    ModelRequestPart,
     ModelResponse,
     SystemPromptPart,
     ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.settings import ModelSettings, merge_model_settings
@@ -100,9 +101,16 @@ class ConversationalToolAgent:
             segments (list[TranscriptSegment]): The segments of the transcript to
                 process.
         """
-        for segment in segments:
-            prompt = f"{segment.speaker or 'Participant'}: {segment.text}"
-            self._messages.append(ModelRequest.user_text_prompt(prompt))
+        self._messages.append(
+            ModelRequest(
+                parts=[
+                    UserPromptPart(
+                        f"{segment.speaker or 'Participant'}: {segment.text}"
+                    )
+                    for segment in segments
+                ]
+            )
+        )
 
         while True:
             self._messages = self._limit_messages(
@@ -176,18 +184,26 @@ class ConversationalToolAgent:
 
         Returns:
             ModelRequest | None: A ModelRequest containing the results of the tool
-                calls, or None if there are no tool calls.
+                calls with any binary content artifacts interleaved, or None if there
+                are no tool calls.
         """
         tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
         if not tool_calls:
             return None
 
-        results: list[ModelRequestPart] = await asyncio.gather(
-            *[self._call_tool(t) for t in tool_calls]
-        )
-        return ModelRequest(parts=results)
+        results = await asyncio.gather(*[self._call_tool(t) for t in tool_calls])
 
-    async def _call_tool(self, tool_call: ToolCallPart) -> ToolReturnPart:
+        parts = []
+        for tool_return, user_part in results:
+            parts.append(tool_return)
+            if user_part:
+                parts.append(user_part)
+
+        return ModelRequest(parts=parts)
+
+    async def _call_tool(
+        self, tool_call: ToolCallPart
+    ) -> tuple[ToolReturnPart, UserPromptPart | None]:
         """Call a tool with the given name and arguments.
 
         Args:
@@ -195,24 +211,29 @@ class ConversationalToolAgent:
                 arguments.
 
         Returns:
-            ToolReturnPart: The result of the tool call.
+            tuple[ToolReturnPart, UserPromptPart | None]: The result of the tool call
+                and an optional user prompt part for binary content.
         """
         if tool_call.tool_name == "end_turn":
-            return ToolReturnPart(
-                tool_name="end_turn",
-                content="",
-                tool_call_id=tool_call.tool_call_id,
+            return (
+                ToolReturnPart(
+                    tool_name="end_turn",
+                    content="",
+                    tool_call_id=tool_call.tool_call_id,
+                ),
+                None,
             )
 
+        logger.info(
+            "%s: %s",
+            tool_call.tool_name,
+            ", ".join(
+                f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                for k, v in tool_call.args_as_dict().items()
+            ),
+        )
+
         try:
-            logger.info(
-                "%s: %s",
-                tool_call.tool_name,
-                ", ".join(
-                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
-                    for k, v in tool_call.args_as_dict().items()
-                ),
-            )
             content = await self._tool_executor(
                 tool_call.tool_name, tool_call.args_as_dict()
             )
@@ -220,11 +241,45 @@ class ConversationalToolAgent:
             logger.exception("Error calling tool %s", tool_call.tool_name)
             content = f"Error calling tool {tool_call.tool_name}"
 
-        logger.info("%s: %s", tool_call.tool_name, content)
-        return ToolReturnPart(
-            tool_name=tool_call.tool_name,
-            content=content,
-            tool_call_id=tool_call.tool_call_id,
+        logger.info(
+            "%s: %s",
+            tool_call.tool_name,
+            content
+            if not isinstance(content, BinaryContent)
+            else (
+                f"BinaryContent(media_type='{content.media_type}', "
+                f"data_bytes={len(content.data)})"
+            ),
+        )
+
+        artifacts = []
+
+        def process_item(item: Any, idx: int | None = None) -> str | float:  # noqa: ANN401
+            if isinstance(item, BinaryContent):
+                suffix = "" if idx is None else f"_{idx}"
+                identifier = f"artifact_{tool_call.tool_call_id}{suffix}"
+                artifacts.extend([f"This is {identifier}:", item])
+                return f"See {identifier}"
+            return item
+
+        if isinstance(content, list):
+            tool_content = [process_item(item, i) for i, item in enumerate(content)]
+        else:
+            tool_content = process_item(content)
+
+        user_part = (
+            UserPromptPart(content=artifacts, part_kind="user-prompt")
+            if artifacts
+            else None
+        )
+
+        return (
+            ToolReturnPart(
+                tool_name=tool_call.tool_name,
+                content=tool_content,
+                tool_call_id=tool_call.tool_call_id,
+            ),
+            user_part,
         )
 
     def _check_end_turn(
