@@ -13,6 +13,7 @@ from pydantic_ai.messages import (
     SystemPromptPart,
     ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.settings import ModelSettings, merge_model_settings
@@ -101,9 +102,16 @@ class ConversationalToolAgent:
             segments (list[TranscriptSegment]): The segments of the transcript to
                 process.
         """
-        for segment in segments:
-            prompt = f"{segment.speaker or 'Participant'}: {segment.text}"
-            self._messages.append(ModelRequest.user_text_prompt(prompt))
+        self._messages.append(
+            ModelRequest(
+                parts=[
+                    UserPromptPart(
+                        f"{segment.speaker or 'Participant'}: {segment.text}"
+                    )
+                    for segment in segments
+                ]
+            )
+        )
 
         while True:
             self._messages = self._limit_messages(
