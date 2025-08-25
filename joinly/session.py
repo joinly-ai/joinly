@@ -6,8 +6,14 @@ from joinly.core import (
     MeetingProvider,
     SpeechController,
     TranscriptionController,
+    VideoReader,
 )
-from joinly.types import MeetingChatHistory, MeetingParticipant, Transcript
+from joinly.types import (
+    MeetingChatHistory,
+    MeetingParticipant,
+    Transcript,
+    VideoSnapshot,
+)
 from joinly.utils.clock import Clock
 from joinly.utils.events import EventBus, EventType
 
@@ -22,6 +28,7 @@ class MeetingSession:
         meeting_provider: MeetingProvider,
         transcription_controller: TranscriptionController,
         speech_controller: SpeechController,
+        video_reader: VideoReader,
     ) -> None:
         """Initialize a meeting session.
 
@@ -31,10 +38,12 @@ class MeetingSession:
                 transcriptions.
             speech_controller (SpeechController): Controller for managing speech
                 actions.
+            video_reader (VideoReader): Controller for managing video actions.
         """
         self._meeting_provider = meeting_provider
         self._transcription_controller = transcription_controller
         self._speech_controller = speech_controller
+        self._video_reader = video_reader
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
         self._event_bus = EventBus()
@@ -144,6 +153,14 @@ class MeetingSession:
             list[MeetingParticipant]: A list of participants in the meeting.
         """
         return await self._meeting_provider.get_participants()
+
+    async def get_video_snapshot(self) -> VideoSnapshot:
+        """Get a snapshot of the current video feed.
+
+        Returns:
+            VideoSnapshot: The current video snapshot.
+        """
+        return await self._video_reader.snapshot()
 
     async def mute(self) -> None:
         """Mute yourself in the meeting."""

@@ -130,6 +130,7 @@ class SessionContainer:
                 meeting_provider=meeting_provider,
                 transcription_controller=transcription_controller,
                 speech_controller=speech_controller,
+                video_reader=meeting_provider.video_reader,
             )
         except:
             await self._stack.aclose()

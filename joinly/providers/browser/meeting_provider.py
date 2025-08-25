@@ -7,7 +7,7 @@ from typing import Self
 
 from playwright.async_api import Page
 
-from joinly.core import AudioReader, AudioWriter
+from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
 from joinly.providers.browser.browser_session import BrowserSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
@@ -80,11 +80,11 @@ class BrowserMeetingProvider(BaseMeetingProvider):
             vnc_server_port (int): The port to use for the VNC server.
         """
         self._env = os.environ.copy()
-        pulse_server = PulseServer(env=self._env)
-        virtual_display = VirtualDisplay(
+        self._pulse_server = PulseServer(env=self._env)
+        self._virtual_display = VirtualDisplay(
             env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
         )
-        virtual_speaker = (
+        self._virtual_speaker = (
             VirtualSpeaker(env=self._env)
             if not reader_byte_depth
             else VirtualSpeaker(env=self._env, byte_depth=reader_byte_depth)
@@ -96,9 +96,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         )
         self._browser_session = BrowserSession(env=self._env)
         self._services = [
-            pulse_server,
-            virtual_display,
-            virtual_speaker,
+            self._pulse_server,
+            self._virtual_display,
+            self._virtual_speaker,
             self._virtual_microphone,
             self._browser_session,
         ]
@@ -108,8 +108,8 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
 
-        self._audio_reader = _SpeakerInjectedAudioReader(
-            virtual_speaker,
+        self._speaker_injected_virtual_speaker = _SpeakerInjectedAudioReader(
+            self._virtual_speaker,
             lambda: (
                 self._platform_controller.active_speaker
                 if self._platform_controller
@@ -120,12 +120,17 @@ class BrowserMeetingProvider(BaseMeetingProvider):
     @property
     def audio_reader(self) -> AudioReader:
         """Get the audio reader."""
-        return self._audio_reader
+        return self._speaker_injected_virtual_speaker
 
     @property
     def audio_writer(self) -> AudioWriter:
         """Get the audio writer."""
         return self._virtual_microphone
+
+    @property
+    def video_reader(self) -> VideoReader:
+        """Get the video reader."""
+        return self._virtual_display
 
     async def __aenter__(self) -> Self:
         """Enter the context manager."""
