@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
@@ -6,7 +7,7 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
-from fastmcp.utilities.types import Image
+from mcp.types import ImageContent
 from pydantic import AnyUrl, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -290,11 +291,15 @@ async def get_participants(
     "get_video_snapshot",
     description="Get a snapshot of the current video feed.",
 )
-async def get_video_snapshot(ctx: Context) -> Image:
+async def get_video_snapshot(ctx: Context) -> ImageContent:
     """Get a snapshot of the current video feed."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     snapshot = await ms.get_video_snapshot()
-    return Image(data=snapshot.data, format=snapshot.media_type.split("/")[-1])
+    return ImageContent(
+        type="image",
+        data=base64.b64encode(snapshot.data).decode(),
+        mimeType=snapshot.media_type,
+    )
 
 
 @mcp.tool(
