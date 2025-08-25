@@ -108,4 +108,4 @@ class VideoSnapshot:
     data: bytes
     width: int
     height: int
-    media_type: Literal["image/png"] = "image/png"
+    media_type: Literal["image/png", "image/jpeg"] = "image/png"
