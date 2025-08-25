@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
+import json
 import logging
+from dataclasses import replace
 from typing import Any, Self
 
 from pydantic_ai import BinaryContent
@@ -27,7 +29,7 @@ logger = logging.getLogger(__name__)
 class ConversationalToolAgent:
     """A conversational agent implementation to interact with joinly."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         llm: Model,
         tools: list[ToolDefinition],
@@ -35,6 +37,7 @@ class ConversationalToolAgent:
         *,
         prompt: str | None = None,
         max_messages: int = 50,
+        max_tool_result_chars: int = 2048,
     ) -> None:
         """Initialize the conversational agent with a model.
 
@@ -47,6 +50,8 @@ class ConversationalToolAgent:
             prompt (str | None): An optional prompt to initialize the agent with.
             max_messages (int): The maximum number of messages to keep in the agent's
                 history. Defaults to 50.
+            max_tool_result_chars (int): The maximum number of characters for tool
+                results, truncated after each turn. Defaults to 2048.
         """
         if not tools:
             msg = "At least one tool must be provided to the agent."
@@ -58,6 +63,7 @@ class ConversationalToolAgent:
         self._tool_executor = tool_executor
         self._messages: list[ModelMessage] = []
         self._max_messages = max_messages
+        self._max_tool_result_chars = max_tool_result_chars
         self._usage = Usage()
         self._run_task: asyncio.Task | None = None
 
@@ -112,6 +118,9 @@ class ConversationalToolAgent:
             )
         )
 
+        self._messages = self._filter_messages(
+            self._messages, max_tool_result_chars=self._max_tool_result_chars
+        )
         while True:
             self._messages = self._limit_messages(
                 self._messages, max_messages=self._max_messages
@@ -321,6 +330,72 @@ class ConversationalToolAgent:
             )
 
         return finished
+
+    def _filter_messages(
+        self, messages: list[ModelMessage], max_tool_result_chars: int
+    ) -> list[ModelMessage]:
+        """Filter binary contents and truncate large texts from messages.
+
+        Args:
+            messages (list[ModelMessage]): The list of messages to filter.
+            max_tool_result_chars (int): Maximum character count for tool results.
+
+        Returns:
+            list[ModelMessage]: The filtered list of messages.
+        """
+
+        def _truncate(obj: object) -> str | object:
+            string = (
+                obj
+                if isinstance(obj, str)
+                else (
+                    json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+                    if isinstance(obj, (dict, list, tuple))
+                    else str(obj)
+                )
+            )
+            if len(string) <= max_tool_result_chars:
+                return obj
+
+            truncated = string[: max_tool_result_chars - 26]
+            logger.debug(
+                "Truncated %d chars from tool result",
+                len(string) - len(truncated),
+            )
+            return f"{truncated} [truncated {len(string) - len(truncated)} chars]"
+
+        filtered: list[ModelMessage] = []
+        for message in messages:
+            if isinstance(message, ModelResponse):
+                filtered.append(message)
+                continue
+
+            parts = []
+            for p in message.parts:
+                if isinstance(p, ToolReturnPart):
+                    parts.append(replace(p, content=_truncate(p.content)))
+                elif isinstance(p, UserPromptPart) and isinstance(
+                    p.content, (list, tuple)
+                ):
+                    parts.append(
+                        replace(
+                            p,
+                            content=[
+                                (
+                                    f"[omitted {it.media_type}, {len(it.data)} bytes]"
+                                    if isinstance(it, BinaryContent)
+                                    else it
+                                )
+                                for it in p.content
+                            ],
+                        )
+                    )
+                else:
+                    parts.append(p)
+
+            filtered.append(ModelRequest(parts=parts))
+
+        return filtered
 
     def _limit_messages(
         self, messages: list[ModelMessage], max_messages: int
