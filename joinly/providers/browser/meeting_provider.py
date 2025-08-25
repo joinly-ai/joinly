@@ -339,9 +339,4 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         buf = io.BytesIO()
         img.save(buf, format="jpeg", quality=85)
 
-        return VideoSnapshot(
-            data=buf.getvalue(),
-            width=img.width,
-            height=img.height,
-            media_type="image/jpeg",
-        )
+        return VideoSnapshot(data=buf.getvalue(), media_type="image/jpeg")

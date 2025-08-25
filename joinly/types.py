@@ -100,12 +100,8 @@ class VideoSnapshot:
 
     Attributes:
         data (bytes): The raw video data.
-        width (int): The width of the video frame in pixels.
-        height (int): The height of the video frame in pixels.
         media_type (Literal["image/png"]): The media type of the video snapshot.
     """
 
     data: bytes
-    width: int
-    height: int
     media_type: Literal["image/png", "image/jpeg"] = "image/png"
