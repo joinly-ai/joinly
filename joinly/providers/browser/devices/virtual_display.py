@@ -1,21 +1,14 @@
 import asyncio
-import io
 import logging
 import re
 from typing import Self
-
-from mss import mss
-from PIL import Image
-
-from joinly.core import VideoReader
-from joinly.types import VideoSnapshot
 
 logger = logging.getLogger(__name__)
 
 _VNC_PORT_RE = re.compile(r"PORT=(\d+)")
 
 
-class VirtualDisplay(VideoReader):
+class VirtualDisplay:
     """A class to create and dispose an Xvfb display."""
 
     def __init__(
@@ -164,25 +157,3 @@ class VirtualDisplay(VideoReader):
             logger.debug("Stopped VNC server on port: %s", self._vnc_port)
             self._vnc_proc = None
             self._vnc_port = None
-
-    async def snapshot(self) -> VideoSnapshot:
-        """Capture a snapshot of the current video frame.
-
-        Returns:
-            VideoSnapshot: A snapshot of the current video frame.
-        """
-        if not self.display_name:
-            msg = "Display not started"
-            raise RuntimeError(msg)
-
-        with mss(display=self.display_name) as sct:
-            raw = sct.grab(sct.monitors[0])
-            img = Image.frombytes("RGB", (raw.width, raw.height), raw.rgb)
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            return VideoSnapshot(
-                data=buf.getvalue(),
-                width=raw.width,
-                height=raw.height,
-                media_type="image/png",
-            )
