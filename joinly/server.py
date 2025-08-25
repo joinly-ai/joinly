@@ -198,7 +198,7 @@ async def leave_meeting(
 
 @mcp.tool(
     "speak_text",
-    description="Speak the given text in the meeting using TTS.",
+    description="Speak the given text in the meeting.",
 )
 async def speak_text(
     ctx: Context,
@@ -215,7 +215,7 @@ async def speak_text(
 
 @mcp.tool(
     "send_chat_message",
-    description="Send a chat message in the meeting.",
+    description="Send a chat message in the meeting chat.",
 )
 async def send_chat_message(
     ctx: Context,
@@ -229,7 +229,7 @@ async def send_chat_message(
 
 @mcp.tool(
     "get_chat_history",
-    description="Get the chat history from the meeting.",
+    description="Get the chat history from the chat inside the meeting.",
 )
 async def get_chat_history(
     ctx: Context,
@@ -289,7 +289,7 @@ async def get_participants(
 
 @mcp.tool(
     "get_video_snapshot",
-    description="Get a snapshot of the current video feed.",
+    description="Get a snapshot of the current video feed inside the meeting.",
 )
 async def get_video_snapshot(ctx: Context) -> ImageContent:
     """Get a snapshot of the current video feed."""
