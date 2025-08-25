@@ -246,7 +246,10 @@ class ConversationalToolAgent:
             tool_call.tool_name,
             content
             if not isinstance(content, BinaryContent)
-            else f"BinaryContent(media_type='{content.media_type}')",
+            else (
+                f"BinaryContent(media_type='{content.media_type}', "
+                f"data_bytes={len(content.data)})"
+            ),
         )
 
         artifacts = []
