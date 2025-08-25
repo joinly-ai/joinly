@@ -124,8 +124,8 @@ async def run():
     async with client:
         # optionally, load all tools from the server
         # can be used to give all tools to the llm
-        # e.g., for langchain mcp adapter, use the client.client.session
-        tool_list = await client.client.list_tools()
+        # e.g., for langchain mcp adapter, use the client.session
+        tool_list = await client.list_tools()
 
         await client.join_meeting("<MeetingUrl>")
         try:
