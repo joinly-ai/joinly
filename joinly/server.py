@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
@@ -6,6 +7,7 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
+from mcp.types import ImageContent
 from pydantic import AnyUrl, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -196,7 +198,7 @@ async def leave_meeting(
 
 @mcp.tool(
     "speak_text",
-    description="Speak the given text in the meeting using TTS.",
+    description="Speak the given text in the meeting.",
 )
 async def speak_text(
     ctx: Context,
@@ -213,7 +215,7 @@ async def speak_text(
 
 @mcp.tool(
     "send_chat_message",
-    description="Send a chat message in the meeting.",
+    description="Send a chat message in the meeting chat.",
 )
 async def send_chat_message(
     ctx: Context,
@@ -227,7 +229,7 @@ async def send_chat_message(
 
 @mcp.tool(
     "get_chat_history",
-    description="Get the chat history from the meeting.",
+    description="Get the chat history from the chat inside the meeting.",
 )
 async def get_chat_history(
     ctx: Context,
@@ -283,6 +285,23 @@ async def get_participants(
     """Get the list of participants in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
     return MeetingParticipantList(await ms.get_participants())
+
+
+@mcp.tool(
+    "get_video_snapshot",
+    description=(
+        "Get a snapshot of the current video feed and screenshare inside the meeting."
+    ),
+)
+async def get_video_snapshot(ctx: Context) -> ImageContent:
+    """Get a snapshot of the current video feed."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    snapshot = await ms.get_video_snapshot()
+    return ImageContent(
+        type="image",
+        data=base64.b64encode(snapshot.data).decode(),
+        mimeType=snapshot.media_type,
+    )
 
 
 @mcp.tool(

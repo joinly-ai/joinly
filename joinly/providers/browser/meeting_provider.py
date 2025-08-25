@@ -1,13 +1,15 @@
 import asyncio
+import io
 import logging
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Self
 
+from PIL import Image, ImageOps
 from playwright.async_api import Page
 
-from joinly.core import AudioReader, AudioWriter
+from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
 from joinly.providers.browser.browser_session import BrowserSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
@@ -26,6 +28,7 @@ from joinly.types import (
     MeetingChatHistory,
     MeetingParticipant,
     ProviderNotSupportedError,
+    VideoSnapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +61,7 @@ class _SpeakerInjectedAudioReader(AudioReader):
         )
 
 
-class BrowserMeetingProvider(BaseMeetingProvider):
+class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
     """A meeting provider that uses a web browser to join meetings."""
 
     def __init__(
@@ -66,6 +69,7 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         *,
         reader_byte_depth: int | None = None,
         writer_byte_depth: int | None = None,
+        snapshot_size: tuple[int, int] = (512, 288),
         vnc_server: bool = False,
         vnc_server_port: int = 5900,
     ) -> None:
@@ -76,15 +80,18 @@ class BrowserMeetingProvider(BaseMeetingProvider):
                 (default is None).
             writer_byte_depth (int | None): The byte depth for the virtual
                 microphone (default is None).
+            snapshot_size (tuple[int, int]): The size of the video snapshot
+                (default is (512, 288)).
             vnc_server (bool): Whether to start a VNC server for the virtual display.
             vnc_server_port (int): The port to use for the VNC server.
         """
+        self.snapshot_size = snapshot_size
         self._env = os.environ.copy()
-        pulse_server = PulseServer(env=self._env)
-        virtual_display = VirtualDisplay(
+        self._pulse_server = PulseServer(env=self._env)
+        self._virtual_display = VirtualDisplay(
             env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
         )
-        virtual_speaker = (
+        self._virtual_speaker = (
             VirtualSpeaker(env=self._env)
             if not reader_byte_depth
             else VirtualSpeaker(env=self._env, byte_depth=reader_byte_depth)
@@ -96,9 +103,9 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         )
         self._browser_session = BrowserSession(env=self._env)
         self._services = [
-            pulse_server,
-            virtual_display,
-            virtual_speaker,
+            self._pulse_server,
+            self._virtual_display,
+            self._virtual_speaker,
             self._virtual_microphone,
             self._browser_session,
         ]
@@ -108,8 +115,8 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
 
-        self._audio_reader = _SpeakerInjectedAudioReader(
-            virtual_speaker,
+        self._speaker_injected_virtual_speaker = _SpeakerInjectedAudioReader(
+            self._virtual_speaker,
             lambda: (
                 self._platform_controller.active_speaker
                 if self._platform_controller
@@ -120,12 +127,17 @@ class BrowserMeetingProvider(BaseMeetingProvider):
     @property
     def audio_reader(self) -> AudioReader:
         """Get the audio reader."""
-        return self._audio_reader
+        return self._speaker_injected_virtual_speaker
 
     @property
     def audio_writer(self) -> AudioWriter:
         """Get the audio writer."""
         return self._virtual_microphone
+
+    @property
+    def video_reader(self) -> VideoReader:
+        """Get the video reader."""
+        return self
 
     async def __aenter__(self) -> Self:
         """Enter the context manager."""
@@ -303,3 +315,29 @@ class BrowserMeetingProvider(BaseMeetingProvider):
         """Unmute yourself in the meeting."""
         async with self._action_guard("unmute") as (page, controller):
             await controller.unmute(page)
+
+    async def snapshot(self) -> VideoSnapshot:
+        """Take a snapshot of the current video frame.
+
+        Returns:
+            VideoSnapshot: The snapshot of the current video frame.
+        """
+        if not self._page or self._page.is_closed():
+            msg = "Cannot take snapshot. Not currently in a meeting."
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        raw = await self._page.screenshot(type="png")
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+        img = ImageOps.crop(img, border=int(min(*img.size) * 0.1))
+        img = ImageOps.fit(
+            img,
+            self.snapshot_size,
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
+
+        buf = io.BytesIO()
+        img.save(buf, format="jpeg", quality=90, optimize=True, progressive=True)
+
+        return VideoSnapshot(data=buf.getvalue(), media_type="image/jpeg")

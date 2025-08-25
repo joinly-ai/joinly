@@ -10,6 +10,7 @@ from joinly.types import (
     SpeechWindow,
     Transcript,
     TranscriptSegment,
+    VideoSnapshot,
 )
 from joinly.utils.clock import Clock
 from joinly.utils.events import EventBus
@@ -53,6 +54,21 @@ class AudioWriter(Protocol):
 
         Args:
             data: Raw PCM audio data.
+        """
+        ...
+
+
+class VideoReader(Protocol):
+    """Protocol for video stream sources.
+
+    Defines the interface for objects that provide video data.
+    """
+
+    async def snapshot(self) -> VideoSnapshot:
+        """Capture a snapshot of the current video frame.
+
+        Returns:
+            VideoSnapshot: A snapshot of the current video frame.
         """
         ...
 
@@ -156,6 +172,15 @@ class MeetingProvider(Protocol):
 
         Returns:
             AudioWriter: The audio output destination.
+        """
+        ...
+
+    @property
+    def video_reader(self) -> VideoReader:
+        """Get the video reader for the provider.
+
+        Returns:
+            VideoReader: The video input source.
         """
         ...
 

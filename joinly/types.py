@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from joinly_common.types import (
     MeetingChatHistory,
@@ -91,3 +92,16 @@ class SpeechWindow:
     time_ns: int
     is_speech: bool
     speaker: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class VideoSnapshot:
+    """A class to represent a snapshot of video data.
+
+    Attributes:
+        data (bytes): The raw video data.
+        media_type (Literal["image/png"]): The media type of the video snapshot.
+    """
+
+    data: bytes
+    media_type: Literal["image/png", "image/jpeg"] = "image/png"
