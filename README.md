@@ -226,10 +226,11 @@ The joinly MCP server provides following tools and resources:
 - **`get_chat_history`** - Get current meeting chat history in JSON format
 - **`get_participants`** - Get current meeting participants in JSON format
 - **`get_transcript`** - Get current meeting transcript in JSON format, optionally filtered by minutes
+- **`get_video_snapshot`** - Get an image from the current meeting, e.g., view a current screenshare
 
 ### Resources
 
-- `transcript://live` - Live meeting transcript in JSON format, including timestamps and speaker information. Subscribable for real-time updates when new utterances are added.
+- **`transcript://live`** - Live meeting transcript in JSON format, including timestamps and speaker information. Subscribable for real-time updates when new utterances are added.
 
 # :building_construction: Developing joinly.ai
 
