@@ -1,6 +1,29 @@
 
 # Changelog
 
+## v0.5.0 - 2025-08-26
+
+### Added
+
+- new tool to access screenshares and video snapshots inside the meeting for vision-enabled models (#128, #131)
+- client changes to allow multimodal tool results (see below)
+
+### Improvements
+
+- reduce deepgram transcription latency (#132)
+- add speech event delay to avoid unwanted interruptions (#133)
+- improve hybrid VAD (#134)
+
+### joinly-client (v0.1.15)
+
+- new and more detailed system prompt and instructions (#116, #135)
+- support for google as LLM provider (#118)
+- `include` option for tool loading (#120)
+- custom post tool-call callbacks (#123, #125)
+- improved tool result parsing including capabilities for multimodal results (#126)
+- message history filtering for large tool results (#127)
+- update README example (#130)
+
 ## v0.4.2 - 2025-08-16
 
 ### Improvements

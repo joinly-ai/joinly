@@ -1021,7 +1021,7 @@ wheels = [
 
 [[package]]
 name = "joinly"
-version = "0.4.2"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -1095,7 +1095,7 @@ dev = [
 
 [[package]]
 name = "joinly-client"
-version = "0.1.14"
+version = "0.1.15"
 source = { editable = "client" }
 dependencies = [
     { name = "click" },
