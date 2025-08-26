@@ -25,6 +25,7 @@ class DefaultTranscriptionController(TranscriptionController):
         self,
         *,
         utterance_tail_seconds: float = 0.6,
+        no_speech_event_delay: float = 0.4,
         max_stt_tasks: int = 5,
         window_queue_size: int = 100,
     ) -> None:
@@ -34,12 +35,15 @@ class DefaultTranscriptionController(TranscriptionController):
             utterance_tail_seconds (float): The duration in seconds to wait after the
                 last detected speech before considering the utterance complete
                 (default is 0.6).
+            no_speech_event_delay (float): The duration in seconds to wait before
+                emitting a no-speech event (default is 0.4).
             max_stt_tasks (int): The maximum number of concurrent STT tasks
                 (default is 5).
             window_queue_size (int): The maximum size of the window queue
                 (default is 100).
         """
-        self.utterance_tail_seconds = utterance_tail_seconds
+        self.utterance_tail_seconds = float(utterance_tail_seconds)
+        self.no_speech_event_delay = float(no_speech_event_delay)
         self.max_stt_tasks = max_stt_tasks
         self.window_queue_size = window_queue_size
         self._vad_task: asyncio.Task | None = None
@@ -115,10 +119,11 @@ class DefaultTranscriptionController(TranscriptionController):
 
         self._event_bus.publish(event_type)
 
-    async def _vad_worker(self) -> None:  # noqa: C901
+    async def _vad_worker(self) -> None:  # noqa: C901, PLR0915
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
         last_speech: int | None = None
+        utterance_start: int | None = None
         dropped_windows: int = 0
 
         async def _chunk_iterator() -> AsyncIterator[AudioChunk]:
@@ -147,7 +152,7 @@ class DefaultTranscriptionController(TranscriptionController):
             if window.is_speech and self._window_queue is None:
                 # utterance start
                 logger.debug("Utterance start: %.2fs", window.time_ns / 1e9)
-                self._no_speech_event.clear()
+                utterance_start = window.time_ns
                 if len(self._stt_tasks) >= self.max_stt_tasks:
                     logger.warning(
                         "Maximum number of STT tasks reached (%d), dropping window",
@@ -171,6 +176,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 logger.debug("Utterance end: %.2fs", window.time_ns / 1e9)
                 self._no_speech_event.set()
                 last_speech = None
+                utterance_start = None
                 if self._window_queue is not None:
                     try:
                         self._window_queue.put_nowait(None)
@@ -185,6 +191,13 @@ class DefaultTranscriptionController(TranscriptionController):
 
             if self._window_queue is not None:
                 # in utterance
+                if (
+                    utterance_start is not None
+                    and window.is_speech
+                    and (window.time_ns - utterance_start) / 1e9
+                    >= self.no_speech_event_delay
+                ):
+                    self._no_speech_event.clear()
                 try:
                     self._window_queue.put_nowait(window)
                 except asyncio.QueueFull:
