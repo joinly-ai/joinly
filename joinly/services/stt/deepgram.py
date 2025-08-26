@@ -39,7 +39,7 @@ class DeepgramSTT(STT):
         hotwords: list[str] | None = None,
         finalize_silence: float = 0.375,
         finalize_min_speech: float = 0.03,
-        padding_silence: float = 0.5,
+        padding_silence: float = 0.1,
         stream_idle_timeout: float = 1.0,
         mip_opt_out: bool = True,
     ) -> None:
@@ -55,7 +55,7 @@ class DeepgramSTT(STT):
             finalize_min_speech: The minimum duration of speech to consider (default is
                 0.03 seconds).
             padding_silence: The duration of silence to pad at the start of each audio
-                window (default is 0.5 seconds).
+                window (default is 0.1 seconds).
             stream_idle_timeout: The duration to wait after finalizing the stream before
                 closing it (default is 1.0 seconds). Normally, this should never
                 trigger as the stream is finalized.
