@@ -38,7 +38,7 @@ class SileroVAD(BasePaddedVAD):
             raise ValueError(msg)
 
         self._sample_rate = sample_rate
-        self._speech_threshold = speech_threshold
+        self._speech_threshold = float(speech_threshold)
         self._use_state = use_state
         self._session: ort.InferenceSession | None = None
         self._state: np.ndarray | None = None
