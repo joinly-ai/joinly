@@ -23,7 +23,7 @@ class HybridVAD(BasePaddedVAD):
         *,
         sample_rate: int = 16000,
         webrtc_aggressiveness: int = 3,
-        silero_speech_threshold: float = 0.5,
+        silero_speech_threshold: float = 0.75,
     ) -> None:
         """Hybrid VAD initialization.
 
@@ -33,7 +33,7 @@ class HybridVAD(BasePaddedVAD):
             webrtc_aggressiveness (int, optional): The aggressiveness level for
                 Webrtc VAD. Defaults to 3.
             silero_speech_threshold (float, optional): The speech threshold for
-                Silero VAD. Defaults to 0.5.
+                Silero VAD. Defaults to 0.75.
         """
         self._webrtc = WebrtcVAD(
             sample_rate=sample_rate,
