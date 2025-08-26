@@ -39,7 +39,7 @@ class DefaultTranscriptionController(TranscriptionController):
             window_queue_size (int): The maximum size of the window queue
                 (default is 100).
         """
-        self.utterance_tail_seconds = utterance_tail_seconds
+        self.utterance_tail_seconds = float(utterance_tail_seconds)
         self.max_stt_tasks = max_stt_tasks
         self.window_queue_size = window_queue_size
         self._vad_task: asyncio.Task | None = None
