@@ -22,6 +22,7 @@ from joinly.types import (
     TranscriptSegment,
 )
 from joinly.utils.audio import calculate_audio_duration
+from joinly.utils.logging import LOGGING_TRACE
 from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ class DeepgramSTT(STT):
         model_name: str | None = None,
         sample_rate: int = 16000,
         hotwords: list[str] | None = None,
-        finalize_silence: float = 0.4,
+        finalize_silence: float = 0.375,
+        finalize_min_speech: float = 0.03,
         padding_silence: float = 0.5,
         stream_idle_timeout: float = 1.0,
         mip_opt_out: bool = True,
@@ -49,9 +51,11 @@ class DeepgramSTT(STT):
             sample_rate: The sample rate of the audio (default is 16000).
             hotwords: A list of hotwords to improve transcription accuracy.
             finalize_silence: The duration of silence to wait before finalizing the
-                stream (default is 0.4 seconds).
+                stream (default is 0.375 seconds).
+            finalize_min_speech: The minimum duration of speech to consider (default is
+                0.03 seconds).
             padding_silence: The duration of silence to pad at the start of each audio
-                window (default is 0.2 seconds).
+                window (default is 0.5 seconds).
             stream_idle_timeout: The duration to wait after finalizing the stream before
                 closing it (default is 1.0 seconds). Normally, this should never
                 trigger as the stream is finalized.
@@ -64,7 +68,8 @@ class DeepgramSTT(STT):
         self.model_name = model_name or (
             "nova-3-general" if get_settings().language == "en" else "nova-2-general"
         )
-        self.finalize_silence = finalize_silence
+        self.finalize_silence = float(finalize_silence)
+        self.finalize_min_speech = float(finalize_min_speech)
         self._live_options = LiveOptions(
             model=self.model_name,
             encoding="linear16",
@@ -88,11 +93,11 @@ class DeepgramSTT(STT):
         self._queue: asyncio.Queue[TranscriptSegment | None] | None = None
         self._lock = asyncio.Lock()
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
+        self._padding_silence_dur = float(padding_silence)
         self._padding_silence = b"\x00" * (
-            int(padding_silence * self.audio_format.sample_rate)
+            int(self._padding_silence_dur * self.audio_format.sample_rate)
             * self.audio_format.byte_depth
         )
-        self._padding_silence_dur = padding_silence
 
     async def __aenter__(self) -> Self:
         """Enter the context."""
@@ -109,7 +114,7 @@ class DeepgramSTT(STT):
             **_kwargs: object,
         ) -> None:
             """Handle incoming messages from the WebSocket."""
-            logger.debug("Received message: %s", result)
+            logger.log(LOGGING_TRACE, "Received message: %s", result)
             if result.channel.alternatives:
                 transcript = result.channel.alternatives[0].transcript
                 if transcript:
@@ -119,8 +124,8 @@ class DeepgramSTT(STT):
                         end=result.start - self._sent_seconds + result.duration,
                     )
                     await self._queue.put(segment)  # type: ignore[attr-defined]
-                if result.from_finalize:
-                    await self._queue.put(None)  # type: ignore[attr-defined]
+            if result.from_finalize:
+                await self._queue.put(None)  # type: ignore[attr-defined]
 
         self._client.on(LiveTranscriptionEvents.Transcript, on_result)  # type: ignore[arg-type]
 
@@ -163,10 +168,11 @@ class DeepgramSTT(STT):
         stream_start: float | None = None
         stream_end: float | None = None
         speaker_windows: list[tuple[float, float, str]] = []
+        finalize_pending: int = 0
 
         async def _producer() -> None:
             """Producer coroutine to send audio data."""
-            nonlocal stream_start, stream_end
+            nonlocal stream_start, stream_end, finalize_pending
             if self._padding_silence:
                 self._sent_seconds += self._padding_silence_dur
                 await self._client.send(self._padding_silence)
@@ -175,6 +181,9 @@ class DeepgramSTT(STT):
                     usage={"minutes": self._padding_silence_dur / 60},
                     meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
+
+            silence_dur: float = 0.0
+            speech_dur: float = 0.0
             async for window in windows:
                 if stream_start is None:
                     stream_start = window.time_ns / 1e9
@@ -191,7 +200,34 @@ class DeepgramSTT(STT):
                     usage={"minutes": dur / 60},
                     meta={"model": self.model_name, "mip_opt_out": self._mip_opt_out},
                 )
-            await self._client.finalize()
+
+                if window.is_speech:
+                    silence_dur = 0.0
+                    speech_dur += dur
+                else:
+                    silence_dur += dur
+                    if (
+                        silence_dur >= self.finalize_silence
+                        and speech_dur >= self.finalize_min_speech
+                    ):
+                        logger.debug(
+                            "Finalizing stream after %.2fs of silence "
+                            "with %.2fs of speech.",
+                            silence_dur,
+                            speech_dur,
+                        )
+                        finalize_pending += 1
+                        await self._client.finalize()
+                        silence_dur = 0.0
+                        speech_dur = 0.0
+
+            if speech_dur >= self.finalize_min_speech:
+                finalize_pending += 1
+                await self._client.finalize()
+
+            # increase "finalize" without sending to cause next loop iteration
+            finalize_pending += 1
+            await self._queue.put(None)  # type: ignore[attr-defined]
 
         async with self._lock:
             while not self._queue.empty():
@@ -216,7 +252,10 @@ class DeepgramSTT(STT):
                         )
                         break
                     if segment is None:
-                        break
+                        finalize_pending -= 1
+                        if producer.done() and finalize_pending <= 0:
+                            break
+                        continue
 
                     speakers: defaultdict[str, float] = defaultdict(float)
                     for start, end, speaker in speaker_windows:
