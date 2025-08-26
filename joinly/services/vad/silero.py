@@ -121,3 +121,8 @@ class SileroVAD(BasePaddedVAD):
             self._state = new_state
 
         return speech_prob > self._speech_threshold
+
+    def reset_state(self) -> None:
+        """Reset the internal state of the VAD."""
+        if self._state is not None:
+            self._state.fill(0)
