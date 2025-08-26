@@ -67,19 +67,6 @@ class SessionContainer:
     async def __aenter__(self) -> MeetingSession:
         """Enter the context manager and create a meeting session."""
         try:
-            transcription_controller = await self._build(
-                self._settings.transcription_controller,
-                "joinly.controllers.transcription",
-                "TranscriptionController",
-                self._settings.transcription_controller_args,
-            )
-            speech_controller = await self._build(
-                self._settings.speech_controller,
-                "joinly.controllers.speech",
-                "SpeechController",
-                self._settings.speech_controller_args,
-            )
-
             vad = await self._build(
                 self._settings.vad,
                 "joinly.services.vad",
@@ -90,10 +77,11 @@ class SessionContainer:
                 {
                     "finalize_silence": max(
                         0.1,
-                        getattr(
-                            transcription_controller,
-                            "utterance_tail_seconds",
-                            6,
+                        float(
+                            self._settings.transcription_controller_args.get(
+                                "utterance_tail_seconds",
+                                0.6,
+                            )
                         )
                         - 0.225,
                     )
@@ -137,6 +125,19 @@ class SessionContainer:
                 "joinly.providers",
                 "MeetingProvider",
                 provider_extra_args | self._settings.meeting_provider_args,
+            )
+
+            transcription_controller = await self._build(
+                self._settings.transcription_controller,
+                "joinly.controllers.transcription",
+                "TranscriptionController",
+                self._settings.transcription_controller_args,
+            )
+            speech_controller = await self._build(
+                self._settings.speech_controller,
+                "joinly.controllers.speech",
+                "SpeechController",
+                self._settings.speech_controller_args,
             )
 
             transcription_controller.reader = meeting_provider.audio_reader
