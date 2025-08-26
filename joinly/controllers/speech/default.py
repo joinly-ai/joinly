@@ -33,15 +33,15 @@ class DefaultSpeechController(SpeechController):
     def __init__(
         self,
         *,
-        prefetch_chunks: int = 3,
+        prefetch_chunks: int = 2,
     ) -> None:
         """Initialize the SpeechFlowController.
 
         Args:
             prefetch_chunks (int): The number of chunks to prefetch for speech
-                synthesis (default is 3).
+                synthesis (default is 2).
         """
-        self.prefetch_chunks = prefetch_chunks
+        self.prefetch_chunks = int(prefetch_chunks)
         self._clock: Clock | None = None
         self._transcript: Transcript | None = None
         self._lock = asyncio.Lock()
