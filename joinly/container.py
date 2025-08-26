@@ -67,17 +67,50 @@ class SessionContainer:
     async def __aenter__(self) -> MeetingSession:
         """Enter the context manager and create a meeting session."""
         try:
+            transcription_controller = await self._build(
+                self._settings.transcription_controller,
+                "joinly.controllers.transcription",
+                "TranscriptionController",
+                self._settings.transcription_controller_args,
+            )
+            speech_controller = await self._build(
+                self._settings.speech_controller,
+                "joinly.controllers.speech",
+                "SpeechController",
+                self._settings.speech_controller_args,
+            )
+
             vad = await self._build(
                 self._settings.vad,
                 "joinly.services.vad",
                 "VAD",
                 self._settings.vad_args,
             )
+            stt_extra_args = (
+                {
+                    "finalize_silence": max(
+                        0.1,
+                        getattr(
+                            transcription_controller,
+                            "utterance_tail_seconds",
+                            6,
+                        )
+                        - 0.225,
+                    )
+                }
+                if _resolve(
+                    self._settings.stt,
+                    base="joinly.services.stt",
+                    suffix="STT",
+                ).__name__
+                == "DeepgramSTT"
+                else {}
+            )
             stt = await self._build(
                 self._settings.stt,
                 "joinly.services.stt",
                 "STT",
-                self._settings.stt_args,
+                stt_extra_args | self._settings.stt_args,
             )
             tts = await self._build(
                 self._settings.tts,
@@ -106,22 +139,10 @@ class SessionContainer:
                 provider_extra_args | self._settings.meeting_provider_args,
             )
 
-            transcription_controller = await self._build(
-                self._settings.transcription_controller,
-                "joinly.controllers.transcription",
-                "TranscriptionController",
-                self._settings.transcription_controller_args,
-            )
             transcription_controller.reader = meeting_provider.audio_reader
             transcription_controller.vad = vad
             transcription_controller.stt = stt
 
-            speech_controller = await self._build(
-                self._settings.speech_controller,
-                "joinly.controllers.speech",
-                "SpeechController",
-                self._settings.speech_controller_args,
-            )
             speech_controller.writer = meeting_provider.audio_writer
             speech_controller.tts = tts
             speech_controller.no_speech_event = transcription_controller.no_speech_event
