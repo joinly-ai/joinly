@@ -1,3 +1,4 @@
+import logging
 from contextlib import AsyncExitStack
 from typing import Self
 
@@ -7,6 +8,8 @@ from joinly.services.vad.webrtc import WebrtcVAD
 from joinly.types import AudioFormat
 from joinly.utils.audio import convert_audio_format
 
+logger = logging.getLogger(__name__)
+
 
 class HybridVAD(BasePaddedVAD):
     """Hybrid VAD combining Silero and Webrtc VADs.
@@ -15,23 +18,38 @@ class HybridVAD(BasePaddedVAD):
     first speech detections using Silero to avoid false detections.
     """
 
-    def __init__(self, *, sample_rate: int = 16000) -> None:
+    def __init__(
+        self,
+        *,
+        sample_rate: int = 16000,
+        webrtc_aggressiveness: int = 3,
+        silero_speech_threshold: float = 0.75,
+    ) -> None:
         """Hybrid VAD initialization.
 
         Args:
             sample_rate (int, optional): The sample rate of the audio. Defaults
                 to 16000.
+            webrtc_aggressiveness (int, optional): The aggressiveness level for
+                Webrtc VAD. Defaults to 3.
+            silero_speech_threshold (float, optional): The speech threshold for
+                Silero VAD. Defaults to 0.75.
         """
         self._webrtc = WebrtcVAD(
-            sample_rate=sample_rate, window_duration=30, aggressiveness=3
+            sample_rate=sample_rate,
+            window_duration=30,
+            aggressiveness=webrtc_aggressiveness,
         )
         self._silero = SileroVAD(
-            sample_rate=sample_rate, speech_threshold=0.5, use_state=False
+            sample_rate=sample_rate,
+            speech_threshold=silero_speech_threshold,
+            use_state=True,
         )
         self.audio_format = AudioFormat(
             sample_rate=sample_rate, byte_depth=self._webrtc.audio_format.byte_depth
         )
         self._last_is_speech: bool = False
+        self._last_used_silero: bool = False
         self._padding = (
             b"\x00"
             * self._webrtc.audio_format.byte_depth
@@ -42,6 +60,7 @@ class HybridVAD(BasePaddedVAD):
     async def __aenter__(self) -> Self:
         """Initialize the hybrid VAD."""
         self._last_is_speech = False
+        self._last_used_silero = False
         await self._stack.enter_async_context(self._webrtc)
         await self._stack.enter_async_context(self._silero)
         return self
@@ -69,13 +88,24 @@ class HybridVAD(BasePaddedVAD):
             bool: True if the window contains speech, False otherwise.
         """
         is_speech = await self._webrtc.is_speech(window)
+
         if is_speech and not self._last_is_speech:
-            is_speech = await self._silero.is_speech(
-                convert_audio_format(
-                    window + self._padding,
-                    self._webrtc.audio_format,
-                    self._silero.audio_format,
-                )
-            )
+            is_speech = await self._silero_is_speech(window)
+        else:
+            self._last_used_silero = False
+
         self._last_is_speech = is_speech
         return is_speech
+
+    async def _silero_is_speech(self, window: bytes) -> bool:
+        """Check if the audio window contains speech using Silero VAD."""
+        if not self._last_used_silero:
+            self._silero.reset_state()
+        self._last_used_silero = True
+        return await self._silero.is_speech(
+            convert_audio_format(
+                self._padding + window,
+                self._webrtc.audio_format,
+                self._silero.audio_format,
+            )
+        )
