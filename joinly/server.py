@@ -290,7 +290,8 @@ async def get_participants(
 @mcp.tool(
     "get_video_snapshot",
     description=(
-        "Get a snapshot of the current video feed and screenshare inside the meeting."
+        "Get a snapshot of the current video feed, including participant webcams and "
+        "screenshares inside the meeting."
     ),
 )
 async def get_video_snapshot(ctx: Context) -> ImageContent:
