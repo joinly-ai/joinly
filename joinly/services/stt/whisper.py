@@ -155,7 +155,7 @@ class WhisperSTT(STT):
                         key=lambda x: x[1],
                         default=(None, 0),
                     )
-                    if speaker_time < 0.2 * (end - start):
+                    if speaker_time < 0.1 * (end - start):
                         speaker = None
                     await queue.put((bytes(buffer), start, end, speaker))
                     buffer.clear()

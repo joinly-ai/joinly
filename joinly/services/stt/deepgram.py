@@ -228,7 +228,7 @@ class DeepgramSTT(STT):
                         key=lambda x: x[1],
                         default=(None, 0),
                     )
-                    if speaker_time < 0.2 * (segment.end - segment.start):
+                    if speaker_time < 0.1 * (segment.end - segment.start):
                         speaker = None
 
                     yield TranscriptSegment(
