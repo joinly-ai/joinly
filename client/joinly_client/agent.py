@@ -38,6 +38,7 @@ class ConversationalToolAgent:
         prompt: str | None = None,
         max_messages: int = 50,
         max_tool_result_chars: int = 2048,
+        max_agent_iter: int | None = 15,
     ) -> None:
         """Initialize the conversational agent with a model.
 
@@ -52,6 +53,8 @@ class ConversationalToolAgent:
                 history. Defaults to 50.
             max_tool_result_chars (int): The maximum number of characters for tool
                 results, truncated after each turn. Defaults to 2048.
+            max_agent_iter (int | None): The maximum number of iterations for the agent.
+                Defaults to 15.
         """
         if not tools:
             msg = "At least one tool must be provided to the agent."
@@ -64,6 +67,7 @@ class ConversationalToolAgent:
         self._messages: list[ModelMessage] = []
         self._max_messages = max_messages
         self._max_tool_result_chars = max_tool_result_chars
+        self._max_agent_iter = max_agent_iter
         self._usage = Usage()
         self._run_task: asyncio.Task | None = None
 
@@ -118,10 +122,11 @@ class ConversationalToolAgent:
             )
         )
 
+        iteration: int = 0
         self._messages = self._filter_messages(
             self._messages, max_tool_result_chars=self._max_tool_result_chars
         )
-        while True:
+        while self._max_agent_iter is None or iteration < self._max_agent_iter:
             self._messages = self._limit_messages(
                 self._messages, max_messages=self._max_messages
             )
@@ -132,6 +137,7 @@ class ConversationalToolAgent:
                 self._messages.append(request)
             if self._check_end_turn(response, request):
                 break
+            iteration += 1
 
     async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
         """Call the LLM with the current messages.
