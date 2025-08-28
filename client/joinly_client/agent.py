@@ -38,6 +38,7 @@ class ConversationalToolAgent:
         prompt: str | None = None,
         max_messages: int = 50,
         max_tool_result_chars: int = 2048,
+        max_ephemeral_tool_result_chars: int = 16384,
         max_agent_iter: int | None = 15,
     ) -> None:
         """Initialize the conversational agent with a model.
@@ -53,6 +54,8 @@ class ConversationalToolAgent:
                 history. Defaults to 50.
             max_tool_result_chars (int): The maximum number of characters for tool
                 results, truncated after each turn. Defaults to 2048.
+            max_ephemeral_tool_result_chars (int): The maximum number of characters for
+                tool results, truncated directly after the call. Defaults to 16384.
             max_agent_iter (int | None): The maximum number of iterations for the agent.
                 Defaults to 15.
         """
@@ -67,6 +70,7 @@ class ConversationalToolAgent:
         self._messages: list[ModelMessage] = []
         self._max_messages = max_messages
         self._max_tool_result_chars = max_tool_result_chars
+        self._max_ephemeral_tool_result_chars = max_ephemeral_tool_result_chars
         self._max_agent_iter = max_agent_iter
         self._usage = Usage()
         self._run_task: asyncio.Task | None = None
@@ -131,6 +135,10 @@ class ConversationalToolAgent:
             self._messages = self._limit_messages(
                 self._messages, max_messages=self._max_messages
             )
+            self._messages = self._truncate_tool_results(
+                self._messages, max_chars=self._max_ephemeral_tool_result_chars
+            )
+
             response = await self._call_llm(self._messages)
             request = await self._call_tools(response)
             self._messages.append(response)
