@@ -10,6 +10,7 @@ from pydantic_ai.direct import model_request
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
+    ModelRequestPart,
     ModelResponse,
     SystemPromptPart,
     ToolCallPart,
@@ -208,7 +209,7 @@ class ConversationalToolAgent:
 
         Returns:
             ModelRequest | None: A ModelRequest containing the results of the tool
-                calls with any binary content artifacts interleaved, or None if there
+                calls with any binary content artifacts appended, or None if there
                 are no tool calls.
         """
         tool_calls = [p for p in response.parts if isinstance(p, ToolCallPart)]
@@ -217,11 +218,8 @@ class ConversationalToolAgent:
 
         results = await asyncio.gather(*[self._call_tool(t) for t in tool_calls])
 
-        parts = []
-        for tool_return, user_part in results:
-            parts.append(tool_return)
-            if user_part:
-                parts.append(user_part)
+        parts: list[ModelRequestPart] = [tool_return for tool_return, _ in results]
+        parts.extend(user_part for _, user_part in results if user_part)
 
         return ModelRequest(parts=parts)
 
