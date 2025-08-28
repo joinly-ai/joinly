@@ -38,6 +38,7 @@ class ConversationalToolAgent:
         prompt: str | None = None,
         max_messages: int = 50,
         max_tool_result_chars: int = 2048,
+        max_ephemeral_tool_result_chars: int = 16384,
         max_agent_iter: int | None = 15,
     ) -> None:
         """Initialize the conversational agent with a model.
@@ -53,6 +54,8 @@ class ConversationalToolAgent:
                 history. Defaults to 50.
             max_tool_result_chars (int): The maximum number of characters for tool
                 results, truncated after each turn. Defaults to 2048.
+            max_ephemeral_tool_result_chars (int): The maximum number of characters for
+                tool results, truncated directly after the call. Defaults to 16384.
             max_agent_iter (int | None): The maximum number of iterations for the agent.
                 Defaults to 15.
         """
@@ -67,6 +70,7 @@ class ConversationalToolAgent:
         self._messages: list[ModelMessage] = []
         self._max_messages = max_messages
         self._max_tool_result_chars = max_tool_result_chars
+        self._max_ephemeral_tool_result_chars = max_ephemeral_tool_result_chars
         self._max_agent_iter = max_agent_iter
         self._usage = Usage()
         self._run_task: asyncio.Task | None = None
@@ -123,13 +127,18 @@ class ConversationalToolAgent:
         )
 
         iteration: int = 0
-        self._messages = self._filter_messages(
-            self._messages, max_tool_result_chars=self._max_tool_result_chars
+        self._messages = self._truncate_tool_results(
+            self._messages, max_chars=self._max_tool_result_chars
         )
+        self._messages = self._omit_binary_tool_results(self._messages)
         while self._max_agent_iter is None or iteration < self._max_agent_iter:
             self._messages = self._limit_messages(
                 self._messages, max_messages=self._max_messages
             )
+            self._messages = self._truncate_tool_results(
+                self._messages, max_chars=self._max_ephemeral_tool_result_chars
+            )
+
             response = await self._call_llm(self._messages)
             request = await self._call_tools(response)
             self._messages.append(response)
@@ -337,17 +346,17 @@ class ConversationalToolAgent:
 
         return finished
 
-    def _filter_messages(
-        self, messages: list[ModelMessage], max_tool_result_chars: int
+    def _truncate_tool_results(
+        self, messages: list[ModelMessage], max_chars: int
     ) -> list[ModelMessage]:
-        """Filter binary contents and truncate large texts from messages.
+        """Truncate large texts from messages tool results.
 
         Args:
             messages (list[ModelMessage]): The list of messages to filter.
-            max_tool_result_chars (int): Maximum character count for tool results.
+            max_chars (int): Maximum character count for tool results.
 
         Returns:
-            list[ModelMessage]: The filtered list of messages.
+            list[ModelMessage]: The list of messages with truncated tool results.
         """
 
         def _truncate(obj: object) -> str | object:
@@ -360,27 +369,53 @@ class ConversationalToolAgent:
                     else str(obj)
                 )
             )
-            if len(string) <= max_tool_result_chars:
+            if len(string) <= max_chars:
                 return obj
 
-            truncated = string[: max_tool_result_chars - 26]
+            truncated = string[: max_chars - 26]
             logger.debug(
                 "Truncated %d chars from tool result",
                 len(string) - len(truncated),
             )
             return f"{truncated} [truncated {len(string) - len(truncated)} chars]"
 
-        filtered: list[ModelMessage] = []
+        out: list[ModelMessage] = []
         for message in messages:
             if isinstance(message, ModelResponse):
-                filtered.append(message)
+                out.append(message)
                 continue
 
             parts = []
             for p in message.parts:
                 if isinstance(p, ToolReturnPart):
                     parts.append(replace(p, content=_truncate(p.content)))
-                elif isinstance(p, UserPromptPart) and isinstance(
+                else:
+                    parts.append(p)
+
+            out.append(ModelRequest(parts=parts))
+
+        return out
+
+    def _omit_binary_tool_results(
+        self, messages: list[ModelMessage]
+    ) -> list[ModelMessage]:
+        """Omit binary tool results from messages.
+
+        Args:
+            messages (list[ModelMessage]): The list of messages to filter.
+
+        Returns:
+            list[ModelMessage]: The list of messages with omitted binary tool results.
+        """
+        out: list[ModelMessage] = []
+        for message in messages:
+            if isinstance(message, ModelResponse):
+                out.append(message)
+                continue
+
+            parts = []
+            for p in message.parts:
+                if isinstance(p, UserPromptPart) and isinstance(
                     p.content, (list, tuple)
                 ):
                     parts.append(
@@ -399,9 +434,9 @@ class ConversationalToolAgent:
                 else:
                     parts.append(p)
 
-            filtered.append(ModelRequest(parts=parts))
+            out.append(ModelRequest(parts=parts))
 
-        return filtered
+        return out
 
     def _limit_messages(
         self, messages: list[ModelMessage], max_messages: int
