@@ -49,6 +49,14 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
         await name_field.fill(name, timeout=20000)
 
+        if await page.get_by_text("can't join this meeting").is_visible():
+            msg = "Joining this meeting is not allowed."
+            raise ValueError(msg)
+
+        if await page.get_by_text("check your meeting code").is_visible():
+            msg = "Meeting link is invalid."
+            raise ValueError(msg)
+
         join_btn = page.get_by_role(
             "button", name=re.compile(r"^(?!.*other ways).*join.*$", re.IGNORECASE)
         )
