@@ -1095,7 +1095,7 @@ dev = [
 
 [[package]]
 name = "joinly-client"
-version = "0.1.15"
+version = "0.1.16"
 source = { editable = "client" }
 dependencies = [
     { name = "click" },
