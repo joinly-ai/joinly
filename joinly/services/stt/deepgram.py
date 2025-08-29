@@ -47,7 +47,7 @@ class DeepgramSTT(STT):
 
         Args:
             model_name: The Deepgram model to use (default is "nova-3-general" for
-                English and "nova-2-general" otherwise).
+                supported languages and "nova-2-general" otherwise).
             sample_rate: The sample rate of the audio (default is 16000).
             hotwords: A list of hotwords to improve transcription accuracy.
             finalize_silence: The duration of silence to wait before finalizing the
@@ -66,7 +66,9 @@ class DeepgramSTT(STT):
         dg = DeepgramClient(config=config)
         self._client: AsyncListenWebSocketClient = dg.listen.asyncwebsocket.v("1")  # type: ignore[attr-type]
         self.model_name = model_name or (
-            "nova-3-general" if get_settings().language == "en" else "nova-2-general"
+            "nova-3-general"
+            if get_settings().language in ["en", "de", "nl", "sv", "da"]
+            else "nova-2-general"
         )
         self.finalize_silence = float(finalize_silence)
         self.finalize_min_speech = float(finalize_min_speech)
