@@ -328,10 +328,13 @@ class ConversationalToolAgent:
 
         end_turn_tool_called = any(p.tool_name == "end_turn" for p in tool_calls)
         interrupted = any(
-            "Interrupted by detected speech" in str(p.content) for p in tool_responses
+            "Interrupted by detected speech" in str(p.content)
+            and p.tool_name.endswith("speak_text")
+            for p in tool_responses
         )
         left_meeting = any(
-            str(p.content) == "Left the meeting." and "leave_meeting" in p.tool_name
+            str(p.content) == "Left the meeting."
+            and p.tool_name.endswith("leave_meeting")
             for p in tool_responses
         )
 
