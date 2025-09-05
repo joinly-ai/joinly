@@ -330,8 +330,12 @@ class ConversationalToolAgent:
         interrupted = any(
             "Interrupted by detected speech" in str(p.content) for p in tool_responses
         )
+        left_meeting = any(
+            str(p.content) == "Left the meeting." and "leave_meeting" in p.tool_name
+            for p in tool_responses
+        )
 
-        finished = not tool_calls or end_turn_tool_called or interrupted
+        finished = not tool_calls or end_turn_tool_called or interrupted or left_meeting
         if finished:
             logger.debug(
                 "Agent turn ended: %s",
@@ -339,7 +343,11 @@ class ConversationalToolAgent:
                 if not tool_calls
                 else "End turn tool called"
                 if end_turn_tool_called
-                else "Interrupted by speech",
+                else "Interrupted by speech"
+                if interrupted
+                else "Left meeting"
+                if left_meeting
+                else "Unknown",
             )
 
         return finished
