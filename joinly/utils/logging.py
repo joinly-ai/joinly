@@ -3,6 +3,16 @@ import logging
 LOGGING_TRACE = 5
 
 
+class HealthCheckFilter(logging.Filter):
+    """Logging filter to skip successful health check logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Filter out health check logs."""
+        return not (
+            "GET /health" in record.getMessage() and "200" in record.getMessage()
+        )
+
+
 def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
     """Configure logging based on verbosity level."""
     log_level = logging.WARNING
@@ -17,6 +27,8 @@ def configure_logging(verbose: int, *, quiet: bool, plain: bool) -> None:
         log_level = LOGGING_TRACE
 
     logging.addLevelName(LOGGING_TRACE, "TRACE")
+
+    logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
     if not plain:
         try:
