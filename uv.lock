@@ -1024,6 +1024,7 @@ name = "joinly"
 version = "0.5.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "click" },
     { name = "deepgram-sdk" },
     { name = "elevenlabs" },
@@ -1039,6 +1040,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "semchunk" },
     { name = "webrtcvad-wheels" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -1061,6 +1063,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.11.18" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "deepgram-sdk", specifier = ">=4.1.1" },
     { name = "elevenlabs", specifier = ">=2.5.0" },
@@ -1077,6 +1080,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "semchunk", specifier = ">=3.2.1" },
     { name = "webrtcvad-wheels", specifier = ">=2.0.14" },
+    { name = "websockets", specifier = ">=15.0.1" },
 ]
 provides-extras = ["cuda"]
 

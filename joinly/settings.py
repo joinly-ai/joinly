@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     meeting_provider: str | type[MeetingProvider] = Field(default="browser")
     vad: str | type[VAD] = Field(default="silero")
     stt: str | type[STT] = Field(default="whisper")
-    tts: str | type[TTS] = Field(default="kokoro")
+    tts: str | type[TTS] = Field(default="resemble")
     transcription_controller: str | type[TranscriptionController] = Field(
         default="default"
     )

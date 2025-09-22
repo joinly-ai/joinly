@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.11.18",
     "click>=8.1.8",
     "deepgram-sdk>=4.1.1",
     "elevenlabs>=2.5.0",
@@ -23,6 +24,7 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "semchunk>=3.2.1",
     "webrtcvad-wheels>=2.0.14",
+    "websockets>=15.0.1",
 ]
 
 [project.scripts]

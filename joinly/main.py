@@ -186,16 +186,28 @@ def _parse_kv(
     show_envvar=True,
     envvar="JOINLY_STT",
 )
+# @click.option(
+#     "--tts",
+#     type=str,
+#     help='Text-to-Speech service to use. Options are: "kokoro" (local), '
+#     '"elevenlabs", "deepgram".',
+#     default="kokoro",
+#     show_default=True,
+#     show_envvar=True,
+#     envvar="JOINLY_TTS",
+# )
+
 @click.option(
     "--tts",
-    type=str,
-    help='Text-to-Speech service to use. Options are: "kokoro" (local), '
-    '"elevenlabs", "deepgram".',
+    type=click.Choice(["kokoro", "elevenlabs", "deepgram", "resemble"], case_sensitive=False),
+    help='Text-to-Speech service to use. Options are: "kokoro" (local), "elevenlabs", "deepgram", "resemble".',
     default="kokoro",
     show_default=True,
     show_envvar=True,
     envvar="JOINLY_TTS",
 )
+
+
 @click.option(
     "--meeting-provider-arg",
     "meeting_provider_args",
