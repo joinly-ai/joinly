@@ -1,6 +1,20 @@
 
 # Changelog
 
+## v0.5.1 - 2025-09-23
+
+### Improvements
+
+- new supported languages for deepgram nova-3 (#143)
+- skip successful health check logs (#147)
+
+### joinly-client (v0.1.17)
+
+- end agent turn on successful meeting leave (#144)
+- ephemeral tool result char limit (#140)
+- add agent iteration limit (#139)
+- correct ordering of parallel binary tool results (#141)
+
 ## v0.5.0 - 2025-08-26
 
 ### Added
