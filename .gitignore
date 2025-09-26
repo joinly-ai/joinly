@@ -176,8 +176,3 @@ cython_debug/
 node_modules/
 .DS_Store
 
-# Audio output files
-*.pcm
-*.wav
-output.pcm
-output.wav
