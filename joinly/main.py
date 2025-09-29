@@ -190,7 +190,7 @@ def _parse_kv(
     "--tts",
     type=str,
     help='Text-to-Speech service to use. Options are: "kokoro" (local), '
-    '"elevenlabs", "deepgram".',
+    '"elevenlabs", "deepgram", "resemble".',
     default="kokoro",
     show_default=True,
     show_envvar=True,
