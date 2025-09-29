@@ -1040,7 +1040,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "semchunk" },
     { name = "webrtcvad-wheels" },
-    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -1080,7 +1079,6 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "semchunk", specifier = ">=3.2.1" },
     { name = "webrtcvad-wheels", specifier = ">=2.0.14" },
-    { name = "websockets", specifier = ">=15.0.1" },
 ]
 provides-extras = ["cuda"]
 
