@@ -84,7 +84,20 @@ class ResembleTTS(TTS):
                         msg = f"Resemble TTS request failed with {resp.status}"
                         raise RuntimeError(msg)
 
+                    data_start = False
+                    buf = bytearray()
                     async for chunk in resp.content.iter_any():
+                        # skip the WAV header
+                        if not data_start:
+                            buf.extend(chunk)
+                            i = buf.find(b"data")
+                            if i == -1 or len(buf) < i + 8:
+                                continue
+                            chunk = bytes(buf[i + 8 :])  # noqa: PLW2901
+                            buf.clear()
+                            data_start = True
+                            if not chunk:
+                                continue
                         received_bytes += len(chunk)
                         yield chunk
 
