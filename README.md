@@ -15,9 +15,10 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/joinly-ai/joinly?sytle=flat&label=Release&labelColor=black&color=%237B2CBF)](https://github.com/joinly-ai/joinly/releases)
 [![GitHub License](https://img.shields.io/github/license/joinly-ai/joinly?style=flat&label=License&labelColor=black&color=%237B2CBF)](LICENSE) 
-[![GitHub Repo stars](https://img.shields.io/github/stars/joinly-ai/joinly?style=flat&logo=github&logoColor=white&label=Stars&labelColor=black&color=7B2CBF)](https://github.com/joinly-ai/joinly) 
+[![GitHub Repo stars](https://img.shields.io/github/stars/joinly-ai/joinly?style=flat&logo=github&logoColor=white&label=Stars&labelColor=black&color=7B2CBF)](https://github.com/joinly-ai/joinly)
 [![Discord](https://img.shields.io/discord/1377431745632145500?style=flat&logo=discord&logoColor=white&label=Discord&labelColor=black&color=7B2CBF)](https://discord.com/invite/AN5NEBkS4d) 
 [![GitHub Discussions](https://img.shields.io/github/discussions/joinly-ai/joinly?style=flat&labelColor=black&label=Discussions&color=%237B2CBF)](https://github.com/joinly-ai/joinly/discussions)
+[![joinly cloud](https://img.shields.io/badge/joinly.ai_cloud-☁️-%237B2CBF?style=flat&labelColor=black)](https://cloud.joinly.ai)
 
 <h1 align="center">Make your meetings accessible to AI Agents 🤖</h1>
 
@@ -25,6 +26,9 @@
 
 > Want to dive right in? Jump to the [Quickstart](#zap-quickstart)!
 > Want to know more? Visit our [website](https://joinly.ai/)!
+
+> [!IMPORTANT]  
+> Don't want the hustle of setting everything up? Try our [cloud](https://cloud.joinly.ai) first! ☁️🚀
 
 
 # :sparkles: Features
