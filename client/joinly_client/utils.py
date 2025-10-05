@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import os
 import re
 import unicodedata
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Never
 
@@ -20,6 +22,8 @@ from joinly_client.prompts import (
     MPC_INSTRUCTIONS,
 )
 from joinly_client.types import McpClientConfig, ToolExecutor, Transcript
+
+logger = logging.getLogger(__name__)
 
 
 def get_llm(llm_provider: str, model_name: str) -> Model:
@@ -189,14 +193,19 @@ def sanitize_tool_schema(schema: dict[str, Any]) -> dict[str, Any]:  # noqa: C90
     return walk(schema)
 
 
-async def load_tools(
+async def load_tools(  # noqa: C901
     clients: McpClientConfig | dict[str, McpClientConfig],
+    sanitize_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = (
+        sanitize_tool_schema
+    ),
 ) -> tuple[list[ToolDefinition], ToolExecutor]:
     """Load tools from the client.
 
     Args:
         clients: A dictionary of client configurations, where the key is the client name
             and the value is the client configuration.
+        sanitize_fn: A function to sanitize the tool schema. Defaults to
+            sanitize_tool_schema. No sanitization if None.
 
     Returns:
         tuple[list[ToolDefinition], ToolExecutor]: A list of tool definitions and a
@@ -205,16 +214,32 @@ async def load_tools(
     tools = []
     client_items = clients.items() if isinstance(clients, dict) else [(None, clients)]
     for prefix, config in client_items:
-        tools.extend(
-            ToolDefinition(
-                name=f"{prefix}_{tool.name}" if prefix is not None else tool.name,
-                description=tool.description,
-                parameters_json_schema=sanitize_tool_schema(tool.inputSchema),
+        for tool in await config.client.list_tools():
+            if tool.name in config.exclude:
+                continue
+            if config.include and tool.name not in config.include:
+                continue
+
+            if sanitize_fn is None:
+                schema = tool.inputSchema
+            else:
+                try:
+                    schema = sanitize_fn(tool.inputSchema)
+                except Exception:
+                    logger.exception(
+                        "Error sanitizing schema for tool %s of MCP %s, skipping",
+                        tool.name,
+                        prefix,
+                    )
+                    continue
+
+            tools.append(
+                ToolDefinition(
+                    name=f"{prefix}_{tool.name}" if prefix is not None else tool.name,
+                    description=tool.description,
+                    parameters_json_schema=schema,
+                )
             )
-            for tool in await config.client.list_tools()
-            if tool.name not in config.exclude
-            and (not config.include or tool.name in config.include)
-        )
 
     async def _tool_executor(tool_name: str, args: dict[str, Any]) -> Any:  # noqa: ANN401
         """Execute a tool with the given name and arguments."""
