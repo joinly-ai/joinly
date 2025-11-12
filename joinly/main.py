@@ -180,7 +180,7 @@ def _parse_kv(
 @click.option(
     "--stt",
     type=str,
-    help='Speech-to-Text service to use. '
+    help="Speech-to-Text service to use. "
     'Options are: "whisper" (local), "google", "deepgram".',
     default="whisper",
     show_default=True,
