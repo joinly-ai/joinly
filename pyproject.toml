@@ -17,6 +17,7 @@ dependencies = [
     "joinly-client>=0.1.18",
     "joinly-common>=0.1.3",
     "kokoro-onnx>=0.4.9",
+    "google-cloud-speech>=2.33.0",
     "google-generativeai>=0.7.0",
     "numpy>=2.2.4",
     "onnxruntime>=1.21.1",

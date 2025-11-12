@@ -857,6 +857,23 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-speech"
+version = "2.34.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", version = "2.25.2", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version >= '3.14'" },
+    { name = "google-api-core", version = "2.26.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version < '3.14'" },
+    { name = "google-auth" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b7/c2/500c58a7e3008cb77da01a2f2a8284ac55c808545d18551c62a031ff548d/google_cloud_speech-2.34.0.tar.gz", hash = "sha256:2a7bffd84f134b9b70c9f11cbb5088c534f92be149d71d9073d0b9dd3a431acf", size = 391496, upload-time = "2025-10-20T14:57:17.127Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/4c/8c52951a4078f4b181917c37a2610e69c0b24a10567d0182bf089a933c35/google_cloud_speech-2.34.0-py3-none-any.whl", hash = "sha256:cc0c6c0fda9306fee01c998bc207b68f71e0a3247121a5a3a27daabacd3a8c98", size = 336614, upload-time = "2025-10-20T14:54:05.004Z" },
+]
+
+[[package]]
 name = "google-genai"
 version = "1.30.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1240,6 +1257,7 @@ dependencies = [
     { name = "elevenlabs" },
     { name = "faster-whisper" },
     { name = "fastmcp" },
+    { name = "google-cloud-speech" },
     { name = "google-generativeai" },
     { name = "joinly-client" },
     { name = "joinly-common" },
@@ -1279,6 +1297,7 @@ requires-dist = [
     { name = "elevenlabs", specifier = ">=2.5.0" },
     { name = "faster-whisper", specifier = ">=1.1.1" },
     { name = "fastmcp", specifier = ">=2.10.5" },
+    { name = "google-cloud-speech", specifier = ">=2.33.0" },
     { name = "google-generativeai", specifier = ">=0.7.0" },
     { name = "joinly-client", editable = "client" },
     { name = "joinly-common", editable = "common" },
