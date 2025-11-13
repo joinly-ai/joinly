@@ -1,6 +1,17 @@
 
 # Changelog
 
+## v0.5.2 - 2025-11-13
+
+### Added
+
+- resemble.ai TTS support by @ArghaSarker (#148)
+- gemini API TTS and STT support by @SanTech0927 (#154)
+
+### joinly-client (v0.1.18)
+
+- sanitize tool schema for OpenAI compatibility (#151, #153)
+
 ## v0.5.1 - 2025-09-23
 
 ### Improvements
