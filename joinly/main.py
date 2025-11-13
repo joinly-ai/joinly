@@ -180,7 +180,8 @@ def _parse_kv(
 @click.option(
     "--stt",
     type=str,
-    help='Speech-to-Text service to use. Options are: "whisper" (local), "deepgram".',
+    help="Speech-to-Text service to use. "
+    'Options are: "whisper" (local), "google", "deepgram".',
     default="whisper",
     show_default=True,
     show_envvar=True,
@@ -190,7 +191,7 @@ def _parse_kv(
     "--tts",
     type=str,
     help='Text-to-Speech service to use. Options are: "kokoro" (local), '
-    '"elevenlabs", "deepgram", "resemble".',
+    '"elevenlabs", "deepgram", "google", "resemble".',
     default="kokoro",
     show_default=True,
     show_envvar=True,
