@@ -102,14 +102,15 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
     ) -> None:
         """Join a government Teams meeting.
 
-        Supports teams.microsoft.us or dod.teams.microsoft.us URLs.
+        Supports teams.microsoft.us or dod.teams.microsoft.us domains.
 
         Args:
             page: The Playwright page instance.
             url: The URL of the Teams meeting.
             name: The name of the participant.
         """
-        await page.goto(url, wait_until="load", timeout=20000)
+        # Use networkidle for government Teams as they may have redirects
+        await page.goto(url, wait_until="networkidle", timeout=60000)
 
         # Wait for the join interface to be ready
         await page.wait_for_timeout(2000)
@@ -117,9 +118,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         async def _dismiss_dialog(page: Page) -> None:
             with contextlib.suppress(PlaywrightTimeoutError):
                 await page.click('div[role="dialog"] button', timeout=1000)
-                await page.click('div[role="dialog"] button', timeout=1000)
 
-        dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
         dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
 
         try:
@@ -130,7 +129,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             if await join_browser_btn.count() > 0:
                 await join_browser_btn.click(timeout=5000)
                 # Wait for the name input page to load
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(3000)
 
             # Try multiple selectors in order of preference
             name_field = None
@@ -167,6 +166,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             # 3. Try any text input field (last resort)
             if not name_field:
                 name_field = page.locator('input[type="text"]').first
+
             if not name_field:
                 # Debug info
                 logger.error(
