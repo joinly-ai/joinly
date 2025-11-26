@@ -1,9 +1,12 @@
 import asyncio
+import contextlib
 import logging
 import re
+import tempfile
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
@@ -16,7 +19,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
     """Controller for managing Teams browser meetings."""
 
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(
-        r"^(?:https?://)?(?:[a-z0-9-]+\.)?(?:teams\.microsoft\.com|teams\.live\.com)/"
+        r"^(?:https?://)?(?:[a-z0-9-]+\.)?(?:teams\.microsoft\.com|teams\.live\.com|teams\.microsoft\.us|dod\.teams\.microsoft\.us)/"
     )
 
     def __init__(self) -> None:
@@ -43,6 +46,31 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name: The name of the participant.
             passcode: The passcode for the meeting (if required).
         """
+        # Check if this is a gov.teams URL
+        if "teams.microsoft.us" in url or "dod.teams.microsoft.us" in url:
+            await self._join_gov_teams(page, url, name)
+        else:
+            await self._join_standard_teams(page, url, name)
+
+        if not await self._check_joined(page):
+            msg = "Join check failed: Failed to join the Teams meeting."
+            raise RuntimeError(msg)
+
+        await self._setup_active_speaker_observer(page)
+
+    async def _join_standard_teams(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+    ) -> None:
+        """Join a standard Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+            url: The URL of the Teams meeting.
+            name: The name of the participant.
+        """
         await page.goto(url, wait_until="load", timeout=20000)
 
         async def _dismiss_dialog(page: Page) -> None:
@@ -54,20 +82,118 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
             await name_field.fill(name, timeout=20000)
 
+            # Wait for the join button to appear after filling the name
+            await page.wait_for_timeout(1000)
+
             join_btn = page.get_by_role(
                 "button", name=re.compile(r"join", re.IGNORECASE)
             )
-            await join_btn.click(timeout=1000)
+            await join_btn.click(timeout=10000)
 
         finally:
             if not dismiss_dialog.done():
                 dismiss_dialog.cancel()
 
-        if not await self._check_joined(page):
-            msg = "Join check failed: Failed to join the Teams meeting."
-            raise RuntimeError(msg)
+    async def _join_gov_teams(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+    ) -> None:
+        """Join a government Teams meeting.
 
-        await self._setup_active_speaker_observer(page)
+        Supports teams.microsoft.us or dod.teams.microsoft.us URLs.
+
+        Args:
+            page: The Playwright page instance.
+            url: The URL of the Teams meeting.
+            name: The name of the participant.
+        """
+        await page.goto(url, wait_until="load", timeout=20000)
+
+        # Wait for the join interface to be ready
+        await page.wait_for_timeout(2000)
+
+        async def _dismiss_dialog(page: Page) -> None:
+            with contextlib.suppress(PlaywrightTimeoutError):
+                await page.click('div[role="dialog"] button', timeout=1000)
+                await page.click('div[role="dialog"] button', timeout=1000)
+
+        dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
+        dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
+
+        try:
+            # Check if "Join via browser" button exists
+            join_browser_btn = page.get_by_role(
+                "button", name=re.compile(r"join.*browser|continue.*web", re.IGNORECASE)
+            )
+            if await join_browser_btn.count() > 0:
+                await join_browser_btn.click(timeout=5000)
+                # Wait for the name input page to load
+                await page.wait_for_timeout(2000)
+
+            # Try multiple selectors in order of preference
+            name_field = None
+
+            try:
+                await page.wait_for_selector("input", timeout=10000)
+            except Exception as e:
+                logger.exception("No input fields found")
+                with tempfile.NamedTemporaryFile(
+                    suffix=".png", delete=False
+                ) as tmp_file:
+                    screenshot_path = tmp_file.name
+                await page.screenshot(path=screenshot_path)
+                msg = (
+                    f"Page did not load properly. Screenshot saved to {screenshot_path}"
+                )
+                raise RuntimeError(msg) from e
+                raise RuntimeError(msg) from e
+
+            # 1. Try placeholder (standard Teams)
+            placeholder_locator = page.get_by_placeholder(
+                re.compile("name", re.IGNORECASE)
+            )
+            if await placeholder_locator.count() > 0:
+                name_field = placeholder_locator
+
+            # 2. Try input with aria-label containing "name" (gov.teams variant)
+            if not name_field:
+                aria_locator = page.locator(
+                    'input[aria-label*="name" i], input[aria-label*="Name"]'
+                )
+                if await aria_locator.count() > 0:
+                    name_field = aria_locator.first
+
+            # 3. Try any text input field (last resort)
+            if not name_field:
+                name_field = page.locator('input[type="text"]').first
+            if not name_field:
+                # Debug info
+                logger.error(
+                    "Available inputs: %s", await page.locator("input").count()
+                )
+                with tempfile.NamedTemporaryFile(
+                    suffix=".png", delete=False
+                ) as tmp_file:
+                    screenshot_path = tmp_file.name
+                await page.screenshot(path=screenshot_path)
+                msg = f"Name field not found. Screenshot saved to {screenshot_path}"
+                raise RuntimeError(msg)
+
+            await name_field.fill(name, timeout=20000)
+
+            # Wait for the join button to appear after filling the name
+            await page.wait_for_timeout(1000)
+
+            join_btn = page.get_by_role(
+                "button", name=re.compile(r"join", re.IGNORECASE)
+            )
+            await join_btn.click(timeout=10000)
+
+        finally:
+            if not dismiss_dialog.done():
+                dismiss_dialog.cancel()
 
     async def leave(self, page: Page) -> None:
         """Leave the Teams meeting.
