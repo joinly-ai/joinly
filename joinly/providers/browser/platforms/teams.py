@@ -136,7 +136,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name_field = None
 
             try:
-                await page.wait_for_selector("input", timeout=10000)
+                await page.wait_for_selector("input", timeout=15000)
             except Exception as e:
                 logger.exception("No input fields found")
                 with tempfile.NamedTemporaryFile(
@@ -147,7 +147,6 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
                 msg = (
                     f"Page did not load properly. Screenshot saved to {screenshot_path}"
                 )
-                raise RuntimeError(msg) from e
                 raise RuntimeError(msg) from e
 
             # 1. Try placeholder (standard Teams)
