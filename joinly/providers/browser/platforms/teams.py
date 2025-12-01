@@ -106,7 +106,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name: The name of the participant.
         """
         # Government Teams may have redirects, use longer timeout
-        await page.goto(url, wait_until="load", timeout=30000)
+        await page.goto(url, wait_until="load", timeout=60000)
 
         async def _dismiss_dialog(page: Page) -> None:
             with contextlib.suppress(PlaywrightTimeoutError):
@@ -125,10 +125,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name_field = page.locator(
                 'input[placeholder*="name" i], input[aria-label*="name" i]'
             ).first
-            await name_field.fill(name, timeout=20000)
-
-            # Wait for the join button to appear after filling the name
-            await page.wait_for_timeout(1000)
+            await name_field.fill(name, timeout=40000)
 
             join_btn = page.get_by_role(
                 "button", name=re.compile(r"join", re.IGNORECASE)
