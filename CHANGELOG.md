@@ -1,6 +1,12 @@
 
 # Changelog
 
+## v0.5.3 - 2025-12-01
+
+### Added
+
+- Support for gov.teams.us platform (#156)
+
 ## v0.5.2 - 2025-11-13
 
 ### Added
