@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import logging
 import re
-import tempfile
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
@@ -132,19 +131,6 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             if await name_field.count() == 0:
                 # Last resort: any text input
                 name_field = page.locator('input[type="text"]').first
-
-            if not name_field:
-                # Debug info
-                logger.error(
-                    "Available inputs: %s", await page.locator("input").count()
-                )
-                with tempfile.NamedTemporaryFile(
-                    suffix=".png", delete=False
-                ) as tmp_file:
-                    screenshot_path = tmp_file.name
-                await page.screenshot(path=screenshot_path)
-                msg = f"Name field not found. Screenshot saved to {screenshot_path}"
-                raise RuntimeError(msg)
 
             await name_field.fill(name, timeout=20000)
 
