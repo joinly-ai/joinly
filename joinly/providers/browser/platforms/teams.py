@@ -106,11 +106,8 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             url: The URL of the Teams meeting.
             name: The name of the participant.
         """
-        # Use networkidle for government Teams as they may have redirects
-        await page.goto(url, wait_until="networkidle", timeout=60000)
-
-        # Wait for the join interface to be ready
-        await page.wait_for_timeout(2000)
+        # Government Teams may have redirects, use longer timeout
+        await page.goto(url, wait_until="load", timeout=30000)
 
         async def _dismiss_dialog(page: Page) -> None:
             with contextlib.suppress(PlaywrightTimeoutError):
