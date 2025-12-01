@@ -122,16 +122,9 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         join_browser = asyncio.create_task(_click_join_browser(page))
 
         try:
-            # Try multiple name field selectors for gov Teams variants
-            name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
-            if await name_field.count() == 0:
-                # Try aria-label variant
-                aria_selector = 'input[aria-label*="name" i], input[aria-label*="Name"]'
-                name_field = page.locator(aria_selector).first
-            if await name_field.count() == 0:
-                # Last resort: any text input
-                name_field = page.locator('input[type="text"]').first
-
+            name_field = page.locator(
+                'input[placeholder*="name" i], input[aria-label*="name" i]'
+            ).first
             await name_field.fill(name, timeout=20000)
 
             # Wait for the join button to appear after filling the name
