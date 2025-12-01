@@ -113,52 +113,24 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             with contextlib.suppress(PlaywrightTimeoutError):
                 await page.click('div[role="dialog"] button', timeout=1000)
 
+        async def _click_join_browser(page: Page) -> None:
+            with contextlib.suppress(PlaywrightTimeoutError):
+                btn_pattern = re.compile(r"join.*browser|continue.*web", re.IGNORECASE)
+                join_browser_btn = page.get_by_role("button", name=btn_pattern)
+                await join_browser_btn.click(timeout=5000)
+
         dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
+        join_browser = asyncio.create_task(_click_join_browser(page))
 
         try:
-            # Check if "Join via browser" button exists
-            join_browser_btn = page.get_by_role(
-                "button", name=re.compile(r"join.*browser|continue.*web", re.IGNORECASE)
-            )
-            if await join_browser_btn.count() > 0:
-                await join_browser_btn.click(timeout=5000)
-                # Wait for the name input page to load
-                await page.wait_for_timeout(3000)
-
-            # Try multiple selectors in order of preference
-            name_field = None
-
-            try:
-                await page.wait_for_selector("input", timeout=15000)
-            except Exception as e:
-                logger.exception("No input fields found")
-                with tempfile.NamedTemporaryFile(
-                    suffix=".png", delete=False
-                ) as tmp_file:
-                    screenshot_path = tmp_file.name
-                await page.screenshot(path=screenshot_path)
-                msg = (
-                    f"Page did not load properly. Screenshot saved to {screenshot_path}"
-                )
-                raise RuntimeError(msg) from e
-
-            # 1. Try placeholder (standard Teams)
-            placeholder_locator = page.get_by_placeholder(
-                re.compile("name", re.IGNORECASE)
-            )
-            if await placeholder_locator.count() > 0:
-                name_field = placeholder_locator
-
-            # 2. Try input with aria-label containing "name" (gov.teams variant)
-            if not name_field:
-                aria_locator = page.locator(
-                    'input[aria-label*="name" i], input[aria-label*="Name"]'
-                )
-                if await aria_locator.count() > 0:
-                    name_field = aria_locator.first
-
-            # 3. Try any text input field (last resort)
-            if not name_field:
+            # Try multiple name field selectors for gov Teams variants
+            name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
+            if await name_field.count() == 0:
+                # Try aria-label variant
+                aria_selector = 'input[aria-label*="name" i], input[aria-label*="Name"]'
+                name_field = page.locator(aria_selector).first
+            if await name_field.count() == 0:
+                # Last resort: any text input
                 name_field = page.locator('input[type="text"]').first
 
             if not name_field:
@@ -185,8 +157,9 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             await join_btn.click(timeout=10000)
 
         finally:
-            if not dismiss_dialog.done():
-                dismiss_dialog.cancel()
+            for task in [dismiss_dialog, join_browser]:
+                if not task.done():
+                    task.cancel()
 
     async def leave(self, page: Page) -> None:
         """Leave the Teams meeting.
