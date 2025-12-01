@@ -116,7 +116,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             with contextlib.suppress(PlaywrightTimeoutError):
                 btn_pattern = re.compile(r"join.*browser|continue.*web", re.IGNORECASE)
                 join_browser_btn = page.get_by_role("button", name=btn_pattern)
-                await join_browser_btn.click(timeout=5000)
+                await join_browser_btn.click(timeout=1000)
 
         dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
         join_browser = asyncio.create_task(_click_join_browser(page))
