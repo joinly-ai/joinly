@@ -1,9 +1,11 @@
 import asyncio
+import contextlib
 import logging
 import re
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
@@ -16,7 +18,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
     """Controller for managing Teams browser meetings."""
 
     url_pattern: ClassVar[re.Pattern[str]] = re.compile(
-        r"^(?:https?://)?(?:[a-z0-9-]+\.)?(?:teams\.microsoft\.com|teams\.live\.com)/"
+        r"^(?:https?://)?(?:[a-z0-9-]+\.)?(?:teams\.microsoft\.com|teams\.live\.com|teams\.microsoft\.us|dod\.teams\.microsoft\.us)/"
     )
 
     def __init__(self) -> None:
@@ -43,6 +45,31 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name: The name of the participant.
             passcode: The passcode for the meeting (if required).
         """
+        # Check if this is a gov.teams URL
+        if "teams.microsoft.us" in url or "dod.teams.microsoft.us" in url:
+            await self._join_gov_teams(page, url, name)
+        else:
+            await self._join_standard_teams(page, url, name)
+
+        if not await self._check_joined(page):
+            msg = "Join check failed: Failed to join the Teams meeting."
+            raise RuntimeError(msg)
+
+        await self._setup_active_speaker_observer(page)
+
+    async def _join_standard_teams(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+    ) -> None:
+        """Join a standard Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+            url: The URL of the Teams meeting.
+            name: The name of the participant.
+        """
         await page.goto(url, wait_until="load", timeout=20000)
 
         async def _dismiss_dialog(page: Page) -> None:
@@ -63,11 +90,52 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             if not dismiss_dialog.done():
                 dismiss_dialog.cancel()
 
-        if not await self._check_joined(page):
-            msg = "Join check failed: Failed to join the Teams meeting."
-            raise RuntimeError(msg)
+    async def _join_gov_teams(
+        self,
+        page: Page,
+        url: str,
+        name: str,
+    ) -> None:
+        """Join a government Teams meeting.
 
-        await self._setup_active_speaker_observer(page)
+        Supports teams.microsoft.us or dod.teams.microsoft.us domains.
+
+        Args:
+            page: The Playwright page instance.
+            url: The URL of the Teams meeting.
+            name: The name of the participant.
+        """
+        # Government Teams may have redirects, use longer timeout
+        await page.goto(url, wait_until="load", timeout=60000)
+
+        async def _dismiss_dialog(page: Page) -> None:
+            with contextlib.suppress(PlaywrightTimeoutError):
+                await page.click('div[role="dialog"] button', timeout=1000)
+
+        async def _click_join_browser(page: Page) -> None:
+            with contextlib.suppress(PlaywrightTimeoutError):
+                btn_pattern = re.compile(r"join.*browser|continue.*web", re.IGNORECASE)
+                join_browser_btn = page.get_by_role("button", name=btn_pattern)
+                await join_browser_btn.click(timeout=1000)
+
+        dismiss_dialog = asyncio.create_task(_dismiss_dialog(page))
+        join_browser = asyncio.create_task(_click_join_browser(page))
+
+        try:
+            name_field = page.locator(
+                'input[placeholder*="name" i], input[aria-label*="name" i]'
+            ).first
+            await name_field.fill(name, timeout=40000)
+
+            join_btn = page.get_by_role(
+                "button", name=re.compile(r"join", re.IGNORECASE)
+            )
+            await join_btn.click(timeout=10000)
+
+        finally:
+            for task in [dismiss_dialog, join_browser]:
+                if not task.done():
+                    task.cancel()
 
     async def leave(self, page: Page) -> None:
         """Leave the Teams meeting.
