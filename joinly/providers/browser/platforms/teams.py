@@ -82,13 +82,10 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
             await name_field.fill(name, timeout=20000)
 
-            # Wait for the join button to appear after filling the name
-            await page.wait_for_timeout(1000)
-
             join_btn = page.get_by_role(
                 "button", name=re.compile(r"join", re.IGNORECASE)
             )
-            await join_btn.click(timeout=10000)
+            await join_btn.click(timeout=1000)
 
         finally:
             if not dismiss_dialog.done():
