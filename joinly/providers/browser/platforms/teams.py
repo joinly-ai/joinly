@@ -269,33 +269,29 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
         """
         share_btn = page.get_by_role(
-            "button", name=re.compile(r"^share\b", re.IGNORECASE)
+            "button", name=re.compile(r"share\b", re.IGNORECASE)
         )
         if not await share_btn.is_visible():
             msg = "Share button not found or not visible."
             raise RuntimeError(msg)
         await share_btn.click(timeout=2000)
-
-        screen_option = page.locator(
-            'button:has-text("Screen"), button:has-text("Entire screen")'
-        ).first
-        await screen_option.wait_for(state="visible", timeout=5000)
-        await screen_option.click(timeout=3000)
         await page.wait_for_timeout(1000)
 
     async def stop_sharing(self, page: Page) -> None:
         """Stop sharing screen in the Teams meeting.
 
+        The Share button is a toggle — clicking it again stops sharing.
+
         Args:
             page: The Playwright page instance.
         """
-        stop_btn = page.get_by_role(
-            "button", name=re.compile(r"stop sharing|stop present", re.IGNORECASE)
+        share_btn = page.get_by_role(
+            "button", name=re.compile(r"share\b", re.IGNORECASE)
         )
-        if not await stop_btn.is_visible():
-            msg = "Stop sharing button not found or not visible."
+        if not await share_btn.is_visible():
+            msg = "Share button not found or not visible."
             raise RuntimeError(msg)
-        await stop_btn.click(timeout=2000)
+        await share_btn.click(timeout=2000)
         await page.wait_for_timeout(500)
 
     async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
