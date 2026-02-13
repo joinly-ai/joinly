@@ -359,12 +359,98 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             }"""
         )
 
+    async def _setup_content_overlay(
+        self, meeting_page: Page, content_page: Page
+    ) -> None:
+        """Overlay content_page frames on meeting_page for tab capture.
+
+        Injects a full-screen canvas on *meeting_page* that receives
+        CDP screencast frames from *content_page*.  Combined with the
+        tab self-capture ``getDisplayMedia`` override, meeting
+        participants see the content page instead of the meeting UI.
+        """
+        cdp = await content_page.context.new_cdp_session(content_page)
+        await cdp.send(
+            "Page.startScreencast",
+            {
+                "format": "jpeg",
+                "quality": 80,
+                "maxWidth": 1280,
+                "maxHeight": 720,
+                "everyNthFrame": 1,
+            },
+        )
+
+        await meeting_page.evaluate(
+            """() => {
+            if (window.__joinlyGDMOverrideInstalled) return;
+            const c = document.createElement('canvas');
+            c.id = '__joinlyOverlay';
+            c.width = 1280; c.height = 720;
+            c.style.position = 'fixed';
+            c.style.inset = '0';
+            c.style.width = '100vw';
+            c.style.height = '100vh';
+            c.style.zIndex = '999999';
+            c.style.pointerEvents = 'none';
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, 1280, 720);
+            ctx.fillStyle = '#fff';
+            ctx.font = '28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading…', 640, 360);
+            document.body.appendChild(c);
+            window.__pushFrame = (b64) => {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, 1280, 720);
+                };
+                img.src = 'data:image/jpeg;base64,' + b64;
+            };
+            const md = navigator.mediaDevices;
+            const origGDM = md.getDisplayMedia.bind(md);
+            md.getDisplayMedia = async (constraints) => {
+                constraints = constraints || {};
+                constraints.selfBrowserSurface = 'include';
+                if (!constraints.video
+                    || constraints.video === true) {
+                    constraints.video = {
+                        displaySurface: 'browser'
+                    };
+                } else if (
+                    typeof constraints.video === 'object') {
+                    constraints.video.displaySurface =
+                        'browser';
+                }
+                return origGDM(constraints);
+            };
+            window.__joinlyGDMOverrideInstalled = true;
+            }"""
+        )
+
+        async def _on_frame(params: dict) -> None:  # type: ignore[type-arg]
+            data = params.get("data", "")
+            if data:
+                await meeting_page.evaluate(
+                    "(b64) => window.__pushFrame?.(b64)",
+                    data,
+                )
+            await cdp.send(
+                "Page.screencastFrameAck",
+                {"sessionId": params.get("sessionId", 0)},
+            )
+
+        cdp.on("Page.screencastFrame", _on_frame)
+
     async def share_screen(self, url: str | None = None) -> None:
         """Start sharing screen in the meeting.
 
-        Uses tab self-capture (``displaySurface: "browser"``) which bypasses
-        Chromium's X11 screen capturer that fails on aarch64 Docker/Xvfb.
-        If *url* is provided it is opened in a new tab after the share starts.
+        When *url* is provided, a full-screen canvas overlay is injected
+        on the meeting tab showing CDP screencast frames from the content
+        tab.  Tab self-capture then captures the overlay so meeting
+        participants see the content.  Without a URL, plain tab
+        self-capture is used.
 
         Args:
             url: Optional URL to display while sharing.
@@ -383,10 +469,11 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
         try:
             async with self._action_guard("share_screen") as (page, controller):
-                await self._setup_tab_capture_override(page)
-                await controller.share_screen(page)
                 if content_page:
-                    await content_page.bring_to_front()
+                    await self._setup_content_overlay(page, content_page)
+                else:
+                    await self._setup_tab_capture_override(page)
+                await controller.share_screen(page)
                 self._content_page = content_page
                 content_page = None  # ownership transferred
                 self._is_sharing = True
@@ -394,11 +481,22 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             if content_page and not content_page.is_closed():
                 await content_page.close()
 
+    async def _remove_share_overlay(self, page: Page) -> None:
+        """Remove the full-screen share overlay from the meeting page."""
+        await page.evaluate(
+            """() => {
+            const el = document.getElementById('__joinlyOverlay');
+            if (el) el.remove();
+            window.__pushFrame = null;
+            }"""
+        )
+
     async def stop_sharing(self) -> None:
         """Stop sharing screen in the meeting."""
         async with self._action_guard("stop_sharing") as (page, controller):
             try:
                 await page.bring_to_front()
+                await self._remove_share_overlay(page)
                 await controller.stop_sharing(page)
             finally:
                 await self._cleanup_content_page()
