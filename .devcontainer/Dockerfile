@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdamage1 \
     libxfixes3 \
     libxkbcommon0 \
+    dbus \
     pulseaudio \
     pulseaudio-utils \
     ffmpeg \

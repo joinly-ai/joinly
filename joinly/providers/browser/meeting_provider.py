@@ -12,6 +12,7 @@ from playwright.async_api import Page
 from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
 from joinly.providers.browser.browser_session import BrowserSession
+from joinly.providers.browser.devices.dbus_session import DbusSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
 from joinly.providers.browser.devices.virtual_microphone import VirtualMicrophone
@@ -88,6 +89,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         self.snapshot_size = snapshot_size
         self._env = os.environ.copy()
         self._pulse_server = PulseServer(env=self._env)
+        self._dbus_session = DbusSession(env=self._env)
         self._virtual_display = VirtualDisplay(
             env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
         )
@@ -104,6 +106,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         self._browser_session = BrowserSession(env=self._env)
         self._services = [
             self._pulse_server,
+            self._dbus_session,
             self._virtual_display,
             self._virtual_speaker,
             self._virtual_microphone,
@@ -329,13 +332,39 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         async with self._action_guard("unmute") as (page, controller):
             await controller.unmute(page)
 
+    async def _setup_tab_capture_override(self, page: Page) -> None:
+        """Override getDisplayMedia on the meeting page to use tab self-capture.
+
+        Chromium's X11 screen capturer fails on aarch64 Docker/Xvfb, but
+        tab self-capture (``displaySurface: "browser"``) works because it
+        bypasses the X11 path entirely.  This override forces every
+        ``getDisplayMedia`` call on the page to request tab capture.
+        """
+        await page.evaluate(
+            """() => {
+            if (window.__joinlyGDMOverrideInstalled) return;
+            const md = navigator.mediaDevices;
+            const origGDM = md.getDisplayMedia.bind(md);
+            md.getDisplayMedia = async (constraints) => {
+                constraints = constraints || {};
+                constraints.selfBrowserSurface = 'include';
+                if (!constraints.video || constraints.video === true) {
+                    constraints.video = {displaySurface: 'browser'};
+                } else if (typeof constraints.video === 'object') {
+                    constraints.video.displaySurface = 'browser';
+                }
+                return origGDM(constraints);
+            };
+            window.__joinlyGDMOverrideInstalled = true;
+            }"""
+        )
+
     async def share_screen(self, url: str | None = None) -> None:
         """Start sharing screen in the meeting.
 
-        If a URL is provided, it will be opened in a new browser tab and its
-        content will be captured via CDP and streamed through a canvas-based
-        ``getDisplayMedia`` override so that screen sharing works even when
-        native X11/PipeWire capture is unavailable (e.g. Docker / Xvfb).
+        Uses tab self-capture (``displaySurface: "browser"``) which bypasses
+        Chromium's X11 screen capturer that fails on aarch64 Docker/Xvfb.
+        If *url* is provided it is opened in a new tab after the share starts.
 
         Args:
             url: Optional URL to display while sharing.
@@ -354,91 +383,16 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
         try:
             async with self._action_guard("share_screen") as (page, controller):
-                if content_page:
-                    await self._setup_screen_share_stream(page, content_page)
+                await self._setup_tab_capture_override(page)
                 await controller.share_screen(page)
+                if content_page:
+                    await content_page.bring_to_front()
                 self._content_page = content_page
                 content_page = None  # ownership transferred
                 self._is_sharing = True
         finally:
             if content_page and not content_page.is_closed():
                 await content_page.close()
-
-    async def _setup_screen_share_stream(
-        self, meeting_page: Page, content_page: Page
-    ) -> None:
-        """Override getDisplayMedia on the meeting page with a CDP-based stream.
-
-        Takes periodic screenshots of *content_page* via CDP, draws them onto
-        an off-screen canvas on *meeting_page*, and returns the canvas capture
-        stream when ``getDisplayMedia`` is called.
-        """
-        cdp = await content_page.context.new_cdp_session(content_page)
-
-        # Start CDP screencast on the content page (JPEG frames at 10 fps)
-        await cdp.send(
-            "Page.startScreencast",
-            {
-                "format": "jpeg",
-                "quality": 80,
-                "maxWidth": 1280,
-                "maxHeight": 720,
-                "everyNthFrame": 1,
-            },
-        )
-
-        # Expose a function on the meeting page so we can push frames to it
-        await meeting_page.evaluate("""() => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1280;
-            canvas.height = 720;
-            const ctx = canvas.getContext('2d');
-
-            // Draw initial "loading" frame
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(0, 0, 1280, 720);
-            ctx.fillStyle = '#fff';
-            ctx.font = '28px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Loading shared content...', 640, 360);
-
-            window.__shareCanvas = canvas;
-            window.__shareCtx = ctx;
-            window.__shareStream = canvas.captureStream(0);  // manual frame push
-
-            // Push a frame from a base64 JPEG
-            window.__pushFrame = (b64) => {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0, 1280, 720);
-                    // Request a frame on the capture stream
-                    const track = window.__shareStream.getVideoTracks()[0];
-                    if (track && track.requestFrame) track.requestFrame();
-                };
-                img.src = 'data:image/jpeg;base64,' + b64;
-            };
-
-            // Override getDisplayMedia to return our canvas stream
-            const origGDM = navigator.mediaDevices.getDisplayMedia;
-            navigator.mediaDevices.getDisplayMedia = async (constraints) => {
-                console.log('[joinly] getDisplayMedia override called!', constraints);
-                return window.__shareStream;
-            };
-            console.log('[joinly] getDisplayMedia override installed');
-        }""")
-
-        # Forward screencast frames from CDP to the meeting page canvas
-        async def _on_frame(params: dict) -> None:  # type: ignore[type-arg]
-            session_id = params.get("sessionId", 0)
-            data = params.get("data", "")
-            if data:
-                await meeting_page.evaluate(
-                    "(b64) => window.__pushFrame && window.__pushFrame(b64)",
-                    data,
-                )
-            await cdp.send("Page.screencastFrameAck", {"sessionId": session_id})
-
-        cdp.on("Page.screencastFrame", _on_frame)
 
     async def stop_sharing(self) -> None:
         """Stop sharing screen in the meeting."""
