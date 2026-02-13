@@ -111,6 +111,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         ]
 
         self._page: Page | None = None
+        self._content_page: Page | None = None
         self._platform_controller: BrowserPlatformController | None = None
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
@@ -315,6 +316,36 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         """Unmute yourself in the meeting."""
         async with self._action_guard("unmute") as (page, controller):
             await controller.unmute(page)
+
+    async def share_screen(self, url: str | None = None) -> None:
+        """Start sharing screen in the meeting.
+
+        If a URL is provided, it will be opened in a new browser tab and brought
+        to the front of the virtual display before sharing starts. This way,
+        participants see the content page rather than the meeting UI.
+
+        Args:
+            url: Optional URL to display while sharing.
+        """
+        if url:
+            self._content_page = await self._browser_session.get_page()
+            await self._content_page.goto(url, wait_until="load", timeout=20000)
+            await self._content_page.bring_to_front()
+
+        async with self._action_guard("share_screen") as (page, controller):
+            await controller.share_screen(page)
+
+    async def stop_sharing(self) -> None:
+        """Stop sharing screen in the meeting."""
+        async with self._action_guard("stop_sharing") as (page, controller):
+            await controller.stop_sharing(page)
+
+        if self._content_page and not self._content_page.is_closed():
+            await self._content_page.close()
+        self._content_page = None
+
+        if self._page and not self._page.is_closed():
+            await self._page.bring_to_front()
 
     async def snapshot(self) -> VideoSnapshot:
         """Take a snapshot of the current video frame.

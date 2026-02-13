@@ -235,6 +235,18 @@ class MeetingProvider(Protocol):
         """Unmute yourself in the meeting."""
         ...
 
+    async def share_screen(self, url: str | None = None) -> None:
+        """Start sharing screen in the meeting.
+
+        Args:
+            url: Optional URL to display while sharing.
+        """
+        ...
+
+    async def stop_sharing(self) -> None:
+        """Stop sharing screen in the meeting."""
+        ...
+
 
 class TranscriptionController(Protocol):
     """Protocol for controlling transcription processes.

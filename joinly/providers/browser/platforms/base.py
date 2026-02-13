@@ -96,6 +96,22 @@ class BrowserPlatformController(Protocol):
         """
         ...
 
+    async def share_screen(self, page: Page) -> None:
+        """Start sharing screen in the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+        """
+        ...
+
+    async def stop_sharing(self, page: Page) -> None:
+        """Stop sharing screen in the meeting.
+
+        Args:
+            page: The Playwright Page object to interact with.
+        """
+        ...
+
 
 class BaseBrowserPlatformController(BrowserPlatformController):
     """Base class for browser platform controllers for specific platforms."""
@@ -146,4 +162,14 @@ class BaseBrowserPlatformController(BrowserPlatformController):
     async def unmute(self, page: Page) -> None:  # noqa: ARG002
         """Unmute yourself in the meeting."""
         msg = "Provider does not support unmuting."
+        raise ProviderNotSupportedError(msg)
+
+    async def share_screen(self, page: Page) -> None:  # noqa: ARG002
+        """Start sharing screen in the meeting."""
+        msg = "Provider does not support screen sharing."
+        raise ProviderNotSupportedError(msg)
+
+    async def stop_sharing(self, page: Page) -> None:  # noqa: ARG002
+        """Stop sharing screen in the meeting."""
+        msg = "Provider does not support stopping screen share."
         raise ProviderNotSupportedError(msg)

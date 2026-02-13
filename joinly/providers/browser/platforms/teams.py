@@ -262,6 +262,42 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             msg = "Unmute button not found or not visible."
             raise RuntimeError(msg)
 
+    async def share_screen(self, page: Page) -> None:
+        """Start sharing screen in the Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        share_btn = page.get_by_role(
+            "button", name=re.compile(r"^share\b", re.IGNORECASE)
+        )
+        if not await share_btn.is_visible():
+            msg = "Share button not found or not visible."
+            raise RuntimeError(msg)
+        await share_btn.click(timeout=2000)
+        await page.wait_for_timeout(500)
+
+        screen_option = page.locator(
+            'button:has-text("Screen"), button:has-text("Entire screen")'
+        ).first
+        await screen_option.click(timeout=3000)
+        await page.wait_for_timeout(1000)
+
+    async def stop_sharing(self, page: Page) -> None:
+        """Stop sharing screen in the Teams meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        stop_btn = page.get_by_role(
+            "button", name=re.compile(r"stop sharing|stop present", re.IGNORECASE)
+        )
+        if not await stop_btn.is_visible():
+            msg = "Stop sharing button not found or not visible."
+            raise RuntimeError(msg)
+        await stop_btn.click(timeout=2000)
+        await page.wait_for_timeout(500)
+
     async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
         """Check if the Teams meeting has been joined successfully.
 
