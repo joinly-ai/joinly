@@ -275,11 +275,11 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             msg = "Share button not found or not visible."
             raise RuntimeError(msg)
         await share_btn.click(timeout=2000)
-        await page.wait_for_timeout(500)
 
         screen_option = page.locator(
             'button:has-text("Screen"), button:has-text("Entire screen")'
         ).first
+        await screen_option.wait_for(state="visible", timeout=5000)
         await screen_option.click(timeout=3000)
         await page.wait_for_timeout(1000)
 

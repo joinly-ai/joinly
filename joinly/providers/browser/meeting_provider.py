@@ -112,6 +112,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
         self._page: Page | None = None
         self._content_page: Page | None = None
+        self._is_sharing: bool = False
         self._platform_controller: BrowserPlatformController | None = None
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
@@ -221,6 +222,13 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         )
         raise RuntimeError(msg)
 
+    async def _cleanup_content_page(self) -> None:
+        """Close the content page if it exists and reset sharing state."""
+        if self._content_page and not self._content_page.is_closed():
+            await self._content_page.close()
+        self._content_page = None
+        self._is_sharing = False
+
     async def join(
         self,
         url: str | None = None,
@@ -269,6 +277,9 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         """Leave the current meeting."""
         async with self._action_guard("leave") as (page, controller):
             try:
+                if self._is_sharing:
+                    await self._cleanup_content_page()
+                    await page.bring_to_front()
                 await controller.leave(page)
             except RuntimeError:
                 logger.warning(
@@ -276,6 +287,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 )
             finally:
                 self._platform_controller = None
+                await self._cleanup_content_page()
                 if self._page is not None and not self._page.is_closed():
                     await self._page.close()
                 self._page = None
@@ -320,32 +332,122 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
     async def share_screen(self, url: str | None = None) -> None:
         """Start sharing screen in the meeting.
 
-        If a URL is provided, it will be opened in a new browser tab and brought
-        to the front of the virtual display before sharing starts. This way,
-        participants see the content page rather than the meeting UI.
+        If a URL is provided, it will be opened in a new browser tab and its
+        content will be captured via CDP and streamed through a canvas-based
+        ``getDisplayMedia`` override so that screen sharing works even when
+        native X11/PipeWire capture is unavailable (e.g. Docker / Xvfb).
 
         Args:
             url: Optional URL to display while sharing.
         """
-        if url:
-            self._content_page = await self._browser_session.get_page()
-            await self._content_page.goto(url, wait_until="load", timeout=20000)
-            await self._content_page.bring_to_front()
+        if self._is_sharing:
+            msg = (
+                "Already sharing screen. "
+                "Stop the current share before starting a new one."
+            )
+            raise RuntimeError(msg)
 
-        async with self._action_guard("share_screen") as (page, controller):
-            await controller.share_screen(page)
+        content_page = None
+        if url:
+            content_page = await self._browser_session.get_page()
+            await content_page.goto(url, wait_until="load", timeout=20000)
+
+        try:
+            async with self._action_guard("share_screen") as (page, controller):
+                if content_page:
+                    await self._setup_screen_share_stream(page, content_page)
+                await controller.share_screen(page)
+                self._content_page = content_page
+                content_page = None  # ownership transferred
+                self._is_sharing = True
+        finally:
+            if content_page and not content_page.is_closed():
+                await content_page.close()
+
+    async def _setup_screen_share_stream(
+        self, meeting_page: Page, content_page: Page
+    ) -> None:
+        """Override getDisplayMedia on the meeting page with a CDP-based stream.
+
+        Takes periodic screenshots of *content_page* via CDP, draws them onto
+        an off-screen canvas on *meeting_page*, and returns the canvas capture
+        stream when ``getDisplayMedia`` is called.
+        """
+        cdp = await content_page.context.new_cdp_session(content_page)
+
+        # Start CDP screencast on the content page (JPEG frames at 10 fps)
+        await cdp.send(
+            "Page.startScreencast",
+            {
+                "format": "jpeg",
+                "quality": 80,
+                "maxWidth": 1280,
+                "maxHeight": 720,
+                "everyNthFrame": 1,
+            },
+        )
+
+        # Expose a function on the meeting page so we can push frames to it
+        await meeting_page.evaluate("""() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1280;
+            canvas.height = 720;
+            const ctx = canvas.getContext('2d');
+
+            // Draw initial "loading" frame
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, 1280, 720);
+            ctx.fillStyle = '#fff';
+            ctx.font = '28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading shared content...', 640, 360);
+
+            window.__shareCanvas = canvas;
+            window.__shareCtx = ctx;
+            window.__shareStream = canvas.captureStream(0);  // manual frame push
+
+            // Push a frame from a base64 JPEG
+            window.__pushFrame = (b64) => {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, 1280, 720);
+                    // Request a frame on the capture stream
+                    const track = window.__shareStream.getVideoTracks()[0];
+                    if (track && track.requestFrame) track.requestFrame();
+                };
+                img.src = 'data:image/jpeg;base64,' + b64;
+            };
+
+            // Override getDisplayMedia to return our canvas stream
+            const origGDM = navigator.mediaDevices.getDisplayMedia;
+            navigator.mediaDevices.getDisplayMedia = async (constraints) => {
+                console.log('[joinly] getDisplayMedia override called!', constraints);
+                return window.__shareStream;
+            };
+            console.log('[joinly] getDisplayMedia override installed');
+        }""")
+
+        # Forward screencast frames from CDP to the meeting page canvas
+        async def _on_frame(params: dict) -> None:  # type: ignore[type-arg]
+            session_id = params.get("sessionId", 0)
+            data = params.get("data", "")
+            if data:
+                await meeting_page.evaluate(
+                    "(b64) => window.__pushFrame && window.__pushFrame(b64)",
+                    data,
+                )
+            await cdp.send("Page.screencastFrameAck", {"sessionId": session_id})
+
+        cdp.on("Page.screencastFrame", _on_frame)
 
     async def stop_sharing(self) -> None:
         """Stop sharing screen in the meeting."""
         async with self._action_guard("stop_sharing") as (page, controller):
-            await controller.stop_sharing(page)
-
-        if self._content_page and not self._content_page.is_closed():
-            await self._content_page.close()
-        self._content_page = None
-
-        if self._page and not self._page.is_closed():
-            await self._page.bring_to_front()
+            try:
+                await page.bring_to_front()
+                await controller.stop_sharing(page)
+            finally:
+                await self._cleanup_content_page()
 
     async def snapshot(self) -> VideoSnapshot:
         """Take a snapshot of the current video frame.

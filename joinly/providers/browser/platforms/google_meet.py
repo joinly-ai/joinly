@@ -231,21 +231,15 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         """
         await self._dismiss_dialog(page)
 
-        present_btn = page.get_by_role(
-            "button", name=re.compile(r"present now", re.IGNORECASE)
+        share_btn = page.get_by_role(
+            "button",
+            name=re.compile(r"present now|share screen", re.IGNORECASE),
         )
-        if not await present_btn.is_visible():
-            msg = "Present now button not found or not visible."
+        if not await share_btn.is_visible():
+            msg = "Share/Present button not found or not visible."
             raise RuntimeError(msg)
-        await present_btn.click(timeout=2000)
-        await page.wait_for_timeout(500)
-
-        entire_screen_option = page.locator(
-            'li:has-text("Your entire screen"), '
-            'div[role="menuitem"]:has-text("entire screen")'
-        ).first
-        await entire_screen_option.click(timeout=3000)
-        await page.wait_for_timeout(1000)
+        await share_btn.first.click(timeout=2000)
+        await page.wait_for_timeout(2000)
 
     async def stop_sharing(self, page: Page) -> None:
         """Stop sharing screen in the Google Meet meeting.
@@ -256,8 +250,11 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await self._dismiss_dialog(page)
 
         stop_btn = page.get_by_role(
-            "button", name=re.compile(r"stop (sharing|present)", re.IGNORECASE)
+            "button",
+            name=re.compile(r"stop (sharing|present)", re.IGNORECASE),
         )
+        if not await stop_btn.is_visible():
+            stop_btn = page.locator("button:has(span.AeBiU-kBDsod-Rtc0Jf)").first
         if not await stop_btn.is_visible():
             msg = "Stop sharing button not found or not visible."
             raise RuntimeError(msg)
