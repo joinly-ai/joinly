@@ -1,106 +1,157 @@
-# ruff: noqa: T201, S101, PLR2004, D103, S108
-"""Quick integration test: join a meeting and trigger screen sharing.
+# ruff: noqa: T201, S101, D103, S108, E501, C901, PLR0912, PLR0915, SLF001, BLE001, S110, SIM105, TRY400, PLR2004, RUF006, ANN001, ANN202, G201
+"""End-to-end test for Teams screen sharing with production code.
 
-Usage (must run inside Docker or a Linux env with Xvfb + PulseAudio):
+Uses the actual production code path (BrowserMeetingProvider) to join
+a Teams meeting and attempt screen sharing.
 
-    uv run python scripts/test_screen_share.py <meeting-url> [url-to-share]
+Usage:
+    uv run python scripts/test_screen_share.py <teams-meeting-url>
 
-Examples:
-    uv run python scripts/test_screen_share.py https://meet.google.com/abc-defg-hij
-    uv run python scripts/test_screen_share.py https://meet.google.com/abc-defg-hij https://example.com
+The bot will join the meeting and wait to be admitted.  Once admitted,
+it will click the Share button.  Monitor the console output for:
+  - getDisplayMedia called       (GDM interceptor working)
+  - Tab capture / canvas fallback (capture method)
+  - Screen sharing state changes
 """
 
 import asyncio
-import base64
 import logging
+import re
 import sys
-from pathlib import Path
 
-from fastmcp import Client
-
-from joinly.server import mcp
+from joinly.providers.browser.meeting_provider import BrowserMeetingProvider
 from joinly.settings import Settings, set_settings
 from joinly.utils.logging import configure_logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("joinly.diag")
 
 
-async def main(meeting_url: str, share_url: str | None = None) -> None:
+async def main(meeting_url: str) -> None:
     configure_logging(verbose=2, quiet=False, plain=True)
     set_settings(Settings(name="joinly", vad="webrtc", stt="whisper", tts="kokoro"))
 
-    client = Client(mcp)
+    provider = BrowserMeetingProvider()
 
-    async with client:
-        # 1. List available tools
-        tools = await client.list_tools()
-        tool_names = [t.name for t in tools]
-        logger.info("Available tools: %s", tool_names)
-        assert "share_screen" in tool_names, "share_screen tool not registered"
-        assert "stop_sharing" in tool_names, "stop_sharing tool not registered"
+    async with provider:
+        logger.info("Joining: %s", meeting_url)
+        await provider.join(url=meeting_url, name="joinly")
+        logger.info("Join completed (in lobby or meeting)")
 
-        # 2. Join the meeting
-        logger.info("Joining meeting: %s", meeting_url)
-        result = await client.call_tool(
-            "join_meeting",
-            {"meeting_url": meeting_url, "participant_name": "joinly"},
-        )
-        logger.info("Join result: %s", result)
+        if not provider._page:
+            logger.error("No page available after join")
+            return
 
-        # 3. Wait for the bot to settle in
-        logger.info("Waiting 10s for meeting to stabilise...")
-        await asyncio.sleep(10)
+        # Add console monitoring
+        def on_console(msg):
+            text = msg.text[:300]
+            if any(
+                kw in text.lower()
+                for kw in [
+                    "screensharing",
+                    "displaymedia",
+                    "gdm",
+                    "allowipvideo",
+                    "screen",
+                    "share",
+                    "modali",
+                    "transceiver",
+                    "joinly",
+                ]
+            ):
+                logger.info("CONSOLE [%s]: %s", msg.type, text[:200])
 
-        # 4. Take a snapshot before sharing
-        logger.info("Taking pre-share snapshot...")
-        snapshot = await client.call_tool("get_video_snapshot", {})
-        logger.info("Pre-share snapshot: %s", snapshot)
+        provider._page.on("console", on_console)
 
-        # 5. Try screen sharing
-        share_args: dict[str, str] = {}
-        if share_url:
-            share_args["url"] = share_url
-        logger.info("Starting screen share (url=%s)...", share_url)
-        result = await client.call_tool("share_screen", share_args)
-        logger.info("Share result: %s", result)
+        # Wait for admission — poll every 3 seconds for up to 120 seconds
+        logger.info("Waiting to be admitted (up to 120s)...")
+        in_meeting = False
+        for i in range(40):
+            await asyncio.sleep(3)
+            leave_btn = provider._page.get_by_role(
+                "button", name=re.compile(r"leave", re.IGNORECASE)
+            )
+            try:
+                if await leave_btn.is_visible():
+                    in_meeting = True
+                    logger.info("Admitted to meeting at t+%ds", (i + 1) * 3)
+                    break
+            except Exception:
+                pass
 
-        if result.is_error:
-            logger.error("Screen share failed: %s", result)
-        else:
-            logger.info("Sharing for 15s...")
+            # Periodic status
+            if i % 5 == 4:
+                heading = await provider._page.evaluate(
+                    "document.querySelector('h1,h2,h3,h4')?.textContent?.trim()?.substring(0,80) || ''"
+                )
+                logger.info("t+%ds: heading=%r", (i + 1) * 3, heading)
+
+        if not in_meeting:
+            logger.warning("Not admitted after 120s — taking screenshot and exiting")
+            await provider._page.screenshot(path="/tmp/share_test_lobby.png")
+            body = await provider._page.evaluate(
+                "document.body?.innerText?.substring(0, 300) || ''"
+            )
+            logger.info("Page: %s", body[:200])
+            return
+
+        await provider._page.screenshot(path="/tmp/share_test_before.png")
+        logger.info("In meeting — checking Share button availability...")
+
+        # Check if share button is visible
+        share_btn_visible = await provider._page.evaluate("""() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            return btns.filter(b => /share/i.test(b.textContent) || /share/i.test(b.getAttribute('aria-label') || ''))
+                .map(b => ({
+                    text: b.textContent?.trim()?.substring(0, 40),
+                    ariaLabel: b.getAttribute('aria-label')?.substring(0, 40),
+                    disabled: b.disabled,
+                    visible: b.offsetParent !== null,
+                }));
+        }""")
+        logger.info("Share buttons: %s", share_btn_visible)
+
+        # Attempt screen share
+        logger.info("Attempting screen share...")
+        try:
+            await provider.share_screen()
+            logger.info("share_screen() returned successfully!")
             await asyncio.sleep(5)
+            await provider._page.screenshot(path="/tmp/share_test_after.png")
 
-            # Take a snapshot during sharing to debug what the display shows
-            logger.info("Taking mid-share snapshot...")
-            snapshot = await client.call_tool("get_video_snapshot", {})
-            for item in snapshot.content:
-                if hasattr(item, "data") and item.data:
-                    img_bytes = base64.b64decode(item.data)
-                    out = Path("/tmp/mid_share_snapshot.jpg")
-                    out.write_bytes(img_bytes)
-                    logger.info("Saved mid-share snapshot to %s", out)
+            # Check if sharing
+            logger.info("Is sharing: %s", provider._is_sharing)
 
-            await asyncio.sleep(10)
+            # Wait and observe
+            logger.info("Waiting 15s to observe sharing state...")
+            await asyncio.sleep(15)
+            await provider._page.screenshot(path="/tmp/share_test_final.png")
 
-            logger.info("Stopping screen share...")
-            result = await client.call_tool("stop_sharing", {})
-            logger.info("Stop result: %s", result)
+            # Stop sharing
+            logger.info("Stopping share...")
+            await provider.stop_sharing()
+            logger.info("Share stopped.")
 
-        await asyncio.sleep(3)
+        except Exception as e:
+            logger.error("share_screen() failed: %s", e, exc_info=True)
+            await provider._page.screenshot(path="/tmp/share_test_error.png")
 
-        # 7. Leave
-        logger.info("Leaving meeting...")
-        result = await client.call_tool("leave_meeting", {})
-        logger.info("Leave result: %s", result)
+            # Capture page state for debugging
+            body = await provider._page.evaluate(
+                "document.body?.innerText?.substring(0, 500) || ''"
+            )
+            logger.info("Page after error: %s", body[:300])
+
+        logger.info("Leaving...")
+        try:
+            await provider.leave()
+        except Exception as e:
+            logger.error("Leave failed: %s", e)
 
     logger.info("Done.")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <meeting-url> [url-to-share]")
+        print(f"Usage: {sys.argv[0]} <teams-meeting-url>")
         sys.exit(1)
-
-    meeting_url = sys.argv[1]
-    share_url = sys.argv[2] if len(sys.argv) > 2 else None
-    asyncio.run(main(meeting_url, share_url))
+    asyncio.run(main(sys.argv[1]))

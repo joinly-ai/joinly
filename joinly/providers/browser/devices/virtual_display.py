@@ -85,8 +85,9 @@ class VirtualDisplay:
                 "-display",
                 self.display_name,
                 "-forever",
-                "-nopw",
                 "-shared",
+                "-nopw",
+                "-noxdamage",
             ]
             if self.vnc_port is not None:
                 cmd.extend(["-rfbport", str(self.vnc_port)])

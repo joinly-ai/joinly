@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import re
+import urllib.parse
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
@@ -57,6 +58,27 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
 
         await self._setup_active_speaker_observer(page)
 
+    @staticmethod
+    def to_v2_url(url: str) -> str:
+        """Convert a Teams meeting URL to the v2 web-client URL.
+
+        The v2 URL bypasses the macOS/Windows app-launcher interstitial
+        that appears when the User-Agent looks like a desktop OS.
+
+        Args:
+            url: The original Teams meeting URL.
+
+        Returns:
+            The v2 URL with ``anon=true`` appended.
+        """
+        parsed = urllib.parse.urlparse(url)
+        v2 = f"https://teams.microsoft.com/v2/#{parsed.path}"
+        if parsed.query:
+            v2 += f"?{parsed.query}&anon=true"
+        else:
+            v2 += "?anon=true"
+        return v2
+
     async def _join_standard_teams(
         self,
         page: Page,
@@ -84,7 +106,7 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             join_btn = page.get_by_role(
                 "button", name=re.compile(r"join", re.IGNORECASE)
             )
-            await join_btn.click(timeout=1000)
+            await join_btn.click(timeout=10000)
 
         finally:
             if not dismiss_dialog.done():
@@ -265,6 +287,10 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
     async def share_screen(self, page: Page) -> None:
         """Start sharing screen in the Teams meeting.
 
+        Clicks the share toolbar button.  If Teams opens a share tray
+        with options (Screen, Window, …), selects the "Screen" option
+        to trigger ``getDisplayMedia``.
+
         Args:
             page: The Playwright page instance.
         """
@@ -276,6 +302,22 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             raise RuntimeError(msg)
         await share_btn.click(timeout=2000)
         await page.wait_for_timeout(1000)
+
+        # Teams may show a share tray — select "Screen" if present.
+        screen_option = page.locator(
+            'button:has-text("Screen"), '
+            'button:has-text("Entire screen"), '
+            '[role="menuitem"]:has-text("Screen"), '
+            '[aria-label*="screen" i][role="button"], '
+            '[aria-label*="Screen"][role="menuitem"]'
+        ).first
+        try:
+            await screen_option.wait_for(state="visible", timeout=3000)
+            await screen_option.click(timeout=2000)
+            await page.wait_for_timeout(1000)
+        except PlaywrightTimeoutError:
+            # No tray — share button directly triggers getDisplayMedia
+            pass
 
     async def stop_sharing(self, page: Page) -> None:
         """Stop sharing screen in the Teams meeting.
@@ -294,8 +336,12 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         await share_btn.click(timeout=2000)
         await page.wait_for_timeout(500)
 
-    async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
+    async def _check_joined(self, page: Page, timeout: float = 20) -> bool:  # noqa: ASYNC109
         """Check if the Teams meeting has been joined successfully.
+
+        Looks for lobby indicators (various "waiting" messages across
+        Teams v1 and v2) or the *Leave* button which confirms the
+        participant is inside the meeting.
 
         Args:
             page: The Playwright page instance.
@@ -307,6 +353,8 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
         locators = [
             page.locator("span >> text=/please wait/i"),
             page.locator("span >> text=/will let you in/i"),
+            page.locator("span >> text=/waiting/i"),
+            page.locator("span >> text=/someone in the meeting/i"),
             page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
         ]
 
