@@ -412,21 +412,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         """
         await page.add_init_script(
             """(() => {
-            /* --- RTCPeerConnection SDP monitor --- */
-            const _origSetRemote = RTCPeerConnection.prototype.setRemoteDescription;
-            RTCPeerConnection.prototype.setRemoteDescription = function(desc) {
-                if (desc && desc.sdp) {
-                    const lines = desc.sdp.split('\\r\\n');
-                    const bundle = lines.filter(l => l.startsWith('a=group:BUNDLE'));
-                    const mlines = lines.filter(l => l.startsWith('m='));
-                    console.log('[joinly-sdp] setRemoteDescription type=' + desc.type
-                        + ' m-lines=' + mlines.length
-                        + ' BUNDLE=' + JSON.stringify(bundle));
-                    mlines.forEach(m => console.log('[joinly-sdp]   ' + m));
-                }
-                return _origSetRemote.apply(this, arguments);
-            };
-
             const md = navigator.mediaDevices;
             if (!md) return;
 
@@ -572,12 +557,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 cm.append("ScreenSharing")
                 patched = True
                 logger.debug("Patched response %s.callModalities: %s", wrapper, cm)
-            # Log SDP BUNDLE info from blob
-            blob = inner.get("blob", "")
-            if blob and "BUNDLE" in str(blob):
-                for line in str(blob).split("\\r\\n"):
-                    if "BUNDLE" in line:
-                        logger.debug("SDP %s BUNDLE: %s", wrapper, line)
 
         return patched
 
@@ -999,14 +978,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             ctx.textAlign = 'center';
             ctx.fillText('Loading\\u2026', 640, 360);
             document.body.appendChild(c);
-
-            window.__pushFrame = (b64) => {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0, 1280, 720);
-                };
-                img.src = 'data:image/jpeg;base64,' + b64;
-            };
 
             /* Continuously repaint the canvas so captureStream
                always has fresh frames to encode. */
