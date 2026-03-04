@@ -328,12 +328,13 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
         """
         share_btn = page.get_by_role(
-            "button", name=re.compile(r"share\b", re.IGNORECASE)
+            "button",
+            name=re.compile(r"(share|stop\s+(sharing|presenting))\b", re.IGNORECASE),
         )
-        if not await share_btn.is_visible():
+        if not await share_btn.first.is_visible():
             msg = "Share button not found or not visible."
             raise RuntimeError(msg)
-        await share_btn.click(timeout=2000)
+        await share_btn.first.click(timeout=2000)
         await page.wait_for_timeout(500)
 
     async def _check_joined(self, page: Page, timeout: float = 20) -> bool:  # noqa: ASYNC109
