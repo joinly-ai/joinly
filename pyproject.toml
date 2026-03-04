@@ -153,3 +153,7 @@ python_functions = ["test_*"]
 log_level = "INFO"
 log_cli_level = "INFO"
 log_cli = true
+markers = [
+    "manual: requires a real meeting and human interaction",
+]
+addopts = "-m 'not manual'"
