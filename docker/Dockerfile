@@ -35,11 +35,7 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8000
 
 # Install system dependencies (for audio, video, browser, etc.)
-# NOTE: The system chromium package is required for H.264 codec support
-# (via OpenH264). Playwright's bundled Chromium lacks H.264 on Linux ARM64,
-# which prevents Teams from allocating video transceivers.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -52,7 +48,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdamage1 \
     libxfixes3 \
     libxkbcommon0 \
-    dbus \
     pulseaudio \
     pulseaudio-utils \
     xvfb \

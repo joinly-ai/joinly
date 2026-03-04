@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import re
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Self
@@ -13,12 +12,6 @@ from playwright.async_api import BrowserContext, Page, Playwright, async_playwri
 from joinly.utils.logging import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
-
-# Prefer the system Chromium over Playwright's bundled build because the
-# Debian/Ubuntu package is compiled with OpenH264 support.  Playwright's
-# open-source Chromium lacks H.264, which prevents Teams from allocating
-# video transceivers (Teams requires H.264 for WebRTC).
-_SYSTEM_CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser")
 
 _CDP_RE = re.compile(r"DevTools listening on (ws://.*)")
 
@@ -49,19 +42,8 @@ class BrowserSession:
         """Start and connect to the Playwright browser."""
         self._playwright = await async_playwright().start()
 
-        if _SYSTEM_CHROMIUM:
-            bin_path = Path(_SYSTEM_CHROMIUM)
-            logger.info(
-                "Using system Chromium with H.264 support: %s",
-                bin_path,
-            )
-        else:
-            bin_path = Path(self._playwright.chromium.executable_path)
-            logger.warning(
-                "System Chromium not found — falling back to Playwright "
-                "Chromium (no H.264): %s",
-                bin_path,
-            )
+        bin_path = Path(self._playwright.chromium.executable_path)
+        logger.debug("Chromium binary path: %s", bin_path)
         if not bin_path.exists():
             msg = "Chromium binary not found"
             logger.error(msg)
@@ -82,21 +64,21 @@ class BrowserSession:
             "--allow-http-screen-capture",
             "--auto-select-desktop-capture-source=Entire",
             "--enable-usermedia-screen-capturing",
+            "--enable-features=WebRTCPipeWireCapturer",
             "--ozone-platform=x11",
             "--disable-gpu",
             "--disable-focus-on-load",
             "--window-size=1280,720",
             "--lang=en-US",
+            "--test-type",
             "--no-sandbox",  # required for docker
-            "--disable-hang-monitor",
-            "--disable-prompt-on-repost",
             "--disable-dev-shm-usage",
             "--disable-gpu-sandbox",
             "--disable-setuid-sandbox",
             "--disable-blink-features=AutomationControlled",
             "--no-xshm",
             "--force-device-scale-factor=1",
-            "--disable-features=TranslateUI,MediaRouter,WebRtcAutomaticGainControl,WebRTCPipeWireCapturer",
+            "--disable-features=TranslateUI,MediaRouter,WebRtcAutomaticGainControl",
             "--disable-backgrounding-occluded-windows",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,

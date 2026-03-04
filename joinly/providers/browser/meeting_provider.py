@@ -12,7 +12,6 @@ from playwright.async_api import CDPSession, Page
 from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
 from joinly.providers.browser.browser_session import BrowserSession
-from joinly.providers.browser.devices.dbus_session import DbusSession
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
 from joinly.providers.browser.devices.virtual_microphone import VirtualMicrophone
@@ -89,7 +88,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         self.snapshot_size = snapshot_size
         self._env = os.environ.copy()
         self._pulse_server = PulseServer(env=self._env)
-        self._dbus_session = DbusSession(env=self._env)
         self._virtual_display = VirtualDisplay(
             env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
         )
@@ -106,7 +104,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         self._browser_session = BrowserSession(env=self._env)
         self._services = [
             self._pulse_server,
-            self._dbus_session,
             self._virtual_display,
             self._virtual_speaker,
             self._virtual_microphone,
