@@ -4,7 +4,7 @@ These tests require a real meeting URL and human interaction (admitting the
 bot into the meeting).  They are excluded from the default pytest run and can
 be invoked explicitly::
 
-    JOINLY_TEST_MEETING_URL="https://..." uv run pytest -m manual
+    JOINLY_TEST_MEETING_URL="https://..." uv run pytest tests/test_screen_share.py
 """
 
 import asyncio
@@ -47,7 +47,7 @@ async def test_share_screen(client: Client) -> None:
         arguments={"meeting_url": MEETING_URL},
     )
 
-    await asyncio.sleep(10)
+    await asyncio.sleep(15)
 
     await client.call_tool(
         "share_screen",
