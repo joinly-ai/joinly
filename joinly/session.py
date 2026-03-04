@@ -162,11 +162,11 @@ class MeetingSession:
         """
         return await self._video_reader.snapshot()
 
-    async def share_screen(self, url: str | None = None) -> None:
+    async def share_screen(self, url: str) -> None:
         """Start sharing screen in the meeting.
 
         Args:
-            url: Optional URL to display while sharing.
+            url: URL to display while sharing.
         """
         await self._meeting_provider.share_screen(url)
 

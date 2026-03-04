@@ -308,20 +308,16 @@ async def get_video_snapshot(ctx: Context) -> ImageContent:
 @mcp.tool(
     "share_screen",
     description=(
-        "Start sharing your screen in the meeting. Optionally provide a URL to "
-        "display while sharing. The entire virtual display is shared, so participants "
-        "will see the content at the given URL."
+        "Start sharing your screen in the meeting. Provide a URL to display "
+        "while sharing. Participants will see the content at the given URL."
     ),
 )
 async def share_screen(
     ctx: Context,
     url: Annotated[
-        str | None,
-        Field(
-            default=None,
-            description="Optional URL to open and display while sharing screen",
-        ),
-    ] = None,
+        str,
+        Field(description="URL to open and display while sharing screen"),
+    ],
 ) -> str:
     """Start sharing screen in the meeting."""
     ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session

@@ -235,11 +235,11 @@ class MeetingProvider(Protocol):
         """Unmute yourself in the meeting."""
         ...
 
-    async def share_screen(self, url: str | None = None) -> None:
+    async def share_screen(self, url: str) -> None:
         """Start sharing screen in the meeting.
 
         Args:
-            url: Optional URL to display while sharing.
+            url: URL to display while sharing.
         """
         ...
 
