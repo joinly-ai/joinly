@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import logging
 import re
-import urllib.parse
 from typing import Any, ClassVar
 
 from playwright.async_api import Page
@@ -57,27 +56,6 @@ class TeamsBrowserPlatformController(BaseBrowserPlatformController):
             raise RuntimeError(msg)
 
         await self._setup_active_speaker_observer(page)
-
-    @staticmethod
-    def to_v2_url(url: str) -> str:
-        """Convert a Teams meeting URL to the v2 web-client URL.
-
-        The v2 URL bypasses the macOS/Windows app-launcher interstitial
-        that appears when the User-Agent looks like a desktop OS.
-
-        Args:
-            url: The original Teams meeting URL.
-
-        Returns:
-            The v2 URL with ``anon=true`` appended.
-        """
-        parsed = urllib.parse.urlparse(url)
-        v2 = f"https://teams.microsoft.com/v2/#{parsed.path}"
-        if parsed.query:
-            v2 += f"?{parsed.query}&anon=true"
-        else:
-            v2 += "?anon=true"
-        return v2
 
     async def _join_standard_teams(
         self,

@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Self
 
 from PIL import Image, ImageOps
-from playwright.async_api import CDPSession, Page
+from playwright.async_api import Page
 
 from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
@@ -114,7 +114,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         self._content_page: Page | None = None
         self._is_sharing: bool = False
         self._platform_controller: BrowserPlatformController | None = None
-        self._signaling_cdp: CDPSession | None = None
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
 
@@ -265,17 +264,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         if name is None:
             name = get_settings().name
 
-        # For Teams, install the platform spoof, media-device interceptors
-        # and signaling interceptor BEFORE the page loads.
-        if isinstance(self._platform_controller, TeamsBrowserPlatformController):
-            await self._setup_teams_platform_spoof(self._page)
-            await self._install_gdm_interceptor(self._page)
-            await self._install_signaling_interceptor(self._page)
-            # Use v2 URL to bypass the app-launcher interstitial that
-            # appears when the (now spoofed) User-Agent looks like macOS.
-            if "teams.microsoft.us" not in url:
-                url = TeamsBrowserPlatformController.to_v2_url(url)
-
         async with self._action_guard("join") as (page, controller):
             try:
                 await controller.join(page, url, name=name, passcode=passcode)
@@ -341,515 +329,27 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         async with self._action_guard("unmute") as (page, controller):
             await controller.unmute(page)
 
-    async def _setup_teams_platform_spoof(self, page: Page) -> None:
-        """Make the browser appear as Google Chrome on macOS for Teams.
-
-        Uses CDP ``Network.setUserAgentOverride`` to set the User-Agent,
-        platform, and Client Hints metadata at the **browser engine**
-        level.  This affects ALL HTTP requests (not just signaling) and
-        all JavaScript APIs (``navigator.userAgent``,
-        ``navigator.platform``, ``navigator.userAgentData``).
-
-        Combined with the v2 meeting URL (set in ``join()``) to bypass
-        the macOS/Windows app-launcher interstitial.
-        """
-        cdp = await page.context.new_cdp_session(page)
-        self._signaling_cdp = cdp
-
-        await cdp.send(
-            "Network.setUserAgentOverride",
-            {
-                "userAgent": self._CHROME_UA,
-                "platform": "MacIntel",
-                "userAgentMetadata": {
-                    "brands": [
-                        {"brand": "Google Chrome", "version": "133"},
-                        {"brand": "Chromium", "version": "133"},
-                        {"brand": "Not_A Brand", "version": "24"},
-                    ],
-                    "fullVersionList": [
-                        {
-                            "brand": "Google Chrome",
-                            "version": "133.0.0.0",
-                        },
-                        {"brand": "Chromium", "version": "133.0.0.0"},
-                        {
-                            "brand": "Not_A Brand",
-                            "version": "24.0.0.0",
-                        },
-                    ],
-                    "fullVersion": "133.0.0.0",
-                    "platform": "macOS",
-                    "platformVersion": "10.15.7",
-                    "architecture": "x86",
-                    "model": "",
-                    "mobile": False,
-                    "bitness": "64",
-                    "wow64": False,
-                },
-            },
-        )
-
-    async def _install_gdm_interceptor(self, page: Page) -> None:
-        """Install stealth getDisplayMedia plumbing before page scripts run.
-
-        Uses ``add_init_script`` to set up:
-
-        - A non-enumerable Symbol store on ``navigator.mediaDevices``
-          for the ``getDisplayMedia`` handler (installed at share time).
-        - ``Function.prototype.toString`` patching so any future
-          overrides look native.
-        - An SDP monitor on ``RTCPeerConnection.setRemoteDescription``
-          for diagnostic logging.
-
-        ``enumerateDevices`` and ``getUserMedia`` are **not** overridden
-        — the fake camera caused the Teams v2 pre-join page to hang on
-        "Connecting…".  Capability injection is handled by the signaling
-        interceptor instead.
-        """
-        await page.add_init_script(
-            """(() => {
-            const md = navigator.mediaDevices;
-            if (!md) return;
-
-            const _sym = Symbol.for('__joinly__');
-
-            /* ---- Internal store (non-enumerable) ---- */
-            const store = {
-                gdmHandler: null,
-                overrideInstalled: false,
-                origGDM: MediaDevices.prototype.getDisplayMedia || null,
-                nativeStrings: null,
-            };
-            Object.defineProperty(md, _sym, {
-                value: store,
-                writable: false,
-                enumerable: false,
-                configurable: false,
-            });
-
-            /* ---- toString stealth ---- */
-            const origToString = Function.prototype.toString;
-            const nativeStrings = new Map();
-            store.nativeStrings = nativeStrings;
-
-            const newToString = function toString() {
-                if (nativeStrings.has(this))
-                    return nativeStrings.get(this);
-                return origToString.call(this);
-            };
-            nativeStrings.set(newToString,
-                'function toString() { [native code] }');
-            Object.defineProperty(newToString, 'name',
-                {value: 'toString', configurable: true});
-            Object.defineProperty(newToString, 'length',
-                {value: 0, configurable: true});
-            Function.prototype.toString = newToString;
-
-            })();"""
-        )
-
-    @staticmethod
-    def _patch_screensharing_fields(body: dict) -> bool:  # type: ignore[type-arg]
-        """Add ScreenSharing to capability fields in a signaling body.
-
-        Returns ``True`` if any field was modified.
-        """
-        patched = False
-
-        # clientEndpointCapabilities |= 4 (bit 2 = ScreenSharing)
-        for cap_key in ("clientEndpointCapabilities", "endpointCapabilities"):
-            val = body.get(cap_key)
-            if val is not None and not (int(val) & 4):
-                body[cap_key] = int(val) | 4
-                patched = True
-                logger.debug("Patched %s: %s → %s", cap_key, val, body[cap_key])
-
-        # Top-level list fields
-        for list_key in ("callModalities", "mediaTypesToUse"):
-            lst = body.get(list_key)
-            if isinstance(lst, list) and "ScreenSharing" not in lst:
-                lst.append("ScreenSharing")
-                patched = True
-                logger.debug("Patched %s: %s", list_key, lst)
-
-        # Nested wrappers (mediaAnswer, mediaNegotiation, mediaOffer)
-        for wrapper in ("mediaAnswer", "mediaNegotiation", "mediaOffer"):
-            inner = body.get(wrapper)
-            if not isinstance(inner, dict):
-                continue
-            cm = inner.get("callModalities")
-            if isinstance(cm, list) and "ScreenSharing" not in cm:
-                cm.append("ScreenSharing")
-                patched = True
-                logger.debug("Patched %s.callModalities: %s", wrapper, cm)
-
-        return patched
-
-    _CHROME_UA = (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/133.0.0.0 Safari/537.36"
-    )
-
-    @staticmethod
-    def _patch_platform_headers(
-        headers: dict,  # type: ignore[type-arg]
-    ) -> list[dict[str, str]] | None:
-        """Rewrite platform and browser identifiers in request headers.
-
-        Patches ``User-Agent`` (remove HeadlessChrome / Linux),
-        ``sec-ch-ua-platform``, ``sec-ch-ua``, and
-        ``X-Microsoft-Skype-Client`` so the Teams server sees a
-        standard Chrome on macOS client.
-        """
-        changed = False
-        result: list[dict[str, str]] = []
-        for name, val in headers.items():
-            lower = name.lower()
-            out = val
-            if lower == "x-microsoft-skype-client" and "os=linux" in val:
-                out = val.replace("os=linux", "os=macos").replace(
-                    "osVer=undefined", "osVer=10.15.7"
-                )
-                changed = True
-                logger.debug("Patched X-Microsoft-Skype-Client header")
-            elif lower == "sec-ch-ua-platform" and "linux" in val.lower():
-                out = '"macOS"'
-                changed = True
-            elif lower == "user-agent" and ("HeadlessChrome" in val or "Linux" in val):
-                out = BrowserMeetingProvider._CHROME_UA
-                changed = True
-            elif lower == "sec-ch-ua" and (
-                "HeadlessChrome" in val or "Chromium" in val
-            ):
-                out = (
-                    '"Google Chrome";v="133", "Chromium";v="133", "Not_A Brand";v="24"'
-                )
-                changed = True
-            result.append({"name": name, "value": out})
-        return result if changed else None
-
-    @staticmethod
-    def _patch_response_fields(body: dict) -> bool:  # type: ignore[type-arg]
-        """Patch server response to enable video and ScreenSharing.
-
-        Modifies ``allowIPVideo``, ``endpointCapabilities``, and
-        ``callModalities`` in the server's response so the Teams SDK
-        believes video and screen sharing are permitted.
-
-        Returns ``True`` if any field was modified.
-        """
-        patched = False
-        patched = BrowserMeetingProvider._patch_allow_ip_video(body) or patched
-        patched = BrowserMeetingProvider._patch_roster_caps(body) or patched
-
-        # Patch nested media wrappers in responses and log SDP
-        for wrapper in ("mediaAnswer", "mediaNegotiation", "mediaOffer"):
-            inner = body.get(wrapper)
-            if not isinstance(inner, dict):
-                continue
-            cm = inner.get("callModalities")
-            if isinstance(cm, list) and "ScreenSharing" not in cm:
-                cm.append("ScreenSharing")
-                patched = True
-                logger.debug("Patched response %s.callModalities: %s", wrapper, cm)
-
-        return patched
-
-    @staticmethod
-    def _patch_allow_ip_video(body: dict) -> bool:  # type: ignore[type-arg]
-        """Set ``allowIPVideo`` to true in meetingCapability."""
-        md = body.get("meetingDetails")
-        if not isinstance(md, dict):
-            return False
-        mc = md.get("meetingCapability")
-        if isinstance(mc, dict) and mc.get("allowIPVideo") is False:
-            mc["allowIPVideo"] = True
-            logger.debug("Patched allowIPVideo: false → true")
-            return True
-        return False
-
-    @staticmethod
-    def _patch_roster_caps(body: dict) -> bool:  # type: ignore[type-arg]
-        """Add ScreenSharing bit to endpointCapabilities in roster."""
-        roster = body.get("roster")
-        if not isinstance(roster, dict):
-            return False
-        participants = roster.get("participants")
-        if not isinstance(participants, dict):
-            return False
-        patched = False
-        for pdata in participants.values():
-            if not isinstance(pdata, dict):
-                continue
-            endpoints = pdata.get("endpoints")
-            if not isinstance(endpoints, dict):
-                continue
-            for ep in endpoints.values():
-                if not isinstance(ep, dict):
-                    continue
-                caps = ep.get("endpointCapabilities")
-                if caps is not None and not (int(caps) & 4):
-                    ep["endpointCapabilities"] = int(caps) | 4
-                    patched = True
-                    logger.debug(
-                        "Patched server endpointCapabilities: %s → %s",
-                        caps,
-                        ep["endpointCapabilities"],
-                    )
-        return patched
-
-    async def _install_signaling_interceptor(self, page: Page) -> None:
-        """Intercept Teams signaling to inject ScreenSharing capabilities.
-
-        The Teams calling SDK may exclude ScreenSharing from
-        ``callModalities`` and ``clientEndpointCapabilities`` based on
-        environment checks unrelated to ``getDisplayMedia`` availability.
-        This interceptor uses CDP ``Fetch`` to modify both outgoing
-        requests and incoming responses, ensuring the server allocates
-        a ScreenSharing transceiver and the client honours it.
-        """
-        import base64
-        import json
-
-        # Reuse the CDP session created by _setup_teams_platform_spoof
-        cdp = self._signaling_cdp
-        if cdp is None:
-            cdp = await page.context.new_cdp_session(page)
-            self._signaling_cdp = cdp
-
-        await cdp.send(
-            "Fetch.enable",
-            {
-                "patterns": [
-                    {"urlPattern": "*conv.skype.com*", "requestStage": "Request"},
-                    {"urlPattern": "*flightproxy*", "requestStage": "Request"},
-                    {"urlPattern": "*broker.skype.com*", "requestStage": "Request"},
-                    {"urlPattern": "*conv.skype.com*", "requestStage": "Response"},
-                    {"urlPattern": "*flightproxy*", "requestStage": "Response"},
-                    {"urlPattern": "*broker.skype.com*", "requestStage": "Response"},
-                ],
-            },
-        )
-
-        async def _on_request_paused(params: dict) -> None:  # type: ignore[type-arg]
-            request_id = params["requestId"]
-
-            # Response stage: patch server responses
-            if params.get("responseStatusCode") is not None:
-                await self._handle_response_intercept(cdp, params, request_id)
-                return
-
-            # Request stage: patch headers and body
-            request = params.get("request", {})
-            headers = request.get("headers", {})
-            patched_headers = self._patch_platform_headers(headers)
-            post_data = request.get("postData", "")
-
-            if request.get("method") != "POST" or not post_data:
-                cont: dict = {"requestId": request_id}
-                if patched_headers is not None:
-                    cont["headers"] = patched_headers
-                await cdp.send("Fetch.continueRequest", cont)
-                return
-
-            body_encoded = None
-            try:
-                body = json.loads(post_data)
-                if self._patch_screensharing_fields(body):
-                    body_encoded = base64.b64encode(json.dumps(body).encode()).decode()
-            except (json.JSONDecodeError, ValueError, TypeError):
-                logger.debug("Signaling body not JSON, passing through")
-
-            cont = {"requestId": request_id}
-            if patched_headers is not None:
-                cont["headers"] = patched_headers
-            if body_encoded is not None:
-                cont["postData"] = body_encoded
-            await cdp.send("Fetch.continueRequest", cont)
-
-        cdp.on("Fetch.requestPaused", _on_request_paused)
-
-    async def _handle_response_intercept(
+    async def _setup_content_stream(
         self,
-        cdp: CDPSession,
-        params: dict,  # type: ignore[type-arg]
-        request_id: str,
+        meeting_page: Page,
+        content_page: Page,
     ) -> None:
-        """Patch server responses to enable ScreenSharing.
+        """Set up screen sharing of *content_page* via a canvas overlay.
 
-        Must ALWAYS call ``continueResponse`` or ``fulfillRequest``
-        to avoid stalling the browser's network stack.
+        Injects a full-screen canvas on *meeting_page* that receives CDP
+        screencast frames from *content_page*.  The ``getDisplayMedia``
+        override uses tab self-capture so the platform receives a real
+        browser-produced stream containing the canvas content.
+
+        The canvas sits at ``z-index:999999`` with ``pointer-events:none``
+        so Playwright automation on the meeting page works normally
+        (clicks pass through to the DOM underneath).
+
+        Args:
+            meeting_page: The meeting tab's Playwright page.
+            content_page: The content tab whose frames will be shared.
         """
-        import base64
-        import json
-
-        try:
-            resp = await cdp.send("Fetch.getResponseBody", {"requestId": request_id})
-            body_str = resp.get("body", "")
-            is_b64 = resp.get("base64Encoded", False)
-
-            # Decode base64 responses (compressed/binary bodies)
-            if is_b64 and body_str:
-                try:
-                    body_str = base64.b64decode(body_str).decode("utf-8")
-                except (UnicodeDecodeError, ValueError):
-                    # Binary body (not text) — pass through
-                    await cdp.send(
-                        "Fetch.continueResponse",
-                        {"requestId": request_id},
-                    )
-                    return
-
-            if not body_str:
-                await cdp.send(
-                    "Fetch.continueResponse",
-                    {"requestId": request_id},
-                )
-                return
-
-            body = json.loads(body_str)
-            patched = self._patch_response_fields(body)
-            if patched:
-                new_body = json.dumps(body)
-                encoded = base64.b64encode(new_body.encode()).decode()
-                await cdp.send(
-                    "Fetch.fulfillRequest",
-                    {
-                        "requestId": request_id,
-                        "responseCode": params["responseStatusCode"],
-                        "responseHeaders": params.get("responseHeaders", []),
-                        "body": encoded,
-                    },
-                )
-                return
-        except (json.JSONDecodeError, ValueError, TypeError, KeyError):
-            pass
-        except Exception:  # noqa: BLE001
-            # CDP errors (network, protocol) — must still release request
-            logger.debug("Response intercept CDP error, passing through")
-
-        try:
-            await cdp.send(
-                "Fetch.continueResponse",
-                {"requestId": request_id},
-            )
-        except Exception:  # noqa: BLE001
-            logger.debug("continueResponse failed for %s", request_id)
-
-    async def _setup_tab_capture_override(self, page: Page) -> None:
-        """Override getDisplayMedia on the meeting page to use tab self-capture.
-
-        Chromium's X11 screen capturer fails on aarch64 Docker/Xvfb, but
-        tab self-capture (``displaySurface: "browser"``) works because it
-        bypasses the X11 path entirely.  This override forces every
-        ``getDisplayMedia`` call on the page to request tab capture.
-        """
-        await page.evaluate(
-            """() => {
-            if (window.__joinlyGDMOverrideInstalled) return;
-            const md = navigator.mediaDevices;
-            const origGDM = md.getDisplayMedia.bind(md);
-            md.getDisplayMedia = async (constraints) => {
-                constraints = constraints || {};
-                constraints.selfBrowserSurface = 'include';
-                if (!constraints.video || constraints.video === true) {
-                    constraints.video = {displaySurface: 'browser'};
-                } else if (typeof constraints.video === 'object') {
-                    constraints.video.displaySurface = 'browser';
-                }
-                return origGDM(constraints);
-            };
-            window.__joinlyGDMOverrideInstalled = true;
-            }"""
-        )
-
-    async def _setup_teams_tab_capture(self, page: Page) -> None:
-        """Override getDisplayMedia at share time for tab self-capture.
-
-        The init-script intentionally leaves ``getDisplayMedia`` native
-        so the Teams SDK includes ScreenSharing in its capability
-        negotiation.  This method installs the override only when
-        sharing actually starts.
-
-        A short delay is added before resolving to allow Teams'
-        signaling to allocate the sharing transceiver on the server.
-
-        If tab self-capture fails (e.g. on aarch64 Docker), falls
-        back to a canvas ``captureStream``.  The video track's
-        ``getSettings`` is patched so ``displaySurface`` reports
-        ``'monitor'``, matching what Teams expects for screen shares.
-        """
-        await page.evaluate(
-            """() => {
-            const _sym = Symbol.for('__joinly__');
-            const store = navigator.mediaDevices[_sym];
-            if (!store || store.overrideInstalled) return;
-            const md = navigator.mediaDevices;
-            const origGDM = store.origGDM
-                || MediaDevices.prototype.getDisplayMedia;
-
-            /* Install getDisplayMedia override now (share time) */
-            const newGDM = function getDisplayMedia(constraints) {
-                const h = md[_sym]?.gdmHandler;
-                if (h) return h(constraints, origGDM.bind(this));
-                return origGDM.call(this, constraints);
-            };
-            /* Stealth: masquerade the late-installed override */
-            const ns = store.nativeStrings;
-            if (ns) {
-                Object.defineProperty(newGDM, 'name',
-                    {value: 'getDisplayMedia', configurable: true});
-                Object.defineProperty(newGDM, 'length',
-                    {value: 1, configurable: true});
-                ns.set(newGDM,
-                    'function getDisplayMedia() { [native code] }');
-            }
-            MediaDevices.prototype.getDisplayMedia = newGDM;
-
-            store.gdmHandler = async (cstr, nativeGDM) => {
-                await new Promise(r => setTimeout(r, 2000));
-                let stream;
-                try {
-                    const tc = Object.assign({}, cstr || {});
-                    tc.selfBrowserSurface = 'include';
-                    tc.video = {displaySurface: 'browser'};
-                    stream = await nativeGDM(tc);
-                } catch (_) {
-                    /* Tab capture failed — canvas fallback */
-                    const cvs = document.createElement('canvas');
-                    cvs.width = 1280; cvs.height = 720;
-                    const ctx = cvs.getContext('2d');
-                    ctx.fillStyle = '#1a1a2e';
-                    ctx.fillRect(0, 0, 1280, 720);
-                    stream = cvs.captureStream(15);
-                }
-                /* Patch displaySurface so Teams treats it as screen */
-                for (const t of stream.getVideoTracks()) {
-                    const orig = t.getSettings.bind(t);
-                    t.getSettings = () => {
-                        const s = orig();
-                        s.displaySurface = 'monitor';
-                        return s;
-                    };
-                }
-                return stream;
-            };
-            store.overrideInstalled = true;
-            }"""
-        )
-
-    async def _setup_content_overlay(
-        self, meeting_page: Page, content_page: Page
-    ) -> None:
-        """Overlay content_page frames on meeting_page for tab capture.
-
-        Injects a full-screen canvas on *meeting_page* that receives
-        CDP screencast frames from *content_page*.  Combined with the
-        tab self-capture ``getDisplayMedia`` override, meeting
-        participants see the content page instead of the meeting UI.
-        """
+        await meeting_page.evaluate("() => { window.__scShareOk = null; }")
         cdp = await content_page.context.new_cdp_session(content_page)
         await cdp.send(
             "Page.startScreencast",
@@ -862,53 +362,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             },
         )
 
-        await meeting_page.evaluate(
-            """() => {
-            if (window.__joinlyGDMOverrideInstalled) return;
-            const c = document.createElement('canvas');
-            c.id = '__joinlyOverlay';
-            c.width = 1280; c.height = 720;
-            c.style.position = 'fixed';
-            c.style.inset = '0';
-            c.style.width = '100vw';
-            c.style.height = '100vh';
-            c.style.zIndex = '999999';
-            c.style.pointerEvents = 'none';
-            const ctx = c.getContext('2d');
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(0, 0, 1280, 720);
-            ctx.fillStyle = '#fff';
-            ctx.font = '28px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Loading…', 640, 360);
-            document.body.appendChild(c);
-            window.__pushFrame = (b64) => {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0, 1280, 720);
-                };
-                img.src = 'data:image/jpeg;base64,' + b64;
-            };
-            const md = navigator.mediaDevices;
-            const origGDM = md.getDisplayMedia.bind(md);
-            md.getDisplayMedia = async (constraints) => {
-                constraints = constraints || {};
-                constraints.selfBrowserSurface = 'include';
-                if (!constraints.video
-                    || constraints.video === true) {
-                    constraints.video = {
-                        displaySurface: 'browser'
-                    };
-                } else if (
-                    typeof constraints.video === 'object') {
-                    constraints.video.displaySurface =
-                        'browser';
-                }
-                return origGDM(constraints);
-            };
-            window.__joinlyGDMOverrideInstalled = true;
-            }"""
-        )
+        await self._setup_content_stream_default(meeting_page)
 
         async def _on_frame(params: dict) -> None:  # type: ignore[type-arg]
             data = params.get("data", "")
@@ -924,43 +378,9 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
         cdp.on("Page.screencastFrame", _on_frame)
 
-    async def _setup_teams_content_overlay(
-        self, meeting_page: Page, content_page: Page
-    ) -> None:
-        """Overlay content via canvas captureStream for Teams screen sharing.
-
-        Captures *content_page* frames via CDP screencast, draws them
-        on a canvas overlay, then returns ``canvas.captureStream()``
-        from the ``getDisplayMedia`` handler.  The ``getDisplayMedia``
-        override is installed here at share time (not during init) so
-        the Teams SDK sees the native function when negotiating
-        capabilities.
-        """
-        cdp = await content_page.context.new_cdp_session(content_page)
-        await cdp.send(
-            "Page.startScreencast",
-            {
-                "format": "jpeg",
-                "quality": 80,
-                "maxWidth": 1280,
-                "maxHeight": 720,
-                "everyNthFrame": 1,
-            },
-        )
-
-        # Inject canvas overlay, install getDisplayMedia override,
-        # and set the GDM handler.
-        await meeting_page.evaluate(
-            """() => {
-            const _sym = Symbol.for('__joinly__');
-            const store = navigator.mediaDevices[_sym];
-            if (!store || store.overrideInstalled) return;
-            const md = navigator.mediaDevices;
-            const origGDM = store.origGDM
-                || MediaDevices.prototype.getDisplayMedia;
-
+    _OVERLAY_CANVAS_JS = """\
             const c = document.createElement('canvas');
-            c.id = '__joinlyOverlay';
+            c.id = '__scOverlay';
             c.width = 1280; c.height = 720;
             c.style.cssText = [
                 'position:fixed', 'inset:0',
@@ -970,14 +390,8 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             const ctx = c.getContext('2d');
             ctx.fillStyle = '#1a1a2e';
             ctx.fillRect(0, 0, 1280, 720);
-            ctx.fillStyle = '#fff';
-            ctx.font = '28px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Loading\\u2026', 640, 360);
             document.body.appendChild(c);
 
-            /* Continuously repaint the canvas so captureStream
-               always has fresh frames to encode. */
             let _lastImg = null;
             const _repaint = () => {
                 if (_lastImg) ctx.drawImage(_lastImg, 0, 0, 1280, 720);
@@ -991,81 +405,47 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 };
                 img.src = 'data:image/jpeg;base64,' + b64;
             };
+"""
 
-            /* Install getDisplayMedia override now (share time) */
-            const newGDM = function getDisplayMedia(constraints) {
-                const h = md[_sym]?.gdmHandler;
-                if (h) return h(constraints, origGDM.bind(this));
-                return origGDM.call(this, constraints);
-            };
-            const ns = store.nativeStrings;
-            if (ns) {
-                Object.defineProperty(newGDM, 'name',
-                    {value: 'getDisplayMedia', configurable: true});
-                Object.defineProperty(newGDM, 'length',
-                    {value: 1, configurable: true});
-                ns.set(newGDM,
-                    'function getDisplayMedia() { [native code] }');
-            }
-            MediaDevices.prototype.getDisplayMedia = newGDM;
-
-            /* Handler: use tab self-capture so Teams gets a real
-               browser-produced stream.  The overlay canvas makes
-               the content visible in the captured tab.
-               Falls back to the overlay canvas captureStream. */
-            store.gdmHandler = async (cstr, nativeGDM) => {
-                await new Promise(r => setTimeout(r, 2000));
-                let stream;
+    async def _setup_content_stream_default(self, meeting_page: Page) -> None:
+        """Install canvas overlay + tab self-capture getDisplayMedia override."""
+        await meeting_page.evaluate(
+            """() => {
+            if (window.__scGDMInstalled) return;
+"""
+            + self._OVERLAY_CANVAS_JS
+            + """
+            const md = navigator.mediaDevices;
+            const origGDM = md.getDisplayMedia.bind(md);
+            md.getDisplayMedia = async (constraints) => {
+                constraints = constraints || {};
+                constraints.audio = false;
+                constraints.selfBrowserSurface = 'include';
+                constraints.video = {displaySurface: 'browser'};
                 try {
-                    const tc = Object.assign({}, cstr || {});
-                    tc.selfBrowserSurface = 'include';
-                    tc.preferCurrentTab = true;
-                    tc.video = {displaySurface: 'browser'};
-                    stream = await nativeGDM(tc);
-                } catch (_) {
-                    /* Tab capture failed — use overlay canvas */
-                    stream = c.captureStream(15);
+                    const s = await origGDM(constraints);
+                    window.__scShareOk = true;
+                    return s;
+                } catch (e) {
+                    window.__scShareOk = false;
+                    throw e;
                 }
-                for (const t of stream.getVideoTracks()) {
-                    const orig = t.getSettings.bind(t);
-                    t.getSettings = () => {
-                        const s = orig();
-                        s.displaySurface = 'monitor';
-                        return s;
-                    };
-                }
-                return stream;
             };
-
-            store.overrideInstalled = true;
+            window.__scGDMInstalled = true;
             }"""
         )
 
-        async def _on_frame(params: dict) -> None:  # type: ignore[type-arg]
-            data = params.get("data", "")
-            if data:
-                await meeting_page.evaluate(
-                    "(b64) => window.__pushFrame?.(b64)",
-                    data,
-                )
-            await cdp.send(
-                "Page.screencastFrameAck",
-                {"sessionId": params.get("sessionId", 0)},
-            )
-
-        cdp.on("Page.screencastFrame", _on_frame)
-
-    async def share_screen(self, url: str | None = None) -> None:
+    async def share_screen(self, url: str) -> None:
         """Start sharing screen in the meeting.
 
-        When *url* is provided, a full-screen canvas overlay is injected
-        on the meeting tab showing CDP screencast frames from the content
-        tab.  Tab self-capture then captures the overlay so meeting
-        participants see the content.  Without a URL, plain tab
-        self-capture is used.
+        Opens *url* in a separate browser tab and streams its content
+        via a full-screen canvas overlay on the meeting tab.  Tab
+        self-capture ensures the platform receives a real
+        ``getDisplayMedia`` stream while participants see only the
+        shared content.
 
         Args:
-            url: Optional URL to display while sharing.
+            url: URL to display while sharing.
         """
         if self._is_sharing:
             msg = (
@@ -1074,24 +454,24 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             )
             raise RuntimeError(msg)
 
-        content_page = None
-        if url:
-            content_page = await self._browser_session.get_page()
-            await content_page.goto(url, wait_until="load", timeout=20000)
+        content_page = await self._browser_session.get_page()
+        await content_page.goto(url, wait_until="load", timeout=20000)
 
         try:
             async with self._action_guard("share_screen") as (page, controller):
-                is_teams = isinstance(controller, TeamsBrowserPlatformController)
-                if content_page:
-                    if is_teams:
-                        await self._setup_teams_content_overlay(page, content_page)
-                    else:
-                        await self._setup_content_overlay(page, content_page)
-                elif is_teams:
-                    await self._setup_teams_tab_capture(page)
-                else:
-                    await self._setup_tab_capture_override(page)
+                await self._setup_content_stream(page, content_page)
                 await controller.share_screen(page)
+                # Wait briefly for getDisplayMedia to resolve
+                ok = None
+                for _ in range(10):
+                    ok = await page.evaluate("() => window.__scShareOk")
+                    if ok is not None:
+                        break
+                    await page.wait_for_timeout(500)
+                if not ok:
+                    logger.error("getDisplayMedia was denied or errored.")
+                    msg = "Screen sharing failed to start."
+                    raise ProviderNotSupportedError(msg)
                 self._content_page = content_page
                 content_page = None  # ownership transferred
                 self._is_sharing = True
@@ -1103,22 +483,14 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         """Remove the full-screen share overlay from the meeting page."""
         await page.evaluate(
             """() => {
-            const el = document.getElementById('__joinlyOverlay');
+            const el = document.getElementById('__scOverlay');
             if (el) el.remove();
             window.__pushFrame = null;
-            const _sym = Symbol.for('__joinly__');
-            const store = navigator.mediaDevices[_sym];
-            if (store) {
-                store.gdmHandler = null;
-                store.overrideInstalled = false;
-            }
+            window.__scShareOk = null;
+            window.__scGDMInstalled = false;
             if (window.__canvasRepaintId) {
                 clearInterval(window.__canvasRepaintId);
                 window.__canvasRepaintId = null;
-            }
-            if (window.__audioCtx) {
-                window.__audioCtx.close();
-                window.__audioCtx = null;
             }
             }"""
         )
