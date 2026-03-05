@@ -22,6 +22,7 @@ from joinly.providers.browser.platforms import (
     TeamsBrowserPlatformController,
     ZoomBrowserPlatformController,
 )
+from joinly.providers.browser.screen_share import remove_overlay, setup_content_stream
 from joinly.settings import get_settings
 from joinly.types import (
     AudioChunk,
@@ -64,11 +65,12 @@ class _SpeakerInjectedAudioReader(AudioReader):
 class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
     """A meeting provider that uses a web browser to join meetings."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         reader_byte_depth: int | None = None,
         writer_byte_depth: int | None = None,
+        display_size: tuple[int, int] = (1280, 720),
         snapshot_size: tuple[int, int] = (512, 288),
         vnc_server: bool = False,
         vnc_server_port: int = 5900,
@@ -80,16 +82,22 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 (default is None).
             writer_byte_depth (int | None): The byte depth for the virtual
                 microphone (default is None).
+            display_size (tuple[int, int]): The virtual display and screen share
+                resolution (default is (1280, 720)).
             snapshot_size (tuple[int, int]): The size of the video snapshot
                 (default is (512, 288)).
             vnc_server (bool): Whether to start a VNC server for the virtual display.
             vnc_server_port (int): The port to use for the VNC server.
         """
         self.snapshot_size = snapshot_size
+        self._display_size = display_size
         self._env = os.environ.copy()
         self._pulse_server = PulseServer(env=self._env)
         self._virtual_display = VirtualDisplay(
-            env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
+            env=self._env,
+            size=display_size,
+            use_vnc_server=vnc_server,
+            vnc_port=vnc_server_port,
         )
         self._virtual_speaker = (
             VirtualSpeaker(env=self._env)
@@ -111,6 +119,8 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         ]
 
         self._page: Page | None = None
+        self._content_page: Page | None = None
+        self._is_sharing: bool = False
         self._platform_controller: BrowserPlatformController | None = None
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
@@ -220,6 +230,13 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         )
         raise RuntimeError(msg)
 
+    async def _cleanup_content_page(self) -> None:
+        """Close the content page if it exists and reset sharing state."""
+        if self._content_page and not self._content_page.is_closed():
+            await self._content_page.close()
+        self._content_page = None
+        self._is_sharing = False
+
     async def join(
         self,
         url: str | None = None,
@@ -268,6 +285,9 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         """Leave the current meeting."""
         async with self._action_guard("leave") as (page, controller):
             try:
+                if self._is_sharing:
+                    await self._cleanup_content_page()
+                    await page.bring_to_front()
                 await controller.leave(page)
             except RuntimeError:
                 logger.warning(
@@ -275,6 +295,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 )
             finally:
                 self._platform_controller = None
+                await self._cleanup_content_page()
                 if self._page is not None and not self._page.is_closed():
                     await self._page.close()
                 self._page = None
@@ -315,6 +336,62 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         """Unmute yourself in the meeting."""
         async with self._action_guard("unmute") as (page, controller):
             await controller.unmute(page)
+
+    async def share_screen(self, url: str) -> None:
+        """Start sharing screen in the meeting.
+
+        Opens *url* in a separate browser tab and streams its content
+        via a full-screen canvas overlay on the meeting tab.  Tab
+        self-capture ensures the platform receives a real
+        ``getDisplayMedia`` stream while participants see only the
+        shared content.
+
+        Args:
+            url: URL to display while sharing.
+        """
+        if self._is_sharing:
+            msg = (
+                "Already sharing screen. "
+                "Stop the current share before starting a new one."
+            )
+            raise RuntimeError(msg)
+
+        content_page = await self._browser_session.get_page()
+        await content_page.goto(url, wait_until="load", timeout=20000)
+
+        try:
+            async with self._action_guard("share_screen") as (page, controller):
+                await setup_content_stream(page, content_page, self._display_size)
+                await controller.share_screen(page)
+                # Wait briefly for getDisplayMedia to resolve
+                ok = None
+                for _ in range(10):
+                    ok = await page.evaluate("() => window.__scShareOk")
+                    if ok is not None:
+                        break
+                    await page.wait_for_timeout(500)
+                if not ok:
+                    logger.error("getDisplayMedia was denied or errored.")
+                    msg = "Screen sharing failed to start."
+                    raise ProviderNotSupportedError(msg)
+                self._content_page = content_page
+                content_page = None  # ownership transferred
+                self._is_sharing = True
+        finally:
+            if content_page and not content_page.is_closed():
+                await content_page.close()
+
+    async def stop_sharing(self) -> None:
+        """Stop sharing screen in the meeting."""
+        if not self._is_sharing:
+            return
+        async with self._action_guard("stop_sharing") as (page, controller):
+            try:
+                await page.bring_to_front()
+                await controller.stop_sharing(page)
+                await remove_overlay(page)
+            finally:
+                await self._cleanup_content_page()
 
     async def snapshot(self) -> VideoSnapshot:
         """Take a snapshot of the current video frame.

@@ -21,7 +21,7 @@ dependencies = [
     "numpy>=2.2.4",
     "onnxruntime>=1.21.1",
     "pillow>=11.3.0",
-    "playwright>=1.51.0",
+    "playwright==1.58.0",
     "python-dotenv>=1.1.0",
     "semchunk>=3.2.1",
     "webrtcvad-wheels>=2.0.14",
@@ -153,3 +153,7 @@ python_functions = ["test_*"]
 log_level = "INFO"
 log_cli_level = "INFO"
 log_cli = true
+markers = [
+    "manual: requires a real meeting and human interaction",
+]
+addopts = "-m 'not manual'"

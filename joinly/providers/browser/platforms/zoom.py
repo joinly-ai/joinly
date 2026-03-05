@@ -9,7 +9,12 @@ from playwright.async_api import Page
 
 from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
 from joinly.settings import get_settings
-from joinly.types import MeetingChatHistory, MeetingChatMessage, MeetingParticipant
+from joinly.types import (
+    MeetingChatHistory,
+    MeetingChatMessage,
+    MeetingParticipant,
+    ProviderNotSupportedError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +265,47 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         ):
             msg = "Unmute button not found or not visible."
             raise RuntimeError(msg)
+
+    async def share_screen(self, page: Page) -> None:
+        """Start sharing screen in the Zoom meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        # Zoom screen sharing is not yet working reliably.
+        msg = "Screen sharing is not yet supported for Zoom."
+        raise ProviderNotSupportedError(msg)
+        # --- unreachable: kept for when Zoom support is fixed ---
+        await self._activate_controls(page)
+
+        share_btn = page.get_by_role(
+            "button", name=re.compile(r"share screen", re.IGNORECASE)
+        )
+        if not await share_btn.is_visible():
+            msg = "Share Screen button not found or not visible."
+            raise RuntimeError(msg)
+        await share_btn.click(timeout=2000)
+        await page.wait_for_timeout(1000)
+
+    async def stop_sharing(self, page: Page) -> None:
+        """Stop sharing screen in the Zoom meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        msg = "Screen sharing is not yet supported for Zoom."
+        raise ProviderNotSupportedError(msg)
+        # --- unreachable: kept for when Zoom support is fixed ---
+        await self._activate_controls(page)
+
+        stop_btn = page.get_by_role(
+            "button", name=re.compile(r"stop shar", re.IGNORECASE)
+        )
+        if not await stop_btn.is_visible():
+            msg = "Stop Share button not found or not visible."
+            raise RuntimeError(msg)
+        await stop_btn.click(timeout=2000)
+        await page.wait_for_timeout(500)
 
     async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
         """Check if the Zoom meeting has been joined successfully.

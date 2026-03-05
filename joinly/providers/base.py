@@ -48,3 +48,13 @@ class BaseMeetingProvider(MeetingProvider):
         """Unmute yourself in the meeting."""
         msg = "Provider does not support unmuting."
         raise ProviderNotSupportedError(msg)
+
+    async def share_screen(self, url: str) -> None:  # noqa: ARG002
+        """Start sharing screen in the meeting."""
+        msg = "Provider does not support screen sharing."
+        raise ProviderNotSupportedError(msg)
+
+    async def stop_sharing(self) -> None:
+        """Stop sharing screen in the meeting."""
+        msg = "Provider does not support stopping screen share."
+        raise ProviderNotSupportedError(msg)

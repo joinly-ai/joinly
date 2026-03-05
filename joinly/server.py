@@ -306,6 +306,39 @@ async def get_video_snapshot(ctx: Context) -> ImageContent:
 
 
 @mcp.tool(
+    "share_screen",
+    description=(
+        "Start sharing your screen in the meeting. Provide a URL to display "
+        "while sharing. Participants will see the content at the given URL."
+    ),
+)
+async def share_screen(
+    ctx: Context,
+    url: Annotated[
+        str,
+        Field(description="URL to open and display while sharing screen"),
+    ],
+) -> str:
+    """Start sharing screen in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.share_screen(url)
+    return "Started sharing screen."
+
+
+@mcp.tool(
+    "stop_sharing",
+    description="Stop sharing your screen in the meeting.",
+)
+async def stop_sharing(
+    ctx: Context,
+) -> str:
+    """Stop sharing screen in the meeting."""
+    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+    await ms.stop_sharing()
+    return "Stopped sharing screen."
+
+
+@mcp.tool(
     "mute_yourself",
     description="Mute yourself in the meeting.",
 )

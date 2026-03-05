@@ -223,6 +223,42 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             msg = "Unmute button not found or not visible."
             raise RuntimeError(msg)
 
+    async def share_screen(self, page: Page) -> None:
+        """Start sharing screen in the Google Meet meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        await self._dismiss_dialog(page)
+
+        share_btn = page.get_by_role(
+            "button",
+            name=re.compile(r"present now|share screen", re.IGNORECASE),
+        ).first
+        if not await share_btn.is_visible():
+            msg = "Share/Present button not found or not visible."
+            raise RuntimeError(msg)
+        await share_btn.click(timeout=2000)
+        await page.wait_for_timeout(2000)
+
+    async def stop_sharing(self, page: Page) -> None:
+        """Stop sharing screen in the Google Meet meeting.
+
+        Args:
+            page: The Playwright page instance.
+        """
+        await self._dismiss_dialog(page)
+
+        stop_btn = page.get_by_role(
+            "button",
+            name=re.compile(r"stop (sharing|present)", re.IGNORECASE),
+        ).first
+        if not await stop_btn.is_visible():
+            msg = "Stop sharing button not found or not visible."
+            raise RuntimeError(msg)
+        await stop_btn.click(timeout=2000)
+        await page.wait_for_timeout(500)
+
     async def _check_joined(self, page: Page, timeout: float = 10) -> bool:  # noqa: ASYNC109
         """Check if the Google Meet meeting has been joined successfully.
 
