@@ -234,11 +234,11 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         share_btn = page.get_by_role(
             "button",
             name=re.compile(r"present now|share screen", re.IGNORECASE),
-        )
+        ).first
         if not await share_btn.is_visible():
             msg = "Share/Present button not found or not visible."
             raise RuntimeError(msg)
-        await share_btn.first.click(timeout=2000)
+        await share_btn.click(timeout=2000)
         await page.wait_for_timeout(2000)
 
     async def stop_sharing(self, page: Page) -> None:
@@ -252,9 +252,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         stop_btn = page.get_by_role(
             "button",
             name=re.compile(r"stop (sharing|present)", re.IGNORECASE),
-        )
-        if not await stop_btn.is_visible():
-            stop_btn = page.locator("button:has(span.AeBiU-kBDsod-Rtc0Jf)").first
+        ).first
         if not await stop_btn.is_visible():
             msg = "Stop sharing button not found or not visible."
             raise RuntimeError(msg)
