@@ -22,6 +22,7 @@ from joinly.providers.browser.platforms import (
     TeamsBrowserPlatformController,
     ZoomBrowserPlatformController,
 )
+from joinly.providers.browser.screen_share import remove_overlay, setup_content_stream
 from joinly.settings import get_settings
 from joinly.types import (
     AudioChunk,
@@ -64,11 +65,12 @@ class _SpeakerInjectedAudioReader(AudioReader):
 class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
     """A meeting provider that uses a web browser to join meetings."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         reader_byte_depth: int | None = None,
         writer_byte_depth: int | None = None,
+        display_size: tuple[int, int] = (1280, 720),
         snapshot_size: tuple[int, int] = (512, 288),
         vnc_server: bool = False,
         vnc_server_port: int = 5900,
@@ -80,16 +82,22 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 (default is None).
             writer_byte_depth (int | None): The byte depth for the virtual
                 microphone (default is None).
+            display_size (tuple[int, int]): The virtual display and screen share
+                resolution (default is (1280, 720)).
             snapshot_size (tuple[int, int]): The size of the video snapshot
                 (default is (512, 288)).
             vnc_server (bool): Whether to start a VNC server for the virtual display.
             vnc_server_port (int): The port to use for the VNC server.
         """
         self.snapshot_size = snapshot_size
+        self._display_size = display_size
         self._env = os.environ.copy()
         self._pulse_server = PulseServer(env=self._env)
         self._virtual_display = VirtualDisplay(
-            env=self._env, use_vnc_server=vnc_server, vnc_port=vnc_server_port
+            env=self._env,
+            size=display_size,
+            use_vnc_server=vnc_server,
+            vnc_port=vnc_server_port,
         )
         self._virtual_speaker = (
             VirtualSpeaker(env=self._env)
@@ -329,112 +337,6 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         async with self._action_guard("unmute") as (page, controller):
             await controller.unmute(page)
 
-    async def _setup_content_stream(
-        self,
-        meeting_page: Page,
-        content_page: Page,
-    ) -> None:
-        """Set up screen sharing of *content_page* via a canvas overlay.
-
-        Injects a full-screen canvas on *meeting_page* that receives CDP
-        screencast frames from *content_page*.  The ``getDisplayMedia``
-        override uses tab self-capture so the platform receives a real
-        browser-produced stream containing the canvas content.
-
-        The canvas sits at ``z-index:999999`` with ``pointer-events:none``
-        so Playwright automation on the meeting page works normally
-        (clicks pass through to the DOM underneath).
-
-        Args:
-            meeting_page: The meeting tab's Playwright page.
-            content_page: The content tab whose frames will be shared.
-        """
-        await meeting_page.evaluate("() => { window.__scShareOk = null; }")
-        cdp = await content_page.context.new_cdp_session(content_page)
-        await cdp.send(
-            "Page.startScreencast",
-            {
-                "format": "jpeg",
-                "quality": 80,
-                "maxWidth": 1280,
-                "maxHeight": 720,
-                "everyNthFrame": 1,
-            },
-        )
-
-        await self._setup_content_stream_default(meeting_page)
-
-        async def _on_frame(params: dict) -> None:  # type: ignore[type-arg]
-            data = params.get("data", "")
-            if data:
-                await meeting_page.evaluate(
-                    "(b64) => window.__pushFrame?.(b64)",
-                    data,
-                )
-            await cdp.send(
-                "Page.screencastFrameAck",
-                {"sessionId": params.get("sessionId", 0)},
-            )
-
-        cdp.on("Page.screencastFrame", _on_frame)
-
-    _OVERLAY_CANVAS_JS = """\
-            const c = document.createElement('canvas');
-            c.id = '__scOverlay';
-            c.width = 1280; c.height = 720;
-            c.style.cssText = [
-                'position:fixed', 'inset:0',
-                'width:100vw', 'height:100vh',
-                'z-index:999999', 'pointer-events:none',
-            ].join(';');
-            const ctx = c.getContext('2d');
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(0, 0, 1280, 720);
-            document.body.appendChild(c);
-
-            let _lastImg = null;
-            const _repaint = () => {
-                if (_lastImg) ctx.drawImage(_lastImg, 0, 0, 1280, 720);
-            };
-            window.__canvasRepaintId = setInterval(_repaint, 66);
-            window.__pushFrame = (b64) => {
-                const img = new Image();
-                img.onload = () => {
-                    _lastImg = img;
-                    ctx.drawImage(img, 0, 0, 1280, 720);
-                };
-                img.src = 'data:image/jpeg;base64,' + b64;
-            };
-"""
-
-    async def _setup_content_stream_default(self, meeting_page: Page) -> None:
-        """Install canvas overlay + tab self-capture getDisplayMedia override."""
-        await meeting_page.evaluate(
-            """() => {
-            if (window.__scGDMInstalled) return;
-"""
-            + self._OVERLAY_CANVAS_JS
-            + """
-            const md = navigator.mediaDevices;
-            const origGDM = md.getDisplayMedia.bind(md);
-            md.getDisplayMedia = async (constraints) => {
-                constraints = constraints || {};
-                constraints.audio = false;
-                constraints.selfBrowserSurface = 'include';
-                constraints.video = {displaySurface: 'browser'};
-                try {
-                    const s = await origGDM(constraints);
-                    window.__scShareOk = true;
-                    return s;
-                } catch (e) {
-                    window.__scShareOk = false;
-                    throw e;
-                }
-            };
-            window.__scGDMInstalled = true;
-            }"""
-        )
-
     async def share_screen(self, url: str) -> None:
         """Start sharing screen in the meeting.
 
@@ -459,7 +361,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
         try:
             async with self._action_guard("share_screen") as (page, controller):
-                await self._setup_content_stream(page, content_page)
+                await setup_content_stream(page, content_page, self._display_size)
                 await controller.share_screen(page)
                 # Wait briefly for getDisplayMedia to resolve
                 ok = None
@@ -479,28 +381,12 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             if content_page and not content_page.is_closed():
                 await content_page.close()
 
-    async def _remove_share_overlay(self, page: Page) -> None:
-        """Remove the full-screen share overlay from the meeting page."""
-        await page.evaluate(
-            """() => {
-            const el = document.getElementById('__scOverlay');
-            if (el) el.remove();
-            window.__pushFrame = null;
-            window.__scShareOk = null;
-            window.__scGDMInstalled = false;
-            if (window.__canvasRepaintId) {
-                clearInterval(window.__canvasRepaintId);
-                window.__canvasRepaintId = null;
-            }
-            }"""
-        )
-
     async def stop_sharing(self) -> None:
         """Stop sharing screen in the meeting."""
         async with self._action_guard("stop_sharing") as (page, controller):
             try:
                 await page.bring_to_front()
-                await self._remove_share_overlay(page)
+                await remove_overlay(page)
                 await controller.stop_sharing(page)
             finally:
                 await self._cleanup_content_page()
