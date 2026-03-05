@@ -383,6 +383,8 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
     async def stop_sharing(self) -> None:
         """Stop sharing screen in the meeting."""
+        if not self._is_sharing:
+            return
         async with self._action_guard("stop_sharing") as (page, controller):
             try:
                 await page.bring_to_front()
