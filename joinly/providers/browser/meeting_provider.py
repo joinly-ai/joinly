@@ -386,8 +386,8 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         async with self._action_guard("stop_sharing") as (page, controller):
             try:
                 await page.bring_to_front()
-                await remove_overlay(page)
                 await controller.stop_sharing(page)
+                await remove_overlay(page)
             finally:
                 await self._cleanup_content_page()
 
