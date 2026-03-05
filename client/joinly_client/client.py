@@ -410,6 +410,29 @@ class JoinlyClient:
             arguments={"message": message},
         )
 
+    async def share_screen(self, url: str) -> None:
+        """Start sharing screen in the meeting.
+
+        Args:
+            url (str): The URL to display while sharing.
+        """
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool(
+            "share_screen",
+            arguments={"url": url},
+        )
+
+    async def stop_sharing(self) -> None:
+        """Stop sharing screen in the meeting."""
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        await self.client.call_tool("stop_sharing")
+
     async def mute(self) -> None:
         """Mute the participant in the meeting."""
         if not self.joined:
