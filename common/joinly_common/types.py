@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -165,6 +166,18 @@ class Transcript(BaseModel):
                 compacted.append(segment)
 
         return Transcript(segments=compacted)
+
+
+class VideoSnapshot(BaseModel):
+    """A snapshot of the meeting video feed.
+
+    Attributes:
+        data (bytes): The raw image data.
+        media_type (Literal["image/jpeg", "image/png"]): The media type of the image.
+    """
+
+    data: bytes
+    media_type: Literal["image/jpeg", "image/png"] = "image/jpeg"
 
 
 class MeetingChatMessage(BaseModel):

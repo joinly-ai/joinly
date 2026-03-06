@@ -13,6 +13,7 @@ from joinly_common.types import (
     Transcript,
     TranscriptSegment,
     Usage,
+    VideoSnapshot,
 )
 from mcp.types import CallToolResult
 
@@ -26,6 +27,7 @@ __all__ = [
     "Transcript",
     "TranscriptSegment",
     "Usage",
+    "VideoSnapshot",
 ]
 
 type ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
