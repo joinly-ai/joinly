@@ -18,7 +18,6 @@ Against running servers (e.g. Docker)::
 """
 
 import asyncio
-import base64
 import io
 import os
 from collections.abc import AsyncIterator
@@ -73,12 +72,6 @@ def _red_ratio(image_data: bytes) -> float:
         if r > 225 and g < 30 and b < 30  # noqa: PLR2004
     )
     return red_count / len(pixels)
-
-
-async def _snapshot_image(bot: JoinlyClient) -> bytes:
-    """Take a video snapshot and return the raw image bytes."""
-    result = await bot.client.call_tool("get_video_snapshot")
-    return base64.b64decode(result.content[0].data)  # type: ignore[union-attr]
 
 
 async def _transcript_text(bot: JoinlyClient) -> str:
@@ -198,19 +191,19 @@ async def test_screen_share(
     # share red page and verify >30% near-pure red pixels
     await bot_a.share_screen(_RED_PAGE)
     await asyncio.sleep(8)
-    ratio = _red_ratio(await _snapshot_image(bot_b))
+    ratio = _red_ratio((await bot_b.get_video_snapshot()).data)
     assert ratio > 0.3, f"Only {ratio:.0%} red pixels during share"  # noqa: PLR2004
 
     # stop and verify red is gone
     await bot_a.stop_sharing()
     await asyncio.sleep(5)
-    ratio = _red_ratio(await _snapshot_image(bot_b))
+    ratio = _red_ratio((await bot_b.get_video_snapshot()).data)
     assert ratio < 0.05, f"Still {ratio:.0%} red after stop"  # noqa: PLR2004
 
     # re-share to verify share works again after stop
     await bot_a.share_screen(_RED_PAGE)
     await asyncio.sleep(5)
-    ratio = _red_ratio(await _snapshot_image(bot_b))
+    ratio = _red_ratio((await bot_b.get_video_snapshot()).data)
     assert ratio > 0.3, f"Only {ratio:.0%} red on re-share"  # noqa: PLR2004
     await bot_a.stop_sharing()
     await asyncio.sleep(2)
@@ -279,7 +272,7 @@ async def test_video_snapshot_is_valid_image(
     """Video snapshot should be a decodable JPEG image of reasonable size."""
     bot_a, _bot_b = bots
 
-    img_bytes = await _snapshot_image(bot_a)
+    img_bytes = (await bot_a.get_video_snapshot()).data
     img = Image.open(io.BytesIO(img_bytes))
 
     assert img.format == "JPEG", f"Expected JPEG, got {img.format}"
