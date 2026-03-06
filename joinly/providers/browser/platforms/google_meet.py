@@ -238,7 +238,7 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         if not await share_btn.is_visible():
             msg = "Share/Present button not found or not visible."
             raise RuntimeError(msg)
-        await share_btn.click(timeout=2000)
+        await share_btn.click(timeout=5000)
         await page.wait_for_timeout(2000)
 
     async def stop_sharing(self, page: Page) -> None:
