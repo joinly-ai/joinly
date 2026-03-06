@@ -4,12 +4,13 @@ These tests require a real meeting URL and human interaction (admitting the
 bot into the meeting).  They are excluded from the default pytest run and can
 be invoked explicitly::
 
-    JOINLY_TEST_MEETING_URL="https://..." uv run pytest tests/test_screen_share.py
+    JOINLY_TEST_MEETING_URL="https://..." \
+        uv run pytest -m manual tests/test_screen_share.py
 
 To test against a running joinly server (e.g. Docker) instead of in-process::
 
     JOINLY_TEST_MEETING_URL="https://..." JOINLY_TEST_URL="http://localhost:8000/mcp" \
-        uv run pytest tests/test_screen_share.py
+        uv run pytest -m manual tests/test_screen_share.py
 """
 
 import asyncio
