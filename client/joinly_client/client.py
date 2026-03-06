@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextlib
 import json
 import logging
@@ -19,6 +20,7 @@ from joinly_client.types import (
     Transcript,
     TranscriptSegment,
     Usage,
+    VideoSnapshot,
 )
 from joinly_client.utils import is_async_context, name_in_transcript
 
@@ -408,6 +410,23 @@ class JoinlyClient:
         await self.client.call_tool(
             "send_chat_message",
             arguments={"message": message},
+        )
+
+    async def get_video_snapshot(self) -> VideoSnapshot:
+        """Get a snapshot of the current video feed.
+
+        Returns:
+            VideoSnapshot: The snapshot with raw image data and media type.
+        """
+        if not self.joined:
+            msg = "Not joined to a meeting"
+            raise RuntimeError(msg)
+
+        result = await self.client.call_tool("get_video_snapshot")
+        content = result.content[0]
+        return VideoSnapshot(
+            data=base64.b64decode(content.data),  # type: ignore[union-attr]
+            media_type=content.mimeType,  # type: ignore[union-attr]
         )
 
     async def share_screen(self, url: str) -> None:
