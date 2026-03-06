@@ -12,6 +12,7 @@ from playwright.async_api import Page
 from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
 from joinly.providers.browser.browser_session import BrowserSession
+from joinly.providers.browser.camera_feed import CameraFeed
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
 from joinly.providers.browser.devices.virtual_microphone import VirtualMicrophone
@@ -125,6 +126,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         self._stack = AsyncExitStack()
         self._lock = asyncio.Lock()
 
+        self._camera_feed = CameraFeed(self._virtual_microphone)
         self._speaker_injected_virtual_speaker = _SpeakerInjectedAudioReader(
             self._virtual_speaker,
             lambda: (
@@ -142,7 +144,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
     @property
     def audio_writer(self) -> AudioWriter:
         """Get the audio writer."""
-        return self._virtual_microphone
+        return self._camera_feed.audio_writer
 
     @property
     def video_reader(self) -> VideoReader:
@@ -191,6 +193,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             raise RuntimeError(msg)
 
         async with self._lock:
+            self._camera_feed.set_status(action)
             try:
                 yield self._page, self._platform_controller
             except Exception as e:
@@ -201,6 +204,8 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 raise RuntimeError(msg) from None
             else:
                 logger.info("Successfully performed '%s'.", action)
+            finally:
+                self._camera_feed.set_status("")
 
     async def _get_platform_controller(self, url: str) -> BrowserPlatformController:
         """Get the platform-specific meeting controller based on the URL.
@@ -262,6 +267,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             raise RuntimeError(msg)
 
         self._page = await self._browser_session.get_page()
+        await self._camera_feed.install(self._page)
         try:
             self._platform_controller = await self._get_platform_controller(url)
         except RuntimeError:
@@ -295,6 +301,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 )
             finally:
                 self._platform_controller = None
+                await self._camera_feed.stop()
                 await self._cleanup_content_page()
                 if self._page is not None and not self._page.is_closed():
                     await self._page.close()
