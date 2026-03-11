@@ -2,8 +2,9 @@ import asyncio
 import contextlib
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic_ai import BinaryContent
 from pydantic_ai.direct import model_request
@@ -26,6 +27,8 @@ from joinly_client.utils import get_prompt
 
 logger = logging.getLogger(__name__)
 
+AgentStatus = Literal["llm_call", "tool_call"]
+
 
 class ConversationalToolAgent:
     """A conversational agent implementation to interact with joinly."""
@@ -41,6 +44,7 @@ class ConversationalToolAgent:
         max_tool_result_chars: int = 2048,
         max_ephemeral_tool_result_chars: int = 16384,
         max_agent_iter: int | None = 15,
+        on_status: Callable[[AgentStatus | None], Awaitable[None]] | None = None,
     ) -> None:
         """Initialize the conversational agent with a model.
 
@@ -59,6 +63,7 @@ class ConversationalToolAgent:
                 tool results, truncated directly after the call. Defaults to 16384.
             max_agent_iter (int | None): The maximum number of iterations for the agent.
                 Defaults to 15.
+            on_status: Optional callback invoked with agent status changes.
         """
         if not tools:
             msg = "At least one tool must be provided to the agent."
@@ -68,6 +73,7 @@ class ConversationalToolAgent:
         self._prompt = prompt or get_prompt()
         self._tools = tools
         self._tool_executor = tool_executor
+        self._on_status = on_status
         self._messages: list[ModelMessage] = []
         self._max_messages = max_messages
         self._max_tool_result_chars = max_tool_result_chars
@@ -109,6 +115,11 @@ class ConversationalToolAgent:
                 await self._run_task
         self._run_task = asyncio.create_task(self._run_loop(segments))
 
+    async def _set_status(self, status: AgentStatus | None) -> None:
+        """Signal a status change if a callback is registered."""
+        if self._on_status:
+            await self._on_status(status)
+
     async def _run_loop(self, segments: list[TranscriptSegment]) -> None:
         """Run the agent loop with the provided segments.
 
@@ -132,22 +143,28 @@ class ConversationalToolAgent:
             self._messages, max_chars=self._max_tool_result_chars
         )
         self._messages = self._omit_binary_tool_results(self._messages)
-        while self._max_agent_iter is None or iteration < self._max_agent_iter:
-            self._messages = self._limit_messages(
-                self._messages, max_messages=self._max_messages
-            )
-            self._messages = self._truncate_tool_results(
-                self._messages, max_chars=self._max_ephemeral_tool_result_chars
-            )
+        try:
+            while self._max_agent_iter is None or iteration < self._max_agent_iter:
+                self._messages = self._limit_messages(
+                    self._messages, max_messages=self._max_messages
+                )
+                self._messages = self._truncate_tool_results(
+                    self._messages, max_chars=self._max_ephemeral_tool_result_chars
+                )
 
-            response = await self._call_llm(self._messages)
-            request = await self._call_tools(response)
-            self._messages.append(response)
-            if request:
-                self._messages.append(request)
-            if self._check_end_turn(response, request):
-                break
-            iteration += 1
+                await self._set_status("llm_call")
+                response = await self._call_llm(self._messages)
+                await self._set_status("tool_call")
+                request = await self._call_tools(response)
+                await self._set_status(None)
+                self._messages.append(response)
+                if request:
+                    self._messages.append(request)
+                if self._check_end_turn(response, request):
+                    break
+                iteration += 1
+        finally:
+            await self._set_status(None)
 
     async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
         """Call the LLM with the current messages.
