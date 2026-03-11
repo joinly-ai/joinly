@@ -154,9 +154,8 @@ class ConversationalToolAgent:
 
                 await self._set_status("llm_call")
                 response = await self._call_llm(self._messages)
-                await self._set_status("tool_call")
-                request = await self._call_tools(response)
                 await self._set_status(None)
+                request = await self._call_tools(response)
                 self._messages.append(response)
                 if request:
                     self._messages.append(request)
@@ -233,7 +232,14 @@ class ConversationalToolAgent:
         if not tool_calls:
             return None
 
-        results = await asyncio.gather(*[self._call_tool(t) for t in tool_calls])
+        signal = any(t.tool_name != "end_turn" for t in tool_calls)
+        if signal:
+            await self._set_status("tool_call")
+        try:
+            results = await asyncio.gather(*[self._call_tool(t) for t in tool_calls])
+        finally:
+            if signal:
+                await self._set_status(None)
 
         parts: list[ModelRequestPart] = [tool_return for tool_return, _ in results]
         parts.extend(user_part for _, user_part in results if user_part)
