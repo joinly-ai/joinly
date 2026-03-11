@@ -185,9 +185,9 @@ function fxThinking(ctx, cx, cy, logoW, logoH, t, alpha) {
     }
 }"""
 
-# Searching: radar sweep with trailing particles
-_FX_SEARCHING = """\
-function fxSearching(ctx, cx, y, t, alpha) {
+# Busy: radar sweep with trailing particles
+_FX_BUSY = """\
+function fxBusy(ctx, cx, y, t, alpha) {
     const w = H * 0.08;
     const speed = 0.6;
     const p = (t * speed) % 2;
@@ -285,13 +285,13 @@ _CAMERA_OVERRIDE_TEMPLATE = """\
     {fx_share}
     {fx_reading}
     {fx_thinking}
-    {fx_searching}
+    {fx_busy}
 
     const FX = {{
         send_chat_message: fxTyping,
         get_chat_history: fxReading,
         get_participants: fxReading,
-        searching: fxSearching,
+        busy: fxBusy,
     }};
 
     const FX_BG = {{
@@ -485,7 +485,7 @@ class CameraFeed:
             fx_share=_FX_SHARE,
             fx_reading=_FX_READING,
             fx_thinking=_FX_THINKING,
-            fx_searching=_FX_SEARCHING,
+            fx_busy=_FX_BUSY,
         )
         await meeting_page.add_init_script(script)
 

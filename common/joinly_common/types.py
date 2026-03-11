@@ -307,11 +307,14 @@ class Usage(RootModel):
 UITarget = Literal["overlay", "camera"]
 
 
+UIAnimation = Literal["thinking", "busy"]
+
+
 class UIAnimationContent(BaseModel):
     """Predefined animation content. None stops the animation."""
 
     type: Literal["animation"] = "animation"
-    animation: Literal["thinking", "searching"] | None = None
+    animation: UIAnimation | None = None
     target: Literal["overlay"] = "overlay"
 
 
