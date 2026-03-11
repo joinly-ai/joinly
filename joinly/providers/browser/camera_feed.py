@@ -140,6 +140,115 @@ function fxShare(ctx, cx, cy, logoW, logoH, t, alpha) {
     }
 }"""
 
+# Thinking: rotating arc segments with soft glow around the logo
+_FX_THINKING = """\
+function fxThinking(ctx, cx, cy, logoW, logoH, t, alpha) {
+    const r = Math.max(logoW, logoH) * 0.62;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.0);
+
+    // Outer glow ring — subtle breathing
+    ctx.globalAlpha = (0.06 + pulse * 0.06) * alpha;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = H * 0.012;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + H * 0.006, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Rotating arc segments — 3 arcs at different speeds
+    for (let i = 0; i < 3; i++) {
+        const speed = 1.2 + i * 0.4;
+        const dir = i % 2 ? -1 : 1;
+        const base = t * speed * dir + i * Math.PI * 0.667;
+        const len = Math.PI * (0.3 + 0.15 * Math.sin(t * 1.5 + i));
+        ctx.globalAlpha = (0.2 + (1 - i * 0.25) * 0.25) * alpha;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2 - i * 0.4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + H * (0.002 + i * 0.006),
+            base, base + len);
+        ctx.stroke();
+    }
+
+    // Orbiting dots — 2 dots at different orbits
+    for (let i = 0; i < 2; i++) {
+        const a = t * (1.6 + i * 0.5) + i * Math.PI;
+        const orbitR = r + H * (0.01 + i * 0.008);
+        const dx = Math.cos(a) * orbitR;
+        const dy = Math.sin(a) * orbitR;
+        const dotPulse = 0.5 + 0.5 * Math.sin(t * 3 + i * 2);
+        ctx.globalAlpha = (0.35 + dotPulse * 0.4) * alpha;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx + dx, cy + dy,
+            H * (0.005 + dotPulse * 0.002), 0, Math.PI * 2);
+        ctx.fill();
+    }
+}"""
+
+# Searching: radar sweep with trailing particles
+_FX_SEARCHING = """\
+function fxSearching(ctx, cx, y, t, alpha) {
+    const w = H * 0.08;
+    const speed = 0.6;
+    const p = (t * speed) % 2;
+    const dir = p <= 1 ? 1 : -1;
+    const norm = p <= 1 ? p : p - 1;
+    const ease = norm < 0.5
+        ? 2 * norm * norm
+        : 1 - 2 * (1 - norm) * (1 - norm);
+    const x = dir > 0
+        ? cx - w + ease * w * 2
+        : cx + w - ease * w * 2;
+
+    // Glow line
+    const grad = ctx.createLinearGradient(
+        x - H * 0.015, y, x + H * 0.015, y);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.globalAlpha = 0.5 * alpha;
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - H * 0.018);
+    ctx.lineTo(x, y + H * 0.018);
+    ctx.stroke();
+
+    // Centre dot
+    ctx.globalAlpha = 0.6 * alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, H * 0.004, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trail particles
+    for (let i = 1; i <= 5; i++) {
+        const d = i * 0.04;
+        const tn = p <= 1 ? Math.max(0, p - d) : Math.max(0, (p - 1) - d);
+        const te = tn < 0.5
+            ? 2 * tn * tn
+            : 1 - 2 * (1 - tn) * (1 - tn);
+        const tx = dir > 0
+            ? cx - w + te * w * 2
+            : cx + w - te * w * 2;
+        const fade = (1 - i / 6);
+        ctx.globalAlpha = fade * 0.35 * alpha;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(tx, y, H * (0.004 - i * 0.0004), 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Static endpoint markers
+    ctx.globalAlpha = 0.12 * alpha;
+    ctx.fillStyle = '#ffffff';
+    for (const ex of [cx - w, cx + w]) {
+        ctx.beginPath();
+        ctx.arc(ex, y, H * 0.003, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}"""
+
 # Reading: dot sweeping back and forth with a trail
 _FX_READING = """\
 function fxReading(ctx, cx, y, t, alpha) {
@@ -175,11 +284,19 @@ _CAMERA_OVERRIDE_TEMPLATE = """\
     {fx_typing}
     {fx_share}
     {fx_reading}
+    {fx_thinking}
+    {fx_searching}
 
     const FX = {{
         send_chat_message: fxTyping,
         get_chat_history: fxReading,
         get_participants: fxReading,
+        searching: fxSearching,
+    }};
+
+    const FX_BG = {{
+        thinking: fxThinking,
+        share_screen: fxShare,
     }};
 
     function _initCanvas() {{
@@ -241,13 +358,15 @@ _CAMERA_OVERRIDE_TEMPLATE = """\
                 statusAlpha += (wantAlpha - statusAlpha) * 0.12;
                 if (status) statusT += 0.02;
 
-                // Share screen — behind the logo
-                if (statusAlpha > 0.02
-                        && status === 'share_screen') {{
-                    ctx.save();
-                    fxShare(ctx, cx, cy, logoW, logoH,
-                        statusT, statusAlpha);
-                    ctx.restore();
+                // Background effects — behind the logo
+                if (statusAlpha > 0.02) {{
+                    const bgFn = FX_BG[status];
+                    if (bgFn) {{
+                        ctx.save();
+                        bgFn(ctx, cx, cy, logoW, logoH,
+                            statusT, statusAlpha);
+                        ctx.restore();
+                    }}
                 }}
 
                 // Speaking — behind the logo
@@ -271,9 +390,8 @@ _CAMERA_OVERRIDE_TEMPLATE = """\
                     logoW, logoH
                 );
 
-                // Other status effects — in front of logo
-                if (statusAlpha > 0.02
-                        && status !== 'share_screen') {{
+                // Foreground effects — below the logo
+                if (statusAlpha > 0.02) {{
                     const fn = FX[status];
                     if (fn) {{
                         ctx.save();
@@ -366,14 +484,16 @@ class CameraFeed:
             fx_typing=_FX_TYPING,
             fx_share=_FX_SHARE,
             fx_reading=_FX_READING,
+            fx_thinking=_FX_THINKING,
+            fx_searching=_FX_SEARCHING,
         )
         await meeting_page.add_init_script(script)
 
-    def set_status(self, status: str) -> None:
-        """Set a status label on the camera feed (e.g. 'typing...')."""
+    def set_effect(self, name: str | None) -> None:
+        """Set the active visual effect, or None to clear."""
         page = self._meeting_page
         if page and not page.is_closed():
-            safe = status.replace("'", "\\'")
+            safe = (name or "").replace("'", "\\'")
             task = asyncio.ensure_future(
                 page.evaluate(f"window.__setStatus?.('{safe}')")
             )

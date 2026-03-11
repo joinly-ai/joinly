@@ -9,6 +9,9 @@ from joinly_common.types import (
     SpeakerRole,
     Transcript,
     TranscriptSegment,
+    UIAnimationContent,
+    UIHtmlContent,
+    UIUpdate,
     Usage,
     VideoSnapshot,
 )
@@ -22,6 +25,9 @@ __all__ = [
     "SpeakerRole",
     "Transcript",
     "TranscriptSegment",
+    "UIAnimationContent",
+    "UIHtmlContent",
+    "UIUpdate",
     "Usage",
     "VideoSnapshot",
 ]
