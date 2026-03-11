@@ -11,7 +11,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp import ClientSession, McpError, ResourceUpdatedNotification, ServerNotification
 from mcp.types import Tool
-from pydantic import AnyUrl
+from pydantic import AnyUrl, BaseModel
 
 from joinly_client.types import (
     MeetingChatHistory,
@@ -19,12 +19,21 @@ from joinly_client.types import (
     SpeakerRole,
     Transcript,
     TranscriptSegment,
+    UIAnimation,
+    UIAnimationContent,
+    UIUpdate,
     Usage,
     VideoSnapshot,
 )
 from joinly_client.utils import is_async_context, name_in_transcript
 
 logger = logging.getLogger(__name__)
+
+
+class _UIUpdateNotification(BaseModel):
+    method: str = "notifications/joinly_ui_update"
+    params: UIUpdate | None = None
+
 
 TRANSCRIPT_URL = AnyUrl("transcript://live")
 SEGMENTS_URL = AnyUrl("transcript://live/segments")
@@ -467,3 +476,35 @@ class JoinlyClient:
             raise RuntimeError(msg)
 
         await self.client.call_tool("unmute_yourself")
+
+    @property
+    def supports_ui_update(self) -> bool:
+        """Check if the server supports joinly_ui_update notifications."""
+        caps = self.client.initialize_result.capabilities
+        return bool(caps.experimental and "joinly_ui_update" in caps.experimental)
+
+    async def on_agent_status(self, status: str | None) -> None:
+        """Map an agent status to a UI animation."""
+        _map: dict[str, UIAnimation] = {"llm_call": "thinking", "tool_call": "busy"}
+        await self.set_ui_animation(_map.get(status or ""))
+
+    async def set_ui_animation(self, animation: UIAnimation | None) -> None:
+        """Set a UI animation by name, or clear overlay with None."""
+        await self.send_ui_update(
+            UIUpdate(content=UIAnimationContent(animation=animation))
+        )
+
+    async def send_ui_update(self, update: UIUpdate) -> None:
+        """Send a UI update notification to the server.
+
+        Does nothing if the server does not advertise the joinly_ui_update
+        experimental capability.
+
+        Args:
+            update: The UI update to send.
+        """
+        if not self.supports_ui_update:
+            return
+        await self.session.send_notification(
+            _UIUpdateNotification(params=update)  # type: ignore[arg-type]
+        )
