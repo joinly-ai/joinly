@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -302,3 +302,48 @@ class Usage(RootModel):
     def __str__(self) -> str:
         """Return a string representation of the Usage instance."""
         return "\n".join(f"{service}: {usage}" for service, usage in self.root.items())
+
+
+UITarget = Literal["overlay", "camera"]
+
+
+UIAnimation = Literal["thinking", "busy"]
+
+
+class UIAnimationContent(BaseModel):
+    """Predefined animation content. None stops the animation."""
+
+    type: Literal["animation"] = "animation"
+    animation: UIAnimation | None = None
+    target: Literal["overlay"] = "overlay"
+
+
+class UICsp(BaseModel):
+    """CSP restrictions for HTML content (aligned with MCP Apps spec)."""
+
+    connect_domains: list[str] = Field(default_factory=list, alias="connectDomains")
+    resource_domains: list[str] = Field(default_factory=list, alias="resourceDomains")
+    frame_domains: list[str] = Field(default_factory=list, alias="frameDomains")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UIHtmlContent(BaseModel):
+    """Custom HTML content. None clears the content."""
+
+    type: Literal["html"] = "html"
+    html: str | None = None
+    target: UITarget = "overlay"
+    csp: UICsp | None = None
+
+
+UIContent = Annotated[
+    UIAnimationContent | UIHtmlContent,
+    Field(discriminator="type"),
+]
+
+
+class UIUpdate(BaseModel):
+    """A UI update notification."""
+
+    content: UIContent

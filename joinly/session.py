@@ -12,6 +12,7 @@ from joinly.types import (
     MeetingChatHistory,
     MeetingParticipant,
     Transcript,
+    UIUpdate,
     VideoSnapshot,
 )
 from joinly.utils.clock import Clock
@@ -181,3 +182,11 @@ class MeetingSession:
     async def unmute(self) -> None:
         """Unmute yourself in the meeting."""
         await self._meeting_provider.unmute()
+
+    async def update_ui(self, update: UIUpdate) -> None:
+        """Update the UI on the meeting provider.
+
+        Args:
+            update: The UI update to apply.
+        """
+        await self._meeting_provider.update_ui(update)

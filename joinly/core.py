@@ -10,6 +10,7 @@ from joinly.types import (
     SpeechWindow,
     Transcript,
     TranscriptSegment,
+    UIUpdate,
     VideoSnapshot,
 )
 from joinly.utils.clock import Clock
@@ -245,6 +246,14 @@ class MeetingProvider(Protocol):
 
     async def stop_sharing(self) -> None:
         """Stop sharing screen in the meeting."""
+        ...
+
+    async def update_ui(self, update: UIUpdate) -> None:
+        """Update the UI on the meeting provider.
+
+        Args:
+            update: The UI update to apply.
+        """
         ...
 
 

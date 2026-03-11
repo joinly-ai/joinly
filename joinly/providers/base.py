@@ -3,6 +3,7 @@ from joinly.types import (
     MeetingChatHistory,
     MeetingParticipant,
     ProviderNotSupportedError,
+    UIUpdate,
 )
 
 
@@ -58,3 +59,6 @@ class BaseMeetingProvider(MeetingProvider):
         """Stop sharing screen in the meeting."""
         msg = "Provider does not support stopping screen share."
         raise ProviderNotSupportedError(msg)
+
+    async def update_ui(self, update: UIUpdate) -> None:
+        """Update the UI on the meeting provider."""

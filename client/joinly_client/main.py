@@ -9,7 +9,6 @@ import click
 from dotenv import load_dotenv
 from fastmcp import Client, FastMCP
 
-from joinly_client.agent import ConversationalToolAgent
 from joinly_client.client import JoinlyClient
 from joinly_client.types import McpClientConfig, TranscriptSegment
 from joinly_client.utils import get_llm, get_prompt, load_tools
@@ -371,7 +370,7 @@ async def run(  # noqa: PLR0913
                 },
             }
         )
-        agent = ConversationalToolAgent(
+        agent = client.create_agent(
             llm,
             tools,
             tool_executor,
@@ -381,7 +380,6 @@ async def run(  # noqa: PLR0913
                 name=client.name,
             ),
         )
-        client.add_utterance_callback(agent.on_utterance)
         async with agent:
             await client.join_meeting(meeting_url)
             try:

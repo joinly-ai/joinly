@@ -4,11 +4,12 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, Union, get_args
 
 from fastmcp import Context, FastMCP
+from mcp import types as mcp_types
 from mcp.types import ImageContent
-from pydantic import AnyUrl, Field, ValidationError
+from pydantic import AnyUrl, BaseModel, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -21,6 +22,7 @@ from joinly.types import (
     SpeakerRole,
     SpeechInterruptedError,
     Transcript,
+    UIUpdate,
     Usage,
 )
 from joinly.utils.usage import get_usage, reset_usage, set_usage
@@ -29,6 +31,31 @@ logger = logging.getLogger(__name__)
 
 TRANSCRIPT_URL = AnyUrl("transcript://live")
 SEGMENTS_URL = AnyUrl("transcript://live/segments")
+
+
+class _UIUpdateNotification(BaseModel):
+    method: Literal["notifications/joinly_ui_update"] = "notifications/joinly_ui_update"
+    params: UIUpdate | None = None
+
+
+def _patch_client_notifications(*types_: type) -> None:
+    field = mcp_types.ClientNotification.model_fields["root"]
+    current = get_args(field.annotation)
+    field.annotation = Union[(*current, *types_)]  # type: ignore[assignment]
+    mcp_types.ClientNotification.model_rebuild(force=True)
+
+
+_patch_client_notifications(_UIUpdateNotification)
+
+
+def _patch_experimental(server: FastMCP, extra: dict[str, dict[str, Any]]) -> None:
+    """Advertise experimental capabilities on a FastMCP server."""
+    _orig = server._mcp_server.get_capabilities  # noqa: SLF001
+
+    def _get_capabilities(opts: Any, exp: dict | None = None) -> Any:  # noqa: ANN401
+        return _orig(opts, {**(exp or {}), **extra})
+
+    server._mcp_server.get_capabilities = _get_capabilities  # type: ignore[assignment]  # noqa: SLF001
 
 
 @dataclass
@@ -105,6 +132,14 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
             _remover[url]()
             _remover.pop(url)
 
+    async def _handle_ui_update(notification: _UIUpdateNotification) -> None:
+        if not notification.params:
+            return
+        logger.debug("UI update: %s", notification.params.content)
+        await meeting_session.update_ui(notification.params)
+
+    server._mcp_server.notification_handlers[_UIUpdateNotification] = _handle_ui_update  # noqa: SLF001
+
     try:
         yield SessionContext(meeting_session=meeting_session)
     finally:
@@ -122,6 +157,7 @@ async def session_lifespan(server: FastMCP) -> AsyncIterator[SessionContext]:
 
 
 mcp = FastMCP("joinly", lifespan=session_lifespan)
+_patch_experimental(mcp, {"joinly_ui_update": {}})
 
 
 @mcp.resource(
