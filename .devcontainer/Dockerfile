@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 
 FROM mcr.microsoft.com/vscode/devcontainers/base:bookworm
 
+COPY --from=uv --chown=vscode: /uv /uvx /bin/
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 \
     libatk1.0-0 \
@@ -25,4 +27,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV XDG_RUNTIME_DIR=/home/vscode/.xdg_runtime
 RUN mkdir -p $XDG_RUNTIME_DIR && chown vscode: $XDG_RUNTIME_DIR
 
-COPY --from=uv --chown=vscode: /uv /uvx /bin/
+USER vscode
+RUN curl -fsSL https://claude.ai/install.sh | bash
