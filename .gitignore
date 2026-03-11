@@ -175,3 +175,4 @@ cython_debug/
 
 node_modules/
 .DS_Store
+*.local.*
