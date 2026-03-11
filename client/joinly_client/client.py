@@ -17,6 +17,7 @@ from joinly_client.types import (
     MeetingChatHistory,
     MeetingParticipantList,
     SpeakerRole,
+    ToolExecutor,
     Transcript,
     TranscriptSegment,
     UIAnimation,
@@ -508,3 +509,33 @@ class JoinlyClient:
         await self.session.send_notification(
             _UIUpdateNotification(params=update)  # type: ignore[arg-type]
         )
+
+    def create_agent(
+        self,
+        llm: Any,  # noqa: ANN401
+        tools: list[Any],
+        tool_executor: ToolExecutor,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Any:  # noqa: ANN401
+        """Create a ConversationalToolAgent wired to this client.
+
+        Connects the status callback and registers the agent's utterance
+        handler.
+
+        Args:
+            llm: The language model to use.
+            tools: Tool definitions for the agent.
+            tool_executor: Callable that executes tool calls.
+            **kwargs: Forwarded to ``ConversationalToolAgent``.
+        """
+        from joinly_client.agent import ConversationalToolAgent
+
+        agent = ConversationalToolAgent(
+            llm,
+            tools,
+            tool_executor,
+            on_status=self.on_agent_status,
+            **kwargs,
+        )
+        self.add_utterance_callback(agent.on_utterance)
+        return agent
