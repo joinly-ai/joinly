@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import click
 from dotenv import load_dotenv
@@ -30,6 +32,17 @@ def _parse_kv(
         except json.JSONDecodeError:
             out[k] = v
     return out
+
+
+def _parse_mcp(
+    _ctx: click.Context, _param: click.Parameter, value: tuple[str, ...]
+) -> dict[str, dict[str, str]]:
+    """Convert repeated --mcp URLs into a name→config mapping."""
+    servers: dict[str, dict[str, str]] = {}
+    for url in value:
+        name = urlparse(url).hostname or "mcp"
+        servers[name] = {"url": url}
+    return servers
 
 
 @click.command()
@@ -268,6 +281,28 @@ def _parse_kv(
     show_envvar=True,
     envvar="JOINLY_LOGGING_PLAIN",
 )
+@click.option(
+    "--mcp",
+    "mcp_servers",
+    multiple=True,
+    type=str,
+    callback=_parse_mcp,
+    help="URL of a remote MCP server to connect to. "
+    "Can be specified multiple times. Only applicable with --client. "
+    "Note: inside Docker, only remote HTTP-based servers work "
+    "(no stdio/npm commands, no interactive OAuth).",
+)
+@click.option(
+    "--mcp-config",
+    "mcp_config_file",
+    type=click.Path(dir_okay=False, readable=True),
+    help="Path to a JSON file with additional MCP server configuration. "
+    "Only applicable with --client. "
+    "Note: inside Docker, the file must be mounted into the container, "
+    "and only remote HTTP-based servers work "
+    "(no stdio/npm commands, no interactive OAuth).",
+    default=None,
+)
 @click.argument(
     "meeting-url",
     default=None,
@@ -287,6 +322,8 @@ def cli(  # noqa: PLR0913
     prompt_style: str,
     name_trigger: bool,
     meeting_url: str | None,
+    mcp_servers: dict[str, dict[str, str]],
+    mcp_config_file: str | None,
     verbose: int,
     quiet: bool,
     logging_plain: bool,
@@ -320,6 +357,15 @@ def cli(  # noqa: PLR0913
                 "Please provide it as an argument."
             )
             raise click.UsageError(msg)
+
+        mcp_config: dict[str, Any] | None = None
+        if mcp_config_file:
+            mcp_config = json.loads(Path(mcp_config_file).read_text())
+        if mcp_servers:
+            if mcp_config is None:
+                mcp_config = {"mcpServers": {}}
+            mcp_config.setdefault("mcpServers", {}).update(mcp_servers)
+
         asyncio.run(
             joinly_client.run(
                 joinly_url=mcp,
@@ -330,6 +376,7 @@ def cli(  # noqa: PLR0913
                 prompt_style=prompt_style,
                 name=settings.name,
                 name_trigger=name_trigger,
+                mcp_config=mcp_config,
             )
         )
 
