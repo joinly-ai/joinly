@@ -12,18 +12,21 @@ from playwright.async_api import Page
 from joinly.core import AudioReader, AudioWriter, VideoReader
 from joinly.providers.base import BaseMeetingProvider
 from joinly.providers.browser.browser_session import BrowserSession
-from joinly.providers.browser.camera_feed import CameraFeed
 from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
 from joinly.providers.browser.devices.virtual_microphone import VirtualMicrophone
 from joinly.providers.browser.devices.virtual_speaker import VirtualSpeaker
+from joinly.providers.browser.media import (
+    CameraFeed,
+    remove_overlay,
+    setup_content_stream,
+)
 from joinly.providers.browser.platforms import (
     BrowserPlatformController,
     GoogleMeetBrowserPlatformController,
     TeamsBrowserPlatformController,
     ZoomBrowserPlatformController,
 )
-from joinly.providers.browser.screen_share import remove_overlay, setup_content_stream
 from joinly.settings import get_settings
 from joinly.types import (
     ActionAnimation,
