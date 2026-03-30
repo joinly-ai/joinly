@@ -287,3 +287,8 @@ If you have questions or feedback, or if you would like to chat with the maintai
 <div align="center">
 Made with ❤️ in Osnabrück
  </div>
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/joinly-ai-joinly).
+
