@@ -47,14 +47,39 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
         await page.goto(url, wait_until="load", timeout=20000)
 
         name_field = page.get_by_placeholder(re.compile("name", re.IGNORECASE))
-        await name_field.fill(name, timeout=20000)
+        try:
+            await name_field.wait_for(state="visible", timeout=10000)
+            box = await name_field.bounding_box()
+            if box:
+                await page.mouse.click(box["x"] + 10, box["y"] + 10)
+                await page.keyboard.type(name)
+        except Exception:
+            logger.warning("Could not interact with name field via mouse click.")
+        
+        await page.wait_for_timeout(1000)
 
-        join_btn = page.get_by_role(
-            "button", name=re.compile(r"^(?!.*other ways).*join.*$", re.IGNORECASE)
-        )
-        await join_btn.click(timeout=1000)
+        # Click the join button
+        join_btn = page.locator("button:has-text('Ask to join'), button:has-text('Join now')").first
+        
+        try:
+            # wait for button to be enabled
+            for _ in range(10):
+                is_disabled = await join_btn.evaluate("node => node.disabled")
+                if not is_disabled:
+                    break
+                await page.wait_for_timeout(500)
+            
+            box = await join_btn.bounding_box()
+            if box:
+                await page.mouse.click(box["x"] + 10, box["y"] + 10)
+            else:
+                await join_btn.click(timeout=5000)
+        except Exception:
+            logger.warning("Playwright natural click failed, attempting JS click.")
+            await join_btn.evaluate("node => node.click()")
 
         if not await self._check_joined(page):
+            await page.screenshot(path="join_failed_chrome.png")
             msg = "Join check failed: Failed to join the Google Meet meeting."
             raise RuntimeError(msg)
 
@@ -270,9 +295,12 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             bool: True if joined, False otherwise.
         """
         locators = [
-            page.locator("div >> text=/asking to be let in/i"),
-            page.locator('[aria-label^="someone lets you in" i]'),
+            page.get_by_text(re.compile("asking to be let in", re.IGNORECASE)),
+            page.get_by_text(re.compile("asking to join", re.IGNORECASE)),
+            page.get_by_text(re.compile("when someone lets you in", re.IGNORECASE)),
+            page.locator('[aria-label*="someone lets you in" i]'),
             page.get_by_role("button", name=re.compile(r"leave", re.IGNORECASE)),
+            page.get_by_role("button", name=re.compile(r"You're in the waiting room", re.IGNORECASE))
         ]
 
         tasks = [

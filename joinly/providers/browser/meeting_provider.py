@@ -204,7 +204,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 logger.exception(msg)
                 if isinstance(e, (ProviderNotSupportedError, ValueError)):
                     raise
-                raise RuntimeError(msg) from None
+                raise RuntimeError(msg) from e
             else:
                 logger.info("Successfully performed '%s'.", action)
 
