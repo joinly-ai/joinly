@@ -6,6 +6,7 @@ import unicodedata
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Never
+from urllib.parse import urlparse
 
 from mcp import ClientSession
 from pydantic_ai.mcp import MCPServer
@@ -309,3 +310,52 @@ def is_async_context() -> bool:
         return False
     else:
         return True
+
+
+_URL_KEYS = frozenset({"url", "link", "href", "source"})
+
+
+def extract_urls(data: Any) -> list[str]:  # noqa: ANN401
+    """Extract HTTP URLs from known keys in a JSON-like structure.
+
+    Recursively walks dicts/lists, collecting string values from keys
+    named "url", "link", "href", or "source" that start with "http".
+    """
+    urls: list[str] = []
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if (
+                key.lower() in _URL_KEYS
+                and isinstance(value, str)
+                and value.startswith("http")
+            ):
+                urls.append(value)
+            else:
+                urls.extend(extract_urls(value))
+    elif isinstance(data, list):
+        for item in data:
+            urls.extend(extract_urls(item))
+    return urls
+
+
+def favicon_html(urls: list[str], *, max_icons: int = 5) -> str:
+    """Build HTML showing favicon images for the given URLs.
+
+    Deduplicates by domain and caps at ``max_icons``.
+    """
+    seen: set[str] = set()
+    imgs: list[str] = []
+    for url in urls:
+        domain = urlparse(url).netloc
+        if not domain or domain in seen:
+            continue
+        seen.add(domain)
+        src = f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
+        imgs.append(f'<img src="{src}" width="24" height="24" style="margin:0 2px">')
+        if len(imgs) >= max_icons:
+            break
+    return (
+        '<div style="position:fixed;bottom:8px;right:8px;display:flex;'
+        "align-items:center;background:rgba(0,0,0,0.5);border-radius:8px;"
+        f'padding:4px 8px">{"".join(imgs)}</div>'
+    )

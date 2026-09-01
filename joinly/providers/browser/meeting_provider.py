@@ -17,6 +17,7 @@ from joinly.providers.browser.devices.pulse_server import PulseServer
 from joinly.providers.browser.devices.virtual_display import VirtualDisplay
 from joinly.providers.browser.devices.virtual_microphone import VirtualMicrophone
 from joinly.providers.browser.devices.virtual_speaker import VirtualSpeaker
+from joinly.providers.browser.html_sandbox import clear_iframe, set_iframe
 from joinly.providers.browser.platforms import (
     BrowserPlatformController,
     GoogleMeetBrowserPlatformController,
@@ -38,6 +39,8 @@ from joinly.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+_OVERLAY_IFRAME_ID = "__uiOverlay"
 
 PLATFORMS: list[type[BrowserPlatformController]] = [
     GoogleMeetBrowserPlatformController,
@@ -410,7 +413,16 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
         if isinstance(update.content, UIAnimationContent):
             self._camera_feed.set_effect(update.content.animation)
         elif isinstance(update.content, UIHtmlContent):
-            logger.warning("HTML UI content not yet supported")
+            if self._page is None or self._page.is_closed():
+                return
+            if update.content.html is None:
+                await clear_iframe(self._page, iframe_id=_OVERLAY_IFRAME_ID)
+            elif update.content.target == "overlay":
+                await set_iframe(
+                    self._page, update.content, iframe_id=_OVERLAY_IFRAME_ID
+                )
+            else:
+                logger.warning("UI target %r not yet supported", update.content.target)
 
     async def snapshot(self) -> VideoSnapshot:
         """Take a snapshot of the current video frame.

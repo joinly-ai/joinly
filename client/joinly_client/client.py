@@ -10,7 +10,7 @@ from typing import Any, Self
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp import ClientSession, McpError, ResourceUpdatedNotification, ServerNotification
-from mcp.types import Tool
+from mcp.types import CallToolResult, Tool
 from pydantic import AnyUrl, BaseModel
 
 from joinly_client.types import (
@@ -22,11 +22,17 @@ from joinly_client.types import (
     TranscriptSegment,
     UIAnimation,
     UIAnimationContent,
+    UIHtmlContent,
     UIUpdate,
     Usage,
     VideoSnapshot,
 )
-from joinly_client.utils import is_async_context, name_in_transcript
+from joinly_client.utils import (
+    extract_urls,
+    favicon_html,
+    is_async_context,
+    name_in_transcript,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -486,6 +492,8 @@ class JoinlyClient:
 
     async def on_agent_status(self, status: str | None) -> None:
         """Map an agent status to a UI animation."""
+        if not status:
+            await self.send_ui_update(UIUpdate(content=UIHtmlContent()))
         _map: dict[str, UIAnimation] = {"llm_call": "thinking", "tool_call": "busy"}
         await self.set_ui_animation(_map.get(status or ""))
 
@@ -509,6 +517,30 @@ class JoinlyClient:
         await self.session.send_notification(
             _UIUpdateNotification(params=update)  # type: ignore[arg-type]
         )
+
+    async def favicon_post_callback(
+        self,
+        _tool_name: str,
+        _args: dict[str, Any],
+        result: CallToolResult,
+    ) -> CallToolResult:
+        """Post-callback that shows favicons for URLs in tool results."""
+        urls: list[str] = []
+        for part in result.content:
+            text = getattr(part, "text", None)
+            if not text:
+                continue
+            try:
+                data = json.loads(text)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            urls.extend(extract_urls(data))
+
+        if urls:
+            await self.send_ui_update(
+                UIUpdate(content=UIHtmlContent(html=favicon_html(urls)))
+            )
+        return result
 
     def create_agent(
         self,

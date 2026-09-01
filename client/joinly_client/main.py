@@ -365,8 +365,11 @@ async def run(  # noqa: PLR0913
             else {
                 "joinly": joinly_config,
                 **{
-                    name: McpClientConfig(client)
-                    for name, client in additional_clients.items()
+                    name: McpClientConfig(
+                        mcp_client,
+                        post_callback=client.favicon_post_callback,
+                    )
+                    for name, mcp_client in additional_clients.items()
                 },
             }
         )
