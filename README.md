@@ -95,6 +95,9 @@ Start the joinly server in the first terminal (note, we are not using `--client`
 docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
 ```
 
+> [!WARNING]
+> The joinly MCP server has no authentication and is meant to run locally with a single trusted client. Do not expose it beyond `localhost` or a trusted private network.
+
 While the server is running, start the example client implementation in the second terminal window to connect to it and join a meeting:
 ```bash  
 uvx joinly-client --env-file .env <MeetingUrl>
