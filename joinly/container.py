@@ -14,11 +14,10 @@ T = TypeVar("T")
 
 
 def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
-    """Turn direct type, dotted path, or short token into a class object.
+    """Turn direct type or short token into a class object.
 
     Discovers paths by convention:
     - if `spec` is a type, return it directly.
-    - if `spec` is a dotted path, import the module and return the class.
     - if `spec` is a short token, map to
         `<base>.<token_lowercase>.<token_camelcase><suffix>`.
     """
@@ -26,16 +25,16 @@ def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
         return spec
 
     if "." in spec:
-        # fully qualified
-        mod, _, cls = spec.rpartition(".")
+        msg = f"Invalid component token '{spec}': dotted import paths are not allowed."
+        raise ImportError(msg)
+
+    # short token
+    if spec.lower().endswith(suffix.lower()):
+        base_name = spec[: -len(suffix)]
     else:
-        # short token
-        if spec.lower().endswith(suffix.lower()):
-            base_name = spec[: -len(suffix)]
-        else:
-            base_name = "".join(p.capitalize() for p in re.split(r"[_\- ]+", spec))
-        mod = f"{base}.{base_name.lower()}"
-        cls = base_name + suffix
+        base_name = "".join(p.capitalize() for p in re.split(r"[_\- ]+", spec))
+    mod = f"{base}.{base_name.lower()}"
+    cls = base_name + suffix
 
     try:
         module = importlib.import_module(mod)
