@@ -84,19 +84,19 @@ docker run --env-file .env ghcr.io/joinly-ai/joinly:latest --client <MeetingURL>
 ```
 > :red_circle: Having trouble getting started? Let's figure it out together on our [discord](https://discord.com/invite/AN5NEBkS4d)! 
 
-# :technologist: Run an external client
-In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to connect other MCP servers. Here, we run an external client using the [joinly-client package](https://pypi.org/project/joinly-client/) and connect it to the joinly MCP server.
+# :technologist: Run a custom client
+In Quickstart, we ran the Docker Container directly as a client using `--client`. But we can also run it as a server and connect to it from outside the container, which allows us to connect other MCP servers. Here, we run a custom client using the [joinly-client package](https://pypi.org/project/joinly-client/) and connect it to the joinly MCP server.
 
 > [!IMPORTANT]
 > **Prerequisites**: do the [Quickstart](#zap-quickstart) (except the last command), [install uv](https://github.com/astral-sh/uv), and open two terminals
 
-Start the joinly server in the first terminal (note, we are not using `--client` here and forward port `8000`):
+Start the joinly server in the first terminal (note, we are not using `--client` here and publish port `8000` on `localhost` only):
 ```bash  
-docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
+docker run -p 127.0.0.1:8000:8000 ghcr.io/joinly-ai/joinly:latest
 ```
 
 > [!WARNING]
-> The joinly MCP server has no authentication and is meant to run locally with a single trusted client. Do not expose it beyond `localhost` or a trusted private network.
+> The joinly MCP server has no authentication and accepts client-supplied configuration, so it is meant to run locally with a single trusted client. Bind it to `localhost` (as above) and do not expose the port to a network.
 
 While the server is running, start the example client implementation in the second terminal window to connect to it and join a meeting:
 ```bash  
@@ -131,7 +131,7 @@ uvx joinly-client --env-file .env --mcp-config config.json <MeetingUrl>
 
 Configurations can be given via env variables and/or command line args. Here is a list of common configuration options, which can be used when starting the docker container:
 ```bash
-docker run --env-file .env -p 8000:8000 ghcr.io/joinly-ai/joinly:latest <MyOptionArgs>
+docker run --env-file .env -p 127.0.0.1:8000:8000 ghcr.io/joinly-ai/joinly:latest <MyOptionArgs>
 ```
 
 Alternatively, you can pass `--name`, `--lang`, and [provider settings](#providers) as command line arguments using `joinly-client`, which will override settings of the server:
@@ -144,7 +144,7 @@ uvx joinly-client <MyOptionArgs> <MeetingUrl>
 In general, the docker image provides an MCP server which is started by default. But to quickly get started, we also include a client implementation that can be used via `--client`. Note, in this case no server is started and no other client can connect to it.
 
 ```bash
-# Start directly as client; default is as server, to which an external client can connect
+# Start directly as client; default is as server, to which a custom client can connect
 --client <MeetingUrl>
 
 # Change participant name (default: joinly)
