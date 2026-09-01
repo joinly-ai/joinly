@@ -1,6 +1,10 @@
 
 # Changelog
 
+## v0.5.4 - 2026-09-01
+
+- Restrict provider/component resolution to scoped tokens (#183)
+
 ## v0.5.3 - 2025-12-01
 
 ### Added
