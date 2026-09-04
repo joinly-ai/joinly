@@ -8,12 +8,13 @@ from typing import Self
 
 from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
+from playwright_stealth import Stealth
 
 from joinly.utils.logging import LOGGING_TRACE
 
 logger = logging.getLogger(__name__)
 
-_CDP_RE = re.compile(r"DevTools listening on (ws://.*)")
+_CDP_RE = re.compile(r"DevTools listening on ((?:ws|http)://.*)")
 
 
 class BrowserSession:
@@ -42,7 +43,10 @@ class BrowserSession:
         """Start and connect to the Playwright browser."""
         self._playwright = await async_playwright().start()
 
-        bin_path = Path(self._playwright.chromium.executable_path)
+        bin_path = Path("/usr/bin/google-chrome")
+        if not bin_path.exists():
+            bin_path = Path(self._playwright.chromium.executable_path)
+            
         logger.debug("Chromium binary path: %s", bin_path)
         if not bin_path.exists():
             msg = "Chromium binary not found"
@@ -53,11 +57,10 @@ class BrowserSession:
         logger.debug("Profile directory created at: %s", self._profile_dir.name)
 
         logger.debug("Launching Chromium browser.")
-        self._proc = await asyncio.create_subprocess_exec(
-            str(bin_path),
+        runner_path = Path(__file__).parent / "uc_runner.py"
+        chrome_args = [
             f"--remote-debugging-port={self._cdp_port}",
             f"--user-data-dir={self._profile_dir.name}",
-            "--use-fake-ui-for-media-stream",
             "--alsa-output-device=pulse",
             f"--alsa-input-device={self._env.get('PULSE_SOURCE')}",
             "--autoplay-policy=no-user-gesture-required",
@@ -66,11 +69,9 @@ class BrowserSession:
             "--enable-usermedia-screen-capturing",
             "--enable-features=WebRTCPipeWireCapturer",
             "--ozone-platform=x11",
-            "--disable-gpu",
             "--disable-focus-on-load",
             "--window-size=1280,720",
             "--lang=en-US",
-            "--test-type",
             "--no-sandbox",  # required for docker
             "--disable-dev-shm-usage",
             "--disable-gpu-sandbox",
@@ -80,6 +81,14 @@ class BrowserSession:
             "--force-device-scale-factor=1",
             "--disable-features=TranslateUI,MediaRouter,WebRtcAutomaticGainControl",
             "--disable-backgrounding-occluded-windows",
+        ]
+        
+        import json
+        import sys
+        self._proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(runner_path),
+            json.dumps(chrome_args),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
             env=self._env,
@@ -105,9 +114,13 @@ class BrowserSession:
             cdp_endpoint
         )
         self._pw_context = self._pw_browser.contexts[0]
+        await self._pw_context.grant_permissions(['camera', 'microphone'])
+        await self._pw_context.tracing.start(screenshots=True, snapshots=True, sources=True)
         self._default_page = (
             self._pw_context.pages[0] if self._pw_context.pages else None
         )
+        if self._default_page:
+            pass
 
         logger.debug("Playwright started.")
 
@@ -115,6 +128,9 @@ class BrowserSession:
 
     async def __aexit__(self, *exc: object) -> None:
         """Stop the browser."""
+        if self._pw_context:
+            await self._pw_context.tracing.stop(path="trace.zip")
+
         logger.debug("Stopping browser.")
 
         for page in self._pages:
