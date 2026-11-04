@@ -212,7 +212,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
         is_participant_list_visible = await participants_list.is_visible()
 
         participants_button = page.get_by_role(
-            "button", name=re.compile(r"participants", re.IGNORECASE)
+            "button", name=re.compile(r"participants list", re.IGNORECASE)
         )
         if not is_participant_list_visible:
             await self._activate_controls(page)
@@ -374,6 +374,7 @@ class ZoomBrowserPlatformController(BaseBrowserPlatformController):
                 const emit = n => window.report(n);
                 const find = () => {
                     const selectors = [
+                        'div.single-main-container__video-frame span',
                         'div.speaker-active-container__video-frame span',
                         'div.speaker-bar-container__video-frame--active span',
                         'div.speaker-bar-container__video-frame span',
