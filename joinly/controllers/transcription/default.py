@@ -2,7 +2,9 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections import deque
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import Self
 
 from joinly.core import STT, VAD, AudioReader, TranscriptionController
@@ -25,6 +27,7 @@ class DefaultTranscriptionController(TranscriptionController):
         self,
         *,
         utterance_tail_seconds: float = 0.6,
+        utterance_preroll_seconds: float = 0.3,
         no_speech_event_delay: float = 0.4,
         max_stt_tasks: int = 5,
         window_queue_size: int = 100,
@@ -35,6 +38,12 @@ class DefaultTranscriptionController(TranscriptionController):
             utterance_tail_seconds (float): The duration in seconds to wait after the
                 last detected speech before considering the utterance complete
                 (default is 0.6).
+            utterance_preroll_seconds (float): The duration in seconds of audio
+                from before an utterance's first detected speech that is passed to
+                the STT with it (default is 0.3, 0 turns it off). The VAD flags
+                speech late (Silero by about 70 ms on median, up to about 380 ms),
+                so the first word is partly in audio it called silence, and an STT
+                that only gets what follows can mishear it or lose it.
             no_speech_event_delay (float): The duration in seconds to wait before
                 emitting a no-speech event (default is 0.4).
             max_stt_tasks (int): The maximum number of concurrent STT tasks
@@ -43,6 +52,7 @@ class DefaultTranscriptionController(TranscriptionController):
                 (default is 100).
         """
         self.utterance_tail_seconds = float(utterance_tail_seconds)
+        self.utterance_preroll_seconds = max(0.0, float(utterance_preroll_seconds))
         self.no_speech_event_delay = float(no_speech_event_delay)
         self.max_stt_tasks = max_stt_tasks
         self.window_queue_size = window_queue_size
@@ -119,12 +129,15 @@ class DefaultTranscriptionController(TranscriptionController):
 
         self._event_bus.publish(event_type)
 
-    async def _vad_worker(self) -> None:  # noqa: C901, PLR0915
+    async def _vad_worker(self) -> None:  # noqa: C901, PLR0912, PLR0915
         """Process audio data for vad and start utterance stt."""
         self._window_queue = None
         last_speech: int | None = None
         utterance_start: int | None = None
         dropped_windows: int = 0
+        preroll_ns = int(self.utterance_preroll_seconds * 1e9)
+        # the last windows of audio before the next utterance, none while one is open
+        preroll: deque[SpeechWindow] = deque()
 
         async def _chunk_iterator() -> AsyncIterator[AudioChunk]:
             """Yield audio chunks from the reader."""
@@ -153,6 +166,8 @@ class DefaultTranscriptionController(TranscriptionController):
                 # utterance start
                 logger.debug("Utterance start: %.2fs", window.time_ns / 1e9)
                 utterance_start = window.time_ns
+                lead_in = list(preroll)
+                preroll.clear()
                 if len(self._stt_tasks) >= self.max_stt_tasks:
                     logger.warning(
                         "Maximum number of STT tasks reached (%d), dropping window",
@@ -166,6 +181,11 @@ class DefaultTranscriptionController(TranscriptionController):
                 task = asyncio.create_task(self._stt_utterance(self._window_queue))
                 task.add_done_callback(lambda t: self._stt_tasks.discard(t))
                 self._stt_tasks.add(task)
+                for held in lead_in:
+                    # marked as speech, which is what makes an STT start with them. A
+                    # queue too small for them just starts with the rest
+                    with contextlib.suppress(asyncio.QueueFull):
+                        self._window_queue.put_nowait(replace(held, is_speech=True))
 
             if (
                 not window.is_speech
@@ -209,6 +229,10 @@ class DefaultTranscriptionController(TranscriptionController):
                             dropped_windows,
                         )
                     dropped_windows = 0
+            elif preroll_ns > 0 and not window.is_speech:
+                preroll.append(window)
+                while window.time_ns - preroll[0].time_ns >= preroll_ns:
+                    preroll.popleft()
 
     async def _stt_utterance(self, queue: asyncio.Queue[SpeechWindow | None]) -> None:
         """Process speech windows for transcription."""
